@@ -20,11 +20,25 @@ This will:
 - Build & start PostgreSQL container (connected on Docker network)
 - Build & start FastAPI backend (port 8000)
 - Build & start nginx frontend (port **4001**)
+- Start optional pgAdmin UI (port **5050**) for DB inspection
 - Run migrations automatically
 - Seed test user: `admin@admin.de` / `admin123`
 
 ### 3. Access Application
 Open browser: **http://localhost:4001**
+
+Optional database UI (pgAdmin): **http://localhost:5050**
+
+Default pgAdmin login (override in `.env`):
+- Email: `pgadmin@local.dev`
+- Password: `change_me_for_local_dev`
+
+To connect pgAdmin to PostgreSQL, add a server with:
+- Host: `db`
+- Port: `5432`
+- Database: `atlas_db`
+- Username: `atlas`
+- Password: `atlas_password` (or your `.env` value)
 
 Login with:
 - Email: `admin@admin.de`
@@ -38,6 +52,7 @@ Login with:
 | **Frontend** | 4001 | nginx serving SPA, proxies /api to backend |
 | **Backend** | 8000 | FastAPI + Uvicorn (async) |
 | **Database** | 5432 | PostgreSQL 15 (internal only) |
+| **pgAdmin** | 5050 | PostgreSQL admin UI (optional, local dev) |
 
 ### Key Technologies
 - **Backend**: FastAPI, SQLAlchemy (async), asyncpg
