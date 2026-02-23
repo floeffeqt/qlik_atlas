@@ -26,9 +26,10 @@ from shared.config import is_prod, settings
 from shared.models import GraphResponse, HealthResponse, InventoryResponse, OrphansReport
 from app.auth.routes import router as auth_router
 from app.customers.routes import router as customers_router
+from app.auth.utils import get_current_user_id
 from app.database import get_session
 from app.projects.routes import router as projects_router
-from app.settings.routes import router as settings_router
+from app.admin.routes import router as admin_router
 from shared.qlik_client import QlikClient
 from shared.security_headers import apply_security_headers
 from shared.utils import ensure_dir, read_json, write_json
@@ -56,14 +57,14 @@ class FetchJobRequest(BaseModel):
     lineageConcurrency: int | None = Field(default=None, ge=1)
     usageConcurrency: int | None = Field(default=None, ge=1)
     usageWindowDays: int | None = Field(default=None, ge=1)
-    project_id: int | None = None  # When set, credentials come from the project's customer
+    project_id: int  # Credentials are loaded from the project's customer
 
 
 app = FastAPI(title="Lineage Explorer API", docs_url=None, redoc_url=None)
 app.include_router(auth_router, prefix="/api")
-app.include_router(settings_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(projects_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 # CORS
 origins = settings.dev_cors_origins or []
@@ -77,9 +78,6 @@ app.add_middleware(
 )
 
 
-@app.get("/health", response_model=HealthResponse)
-async def health():
-    return HealthResponse(status="ok", filesLoaded=0, nodesCount=0, edgesCount=0)
 store = GraphStore(
     settings.data_dir,
     settings.spaces_file or SPACES_FILE,
@@ -90,10 +88,26 @@ store = GraphStore(
 fetch_jobs_registry: dict[str, dict[str, Any]] = {}
 fetch_jobs_lock = asyncio.Lock()
 job_logs: dict[str, list[str]] = {}
+MAX_FINISHED_JOBS = 50
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _prune_old_jobs() -> None:
+    """Remove oldest finished jobs when registry exceeds MAX_FINISHED_JOBS. Must be called under fetch_jobs_lock."""
+    finished = [
+        (jid, j) for jid, j in fetch_jobs_registry.items()
+        if j.get("status") in {"completed", "failed"}
+    ]
+    if len(finished) <= MAX_FINISHED_JOBS:
+        return
+    finished.sort(key=lambda x: x[1].get("finishedAt", ""))
+    to_remove = finished[:len(finished) - MAX_FINISHED_JOBS]
+    for jid, _ in to_remove:
+        del fetch_jobs_registry[jid]
+        job_logs.pop(jid, None)
 
 
 def _log_time() -> str:
@@ -108,15 +122,6 @@ async def _append_log(job_id: str, msg: str) -> None:
 
 def _public_job(job: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in job.items() if not k.startswith("_")}
-
-
-def _missing_fetch_env() -> list[str]:
-    missing: list[str] = []
-    if not os.getenv("QLIK_TENANT_URL", "").strip():
-        missing.append("QLIK_TENANT_URL")
-    if not os.getenv("QLIK_API_KEY", "").strip():
-        missing.append("QLIK_API_KEY")
-    return missing
 
 
 def _assert_fetch_token(token: str | None) -> None:
@@ -140,12 +145,14 @@ def _normalize_steps(steps: list[FetchStep] | None) -> list[FetchStep]:
 
 
 def _build_qlik_client() -> QlikClient:
-    missing = _missing_fetch_env()
-    if missing:
-        raise RuntimeError(f"missing backend env vars: {', '.join(missing)}")
+    """Build a QlikClient from env vars (set by _load_project_creds_to_env before each job)."""
+    tenant_url = os.getenv("QLIK_TENANT_URL", "").strip()
+    api_key = os.getenv("QLIK_API_KEY", "").strip()
+    if not tenant_url or not api_key:
+        raise RuntimeError("Qlik credentials not loaded — ensure project has a customer with valid credentials")
     return QlikClient(
-        base_url=os.getenv("QLIK_TENANT_URL", "").strip(),
-        api_key=os.getenv("QLIK_API_KEY", "").strip(),
+        base_url=tenant_url,
+        api_key=api_key,
         timeout=float(os.getenv("QLIK_TIMEOUT", "30")),
         max_retries=int(os.getenv("QLIK_MAX_RETRIES", "5")),
     )
@@ -422,10 +429,9 @@ async def _execute_fetch_job(job_id: str, request: FetchJobRequest, steps: list[
         await _update_job(job_id, status="running")
         await _append_log(job_id, f"Job gestartet · {len(steps)} Schritt(e) geplant")
 
-        if project_id is not None:
-            await _append_log(job_id, f"Lade Credentials für Projekt {project_id}…")
-            await _load_project_creds_to_env(project_id)
-            await _append_log(job_id, "✓ Credentials geladen")
+        await _append_log(job_id, f"Lade Credentials für Projekt {project_id}…")
+        await _load_project_creds_to_env(project_id)
+        await _append_log(job_id, "✓ Credentials geladen")
 
         cleared = _clear_outputs_for_steps(steps)
         if cleared.get("files") or cleared.get("dirs"):
@@ -487,23 +493,6 @@ async def _execute_fetch_job(job_id: str, request: FetchJobRequest, steps: list[
         )
 
 
-async def _load_qlik_creds_to_env() -> None:
-    """On startup: load legacy single-row credentials from DB into os.environ (fallback)."""
-    try:
-        from app.database import AsyncSessionLocal
-        from app.models import QlikCredential
-        from sqlalchemy import select
-        async with AsyncSessionLocal() as session:
-            result = await session.execute(select(QlikCredential).limit(1))
-            cred = result.scalar_one_or_none()
-            if cred:
-                os.environ["QLIK_TENANT_URL"] = cred.tenant_url
-                os.environ["QLIK_API_KEY"] = cred.api_key
-                print(f"Loaded Qlik credentials from DB (tenant: {cred.tenant_url})")
-    except Exception as exc:
-        print(f"Warning: could not load Qlik credentials from DB: {exc}")
-
-
 async def _load_project_creds_to_env(project_id: int) -> None:
     """Load credentials from a project's customer into os.environ for the duration of a fetch."""
     from app.database import AsyncSessionLocal
@@ -523,16 +512,12 @@ async def _load_project_creds_to_env(project_id: int) -> None:
         print(f"Loaded credentials for project {project_id} from customer '{customer.name}'")
 
 
-async def _run_db_store_step(project_id: int | None = None) -> dict[str, Any]:
+async def _run_db_store_step(project_id: int) -> dict[str, Any]:
     """After a fetch, persist graph data as JSONB in PostgreSQL (scoped by project_id)."""
     from app.database import AsyncSessionLocal
     from app.models import QlikApp, LineageNode, LineageEdge
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     stored: dict[str, int] = {"apps": 0, "nodes": 0, "edges": 0}
-
-    if project_id is None:
-        print("Warning: _run_db_store_step called without project_id — skipping DB persistence")
-        return stored
 
     try:
         async with AsyncSessionLocal() as session:
@@ -594,7 +579,6 @@ async def _run_db_store_step(project_id: int | None = None) -> dict[str, Any]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await _load_qlik_creds_to_env()
     store.load()
     yield
 
@@ -621,17 +605,17 @@ async def api_health() -> HealthResponse:
 
 
 @app.get("/api/inventory", response_model=InventoryResponse)
-async def inventory() -> InventoryResponse:
+async def inventory(_user: str = Depends(get_current_user_id)) -> InventoryResponse:
     return store.inventory()
 
 
 @app.get("/api/apps", response_model=InventoryResponse)
-async def apps() -> InventoryResponse:
+async def apps(_user: str = Depends(get_current_user_id)) -> InventoryResponse:
     return store.inventory()
 
 
 @app.get("/api/data-connections")
-async def data_connections():
+async def data_connections(_user: str = Depends(get_current_user_id)):
     try:
         return store.get_data_connections()
     except FileNotFoundError:
@@ -641,7 +625,7 @@ async def data_connections():
 
 
 @app.get("/api/spaces")
-async def spaces():
+async def spaces(_user: str = Depends(get_current_user_id)):
     if not SPACES_FILE.exists():
         raise HTTPException(status_code=404, detail="spaces artifact not found")
     payload = read_json(SPACES_FILE)
@@ -651,7 +635,7 @@ async def spaces():
 
 
 @app.get("/api/graph/app/{app_id:path}", response_model=GraphResponse)
-async def graph_for_app(app_id: str, depth: int = 1) -> GraphResponse:
+async def graph_for_app(app_id: str, depth: int = 1, _user: str = Depends(get_current_user_id)) -> GraphResponse:
     try:
         return store.get_app_subgraph(app_id, depth)
     except KeyError:
@@ -659,12 +643,12 @@ async def graph_for_app(app_id: str, depth: int = 1) -> GraphResponse:
 
 
 @app.get("/api/graph/all", response_model=GraphResponse)
-async def graph_all() -> GraphResponse:
+async def graph_all(_user: str = Depends(get_current_user_id)) -> GraphResponse:
     return store.get_full_graph()
 
 
 @app.get("/api/graph/db", response_model=GraphResponse)
-async def graph_from_db(session: AsyncSession = Depends(get_session)) -> GraphResponse:
+async def graph_from_db(session: AsyncSession = Depends(get_session), _user: str = Depends(get_current_user_id)) -> GraphResponse:
     """Read all lineage graph data from PostgreSQL JSONB tables (all projects)."""
     from app.models import LineageNode, LineageEdge
     from sqlalchemy import select
@@ -687,7 +671,7 @@ async def graph_from_db(session: AsyncSession = Depends(get_session)) -> GraphRe
 
 
 @app.get("/api/graph/project/{project_id}", response_model=GraphResponse)
-async def graph_for_project(project_id: int, session: AsyncSession = Depends(get_session)) -> GraphResponse:
+async def graph_for_project(project_id: int, session: AsyncSession = Depends(get_session), _user: str = Depends(get_current_user_id)) -> GraphResponse:
     """Read lineage graph data for a specific project from PostgreSQL."""
     from app.models import LineageNode, LineageEdge
     from sqlalchemy import select
@@ -714,7 +698,7 @@ async def graph_for_project(project_id: int, session: AsyncSession = Depends(get
 
 
 @app.get("/api/graph/node/{node_id:path}", response_model=GraphResponse)
-async def graph_for_node(node_id: str, direction: str = "both", depth: int = 1) -> GraphResponse:
+async def graph_for_node(node_id: str, direction: str = "both", depth: int = 1, _user: str = Depends(get_current_user_id)) -> GraphResponse:
     if direction not in {"up", "down", "both"}:
         raise HTTPException(status_code=400, detail="invalid direction")
     result = store.get_node_subgraph(node_id, direction, depth)
@@ -724,12 +708,12 @@ async def graph_for_node(node_id: str, direction: str = "both", depth: int = 1) 
 
 
 @app.get("/api/reports/orphans", response_model=OrphansReport)
-async def orphans() -> OrphansReport:
+async def orphans(_user: str = Depends(get_current_user_id)) -> OrphansReport:
     return store.orphans_report()
 
 
 @app.get("/api/app/{app_id:path}/usage")
-async def app_usage(app_id: str):
+async def app_usage(app_id: str, _user: str = Depends(get_current_user_id)):
     try:
         return store.get_app_usage(app_id)
     except FileNotFoundError:
@@ -739,7 +723,7 @@ async def app_usage(app_id: str):
 
 
 @app.get("/api/app/{app_id:path}/script")
-async def app_script(app_id: str):
+async def app_script(app_id: str, _user: str = Depends(get_current_user_id)):
     try:
         return store.get_app_script(app_id)
     except FileNotFoundError:
@@ -749,8 +733,14 @@ async def app_script(app_id: str):
 
 
 @app.get("/api/fetch/status")
-async def fetch_status():
-    missing = _missing_fetch_env()
+async def fetch_status(
+    session: AsyncSession = Depends(get_session),
+    _user: str = Depends(get_current_user_id),
+):
+    from app.models import Customer
+    from sqlalchemy import select, func as sa_func
+    count_result = await session.execute(select(sa_func.count()).select_from(Customer))
+    customer_count = count_result.scalar() or 0
     running_job_id = None
     async with fetch_jobs_lock:
         for job_id, job in fetch_jobs_registry.items():
@@ -758,15 +748,15 @@ async def fetch_status():
                 running_job_id = job_id
                 break
     return {
-        "canRun": len(missing) == 0,
-        "missingEnv": missing,
+        "canRun": customer_count > 0,
+        "customersConfigured": customer_count,
         "tokenRequired": bool(settings.fetch_trigger_token),
         "runningJobId": running_job_id,
     }
 
 
 @app.get("/api/fetch/jobs")
-async def list_fetch_jobs():
+async def list_fetch_jobs(_user: str = Depends(get_current_user_id)):
     async with fetch_jobs_lock:
         jobs = [_public_job(job) for job in fetch_jobs_registry.values()]
     jobs.sort(key=lambda item: item.get("updatedAt", ""), reverse=True)
@@ -774,7 +764,7 @@ async def list_fetch_jobs():
 
 
 @app.get("/api/fetch/jobs/{job_id}")
-async def get_fetch_job(job_id: str):
+async def get_fetch_job(job_id: str, _user: str = Depends(get_current_user_id)):
     async with fetch_jobs_lock:
         job = fetch_jobs_registry.get(job_id)
         if not job:
@@ -783,7 +773,7 @@ async def get_fetch_job(job_id: str):
 
 
 @app.get("/api/fetch/jobs/{job_id}/logs")
-async def get_fetch_job_logs(job_id: str):
+async def get_fetch_job_logs(job_id: str, _user: str = Depends(get_current_user_id)):
     async with fetch_jobs_lock:
         job = fetch_jobs_registry.get(job_id)
         if not job:
@@ -800,15 +790,9 @@ async def get_fetch_job_logs(job_id: str):
 async def start_fetch_job(
     payload: FetchJobRequest,
     x_fetch_token: str | None = Header(default=None, alias="X-Fetch-Token"),
+    _user: str = Depends(get_current_user_id),
 ):
     _assert_fetch_token(x_fetch_token)
-    # When project_id is given, credentials are loaded from the project's customer at runtime.
-    # Skip the global env-var check in that case.
-    if payload.project_id is None:
-        missing = _missing_fetch_env()
-        if missing:
-            raise HTTPException(status_code=400, detail=f"missing backend env vars: {', '.join(missing)}")
-
     planned_steps = _normalize_steps(payload.steps)
     async with fetch_jobs_lock:
         for job in fetch_jobs_registry.values():
@@ -833,6 +817,7 @@ async def start_fetch_job(
             "finishedAt": None,
         }
         fetch_jobs_registry[job_id] = job
+        _prune_old_jobs()
 
     task = asyncio.create_task(_execute_fetch_job(job_id, payload, planned_steps))
     async with fetch_jobs_lock:

@@ -8,17 +8,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(320), unique=True, index=True, nullable=False)
     password_hash = Column(String(256), nullable=False)
+    role = Column(String(20), nullable=False, server_default="user")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-
-class QlikCredential(Base):
-    """Legacy single-row Qlik config (superseded by Customer model)."""
-    __tablename__ = "qlik_credentials"
-    id = Column(Integer, primary_key=True)
-    tenant_url = Column(String(500), nullable=False)
-    api_key = Column(Text, nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class Customer(Base):

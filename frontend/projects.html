@@ -278,6 +278,25 @@
     .rji-name { flex: 1; font-size: 0.72rem; color: #aaffaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rji-label { font-size: 0.65rem; color: #558855; }
     .rji-open { font-size: 0.65rem; color: #55ffff; flex-shrink: 0; }
+
+    /* ── ADMIN FAB ── */
+    .admin-fab {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 1.5rem;
+      padding: 0.6rem 1.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      z-index: 90;
+      box-shadow: 0 4px 16px rgba(102,126,234,0.3);
+      transition: opacity 0.2s, transform 0.1s;
+      display: none;
+    }
+    .admin-fab:hover { opacity: 0.9; transform: translateY(-1px); }
   </style>
 </head>
 <body>
@@ -286,7 +305,6 @@
   <a class="nav-brand" href="/"><div class="brand-icon">⬡</div>Lineage Explorer</a>
   <div class="nav-links">
     <a class="nav-link" href="/">Dashboard</a>
-    <a class="nav-link" href="/customers.html">Kunden</a>
     <a class="nav-link active" href="/projects.html">Projekte</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
   </div>
@@ -380,6 +398,7 @@
   <button class="recent-jobs-toggle" id="recentJobsBtn">&gt; FETCH LOG</button>
 </div>
 
+<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
 <div id="toast"></div>
 
 <script>
@@ -388,7 +407,10 @@
 
   try {
     var jp = JSON.parse(atob(token.split('.')[1]));
-    document.getElementById('userEmail').textContent = 'User #' + (jp.sub || '—');
+    document.getElementById('userEmail').textContent = jp.email || 'User #' + (jp.sub || '—');
+    if (jp.role === 'admin') {
+      document.getElementById('adminFab').style.display = 'inline-block';
+    }
   } catch(e) {}
 
   document.getElementById('logoutBtn').addEventListener('click', function() {
@@ -410,7 +432,7 @@
     return res;
   }
 
-  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
   function fmtDate(iso) {
     if (!iso) return '—';
@@ -432,7 +454,7 @@
   async function loadData() {
     var [projRes, custRes] = await Promise.all([
       apiFetch('/api/projects'),
-      apiFetch('/api/customers')
+      apiFetch('/api/customers/names')
     ]);
     projects = await projRes.json();
     customers = await custRes.json();
@@ -446,7 +468,7 @@
     sel.innerHTML = '<option value="">— Kunden wählen —</option>'
       + customers.map(function(c) {
           return '<option value="' + c.id + '"' + (String(c.id) === current ? ' selected' : '') + '>'
-            + escHtml(c.name) + ' (' + escHtml(c.tenant_url.replace(/^https?:\/\//, '').split('/')[0]) + ')'
+            + escHtml(c.name)
             + '</option>';
         }).join('');
   }
@@ -475,14 +497,28 @@
         + '<div class="meta-row"><span class="meta-key">Erstellt</span><span class="meta-val">' + fmtDate(p.created_at) + '</span></div>'
         + '</div>'
         + '<div class="project-actions">'
-        + '<button class="btn-fetch" id="fetchBtn-' + p.id + '" onclick="startFetch(' + p.id + ')" ' + (isBusy ? 'disabled' : '') + '>▶ Daten laden</button>'
+        + '<button class="btn-fetch" id="fetchBtn-' + p.id + '" data-fetch-id="' + p.id + '" ' + (isBusy ? 'disabled' : '') + '>▶ Daten laden</button>'
         + '<a class="btn-lineage" href="/lineage.html?project=' + p.id + '">⬡ Lineage</a>'
-        + '<button class="btn-edit" onclick="openEdit(' + p.id + ')">Bearbeiten</button>'
-        + '<button class="btn-danger" onclick="openDelete(' + p.id + ', \'' + escHtml(p.name) + '\')">Löschen</button>'
+        + '<button class="btn-edit" data-edit-id="' + p.id + '">Bearbeiten</button>'
+        + '<button class="btn-danger" data-delete-id="' + p.id + '">Löschen</button>'
         + '</div>'
         + '</div>';
     }).join('');
     wrap.innerHTML = '<div class="projects-grid">' + cards + '</div>';
+
+    wrap.querySelectorAll('[data-fetch-id]').forEach(function(btn) {
+      btn.addEventListener('click', function() { startFetch(parseInt(this.dataset.fetchId, 10)); });
+    });
+    wrap.querySelectorAll('[data-edit-id]').forEach(function(btn) {
+      btn.addEventListener('click', function() { openEdit(parseInt(this.dataset.editId, 10)); });
+    });
+    wrap.querySelectorAll('[data-delete-id]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = parseInt(this.dataset.deleteId, 10);
+        var p = projects.find(function(x) { return x.id === id; });
+        openDelete(id, p ? p.name : '');
+      });
+    });
   }
 
   // ── LOG POPUP ─────────────────────────────────────────────────────
