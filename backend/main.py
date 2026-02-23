@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +24,11 @@ from fetchers.fetch_usage import fetch_usage_async
 from fetchers.graph_store import GraphStore
 from shared.config import is_prod, settings
 from shared.models import GraphResponse, HealthResponse, InventoryResponse, OrphansReport
+from app.auth.routes import router as auth_router
+from app.customers.routes import router as customers_router
+from app.database import get_session
+from app.projects.routes import router as projects_router
+from app.settings.routes import router as settings_router
 from shared.qlik_client import QlikClient
 from shared.security_headers import apply_security_headers
 from shared.utils import ensure_dir, read_json, write_json
@@ -30,7 +37,7 @@ from shared.utils import ensure_dir, read_json, write_json
 FetchStep = Literal["spaces", "apps", "data-connections", "lineage", "app-edges", "usage"]
 FETCH_STEP_ORDER: list[FetchStep] = ["spaces", "apps", "data-connections", "lineage", "app-edges", "usage"]
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parent
 OUTPUT_ROOT = PROJECT_ROOT / "output"
 APPS_INVENTORY_FILE = OUTPUT_ROOT / "apps_inventory.json"
 SPACES_FILE = OUTPUT_ROOT / "spaces.json"
@@ -49,9 +56,30 @@ class FetchJobRequest(BaseModel):
     lineageConcurrency: int | None = Field(default=None, ge=1)
     usageConcurrency: int | None = Field(default=None, ge=1)
     usageWindowDays: int | None = Field(default=None, ge=1)
+    project_id: int | None = None  # When set, credentials come from the project's customer
 
 
 app = FastAPI(title="Lineage Explorer API", docs_url=None, redoc_url=None)
+app.include_router(auth_router, prefix="/api")
+app.include_router(settings_router, prefix="/api")
+app.include_router(customers_router, prefix="/api")
+app.include_router(projects_router, prefix="/api")
+
+# CORS
+origins = settings.dev_cors_origins or []
+origins.append(settings.connect_src)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(set(origins)),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health():
+    return HealthResponse(status="ok", filesLoaded=0, nodesCount=0, edgesCount=0)
 store = GraphStore(
     settings.data_dir,
     settings.spaces_file or SPACES_FILE,
@@ -61,10 +89,21 @@ store = GraphStore(
 )
 fetch_jobs_registry: dict[str, dict[str, Any]] = {}
 fetch_jobs_lock = asyncio.Lock()
+job_logs: dict[str, list[str]] = {}
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _log_time() -> str:
+    return datetime.now(timezone.utc).strftime("%H:%M:%S")
+
+
+async def _append_log(job_id: str, msg: str) -> None:
+    async with fetch_jobs_lock:
+        if job_id in job_logs:
+            job_logs[job_id].append(f"[{_log_time()}] {msg}")
 
 
 def _public_job(job: dict[str, Any]) -> dict[str, Any]:
@@ -369,38 +408,76 @@ async def _complete_job_step(job_id: str, step: FetchStep, result: dict[str, Any
 
 
 async def _execute_fetch_job(job_id: str, request: FetchJobRequest, steps: list[FetchStep]) -> None:
+    project_id = request.project_id
     apps_cache: list[dict[str, Any]] | None = None
+    step_labels: dict[str, str] = {
+        "spaces": "Spaces laden",
+        "apps": "Apps laden",
+        "data-connections": "Datenverbindungen laden",
+        "lineage": "Lineage berechnen",
+        "app-edges": "App-Kanten berechnen",
+        "usage": "Usage-Daten laden",
+    }
     try:
         await _update_job(job_id, status="running")
+        await _append_log(job_id, f"Job gestartet · {len(steps)} Schritt(e) geplant")
+
+        if project_id is not None:
+            await _append_log(job_id, f"Lade Credentials für Projekt {project_id}…")
+            await _load_project_creds_to_env(project_id)
+            await _append_log(job_id, "✓ Credentials geladen")
+
         cleared = _clear_outputs_for_steps(steps)
+        if cleared.get("files") or cleared.get("dirs"):
+            await _append_log(job_id, "Alte Ausgabedateien bereinigt")
         await _update_job(job_id, cleanup=cleared)
-        for step in steps:
+
+        for i, step in enumerate(steps, 1):
+            label = step_labels.get(step, step)
+            await _append_log(job_id, f"Schritt {i}/{len(steps)}: {label}…")
             await _update_job(job_id, currentStep=step)
+
             if step == "spaces":
                 result = await _run_spaces_step()
+                await _append_log(job_id, f"✓ {result.get('count', 0)} Spaces geladen")
             elif step == "apps":
                 apps_cache, result = await _run_apps_step(request)
+                await _append_log(job_id, f"✓ {result.get('count', 0)} Apps geladen")
             elif step == "data-connections":
                 result = await _run_data_connections_step()
+                await _append_log(job_id, f"✓ {result.get('count', 0)} Datenverbindungen geladen")
             elif step == "lineage":
                 if apps_cache is None:
                     apps_cache = _load_apps_inventory()
                 result = await _run_lineage_step(request, apps_cache)
+                await _append_log(job_id, f"✓ Lineage für {len(apps_cache)} Apps berechnet")
             elif step == "app-edges":
                 if apps_cache is None:
                     apps_cache = _load_apps_inventory()
                 result = await _run_app_edges_step(request, apps_cache)
+                edges = result.get("appEdges", {}).get("edges", 0)
+                await _append_log(job_id, f"✓ {edges} App-Kanten gefunden")
             elif step == "usage":
                 if apps_cache is None:
                     apps_cache = _load_apps_inventory()
                 result = await _run_usage_step(request, apps_cache)
+                await _append_log(job_id, f"✓ Usage-Daten geladen")
             else:
                 continue
             await _complete_job_step(job_id, step, result)
 
         store.load()
-        await _update_job(job_id, status="completed", finishedAt=_utc_now_iso(), currentStep=None)
+        await _append_log(job_id, "Speichere Daten in Datenbank…")
+        db_result = await _run_db_store_step(project_id)
+        await _append_log(
+            job_id,
+            f"✓ Gespeichert: {db_result.get('apps', 0)} Apps · "
+            f"{db_result.get('nodes', 0)} Knoten · {db_result.get('edges', 0)} Kanten"
+        )
+        await _append_log(job_id, "✓ Job erfolgreich abgeschlossen")
+        await _update_job(job_id, status="completed", finishedAt=_utc_now_iso(), currentStep=None, dbStore=db_result)
     except Exception as exc:
+        await _append_log(job_id, f"✗ Fehler: {exc}")
         await _update_job(
             job_id,
             status="failed",
@@ -410,19 +487,118 @@ async def _execute_fetch_job(job_id: str, request: FetchJobRequest, steps: list[
         )
 
 
-@app.on_event("startup")
-def startup() -> None:
+async def _load_qlik_creds_to_env() -> None:
+    """On startup: load legacy single-row credentials from DB into os.environ (fallback)."""
+    try:
+        from app.database import AsyncSessionLocal
+        from app.models import QlikCredential
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(QlikCredential).limit(1))
+            cred = result.scalar_one_or_none()
+            if cred:
+                os.environ["QLIK_TENANT_URL"] = cred.tenant_url
+                os.environ["QLIK_API_KEY"] = cred.api_key
+                print(f"Loaded Qlik credentials from DB (tenant: {cred.tenant_url})")
+    except Exception as exc:
+        print(f"Warning: could not load Qlik credentials from DB: {exc}")
+
+
+async def _load_project_creds_to_env(project_id: int) -> None:
+    """Load credentials from a project's customer into os.environ for the duration of a fetch."""
+    from app.database import AsyncSessionLocal
+    from app.models import Customer, Project
+    from sqlalchemy import select
+    async with AsyncSessionLocal() as session:
+        proj_result = await session.execute(select(Project).where(Project.id == project_id))
+        project = proj_result.scalar_one_or_none()
+        if not project:
+            raise RuntimeError(f"project {project_id} not found")
+        cust_result = await session.execute(select(Customer).where(Customer.id == project.customer_id))
+        customer = cust_result.scalar_one_or_none()
+        if not customer:
+            raise RuntimeError(f"customer {project.customer_id} not found for project {project_id}")
+        os.environ["QLIK_TENANT_URL"] = customer.tenant_url
+        os.environ["QLIK_API_KEY"] = customer.api_key
+        print(f"Loaded credentials for project {project_id} from customer '{customer.name}'")
+
+
+async def _run_db_store_step(project_id: int | None = None) -> dict[str, Any]:
+    """After a fetch, persist graph data as JSONB in PostgreSQL (scoped by project_id)."""
+    from app.database import AsyncSessionLocal
+    from app.models import QlikApp, LineageNode, LineageEdge
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    stored: dict[str, int] = {"apps": 0, "nodes": 0, "edges": 0}
+
+    if project_id is None:
+        print("Warning: _run_db_store_step called without project_id — skipping DB persistence")
+        return stored
+
+    try:
+        async with AsyncSessionLocal() as session:
+            # --- apps ---
+            if APPS_INVENTORY_FILE.exists():
+                payload = read_json(APPS_INVENTORY_FILE)
+                apps_list = payload.get("apps", payload) if isinstance(payload, dict) else payload
+                for app_data in (apps_list if isinstance(apps_list, list) else []):
+                    app_id = app_data.get("appId")
+                    if not app_id:
+                        continue
+                    stmt = pg_insert(QlikApp).values(
+                        project_id=project_id,
+                        app_id=app_id,
+                        space_id=app_data.get("spaceId"),
+                        data=app_data,
+                    ).on_conflict_do_update(
+                        index_elements=["project_id", "app_id"],
+                        set_={"data": app_data, "space_id": app_data.get("spaceId")},
+                    )
+                    await session.execute(stmt)
+                    stored["apps"] += 1
+
+            # --- nodes ---
+            for node_id, node in store.nodes.items():
+                stmt = pg_insert(LineageNode).values(
+                    project_id=project_id,
+                    node_id=node_id,
+                    app_id=node.get("group"),
+                    node_type=node.get("type"),
+                    data=dict(node),
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "node_id"],
+                    set_={"data": dict(node), "node_type": node.get("type")},
+                )
+                await session.execute(stmt)
+                stored["nodes"] += 1
+
+            # --- edges ---
+            for edge_id, edge in store.edges.items():
+                stmt = pg_insert(LineageEdge).values(
+                    project_id=project_id,
+                    edge_id=edge_id,
+                    source_node_id=edge.get("source"),
+                    target_node_id=edge.get("target"),
+                    data=dict(edge),
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "edge_id"],
+                    set_={"data": dict(edge)},
+                )
+                await session.execute(stmt)
+                stored["edges"] += 1
+
+            await session.commit()
+    except Exception as exc:
+        print(f"Warning: DB store step failed: {exc}")
+    return stored
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await _load_qlik_creds_to_env()
     store.load()
+    yield
 
-
-if not is_prod():
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.dev_cors_origins,
-        allow_credentials=False,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["*"],
-    )
+app.router.lifespan_context = lifespan
 
 
 @app.middleware("http")
@@ -435,7 +611,7 @@ async def log_and_secure(request: Request, call_next):
 
 
 @app.get("/api/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
+async def api_health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         filesLoaded=store.files_loaded,
@@ -485,6 +661,56 @@ async def graph_for_app(app_id: str, depth: int = 1) -> GraphResponse:
 @app.get("/api/graph/all", response_model=GraphResponse)
 async def graph_all() -> GraphResponse:
     return store.get_full_graph()
+
+
+@app.get("/api/graph/db", response_model=GraphResponse)
+async def graph_from_db(session: AsyncSession = Depends(get_session)) -> GraphResponse:
+    """Read all lineage graph data from PostgreSQL JSONB tables (all projects)."""
+    from app.models import LineageNode, LineageEdge
+    from sqlalchemy import select
+    from shared.models import Node, Edge
+    nodes_result = await session.execute(select(LineageNode))
+    edges_result = await session.execute(select(LineageEdge))
+    nodes: list[Node] = []
+    for n in nodes_result.scalars():
+        try:
+            nodes.append(Node(**n.data))
+        except Exception:
+            pass
+    edges: list[Edge] = []
+    for e in edges_result.scalars():
+        try:
+            edges.append(Edge(**e.data))
+        except Exception:
+            pass
+    return GraphResponse(nodes=nodes, edges=edges)
+
+
+@app.get("/api/graph/project/{project_id}", response_model=GraphResponse)
+async def graph_for_project(project_id: int, session: AsyncSession = Depends(get_session)) -> GraphResponse:
+    """Read lineage graph data for a specific project from PostgreSQL."""
+    from app.models import LineageNode, LineageEdge
+    from sqlalchemy import select
+    from shared.models import Node, Edge
+    nodes_result = await session.execute(
+        select(LineageNode).where(LineageNode.project_id == project_id)
+    )
+    edges_result = await session.execute(
+        select(LineageEdge).where(LineageEdge.project_id == project_id)
+    )
+    nodes: list[Node] = []
+    for n in nodes_result.scalars():
+        try:
+            nodes.append(Node(**n.data))
+        except Exception:
+            pass
+    edges: list[Edge] = []
+    for e in edges_result.scalars():
+        try:
+            edges.append(Edge(**e.data))
+        except Exception:
+            pass
+    return GraphResponse(nodes=nodes, edges=edges)
 
 
 @app.get("/api/graph/node/{node_id:path}", response_model=GraphResponse)
@@ -556,15 +782,32 @@ async def get_fetch_job(job_id: str):
         return _public_job(job)
 
 
+@app.get("/api/fetch/jobs/{job_id}/logs")
+async def get_fetch_job_logs(job_id: str):
+    async with fetch_jobs_lock:
+        job = fetch_jobs_registry.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="fetch job not found")
+        return {
+            "logs": list(job_logs.get(job_id, [])),
+            "status": job.get("status"),
+            "currentStep": job.get("currentStep"),
+            "projectId": job.get("projectId"),
+        }
+
+
 @app.post("/api/fetch/jobs")
 async def start_fetch_job(
     payload: FetchJobRequest,
     x_fetch_token: str | None = Header(default=None, alias="X-Fetch-Token"),
 ):
     _assert_fetch_token(x_fetch_token)
-    missing = _missing_fetch_env()
-    if missing:
-        raise HTTPException(status_code=400, detail=f"missing backend env vars: {', '.join(missing)}")
+    # When project_id is given, credentials are loaded from the project's customer at runtime.
+    # Skip the global env-var check in that case.
+    if payload.project_id is None:
+        missing = _missing_fetch_env()
+        if missing:
+            raise HTTPException(status_code=400, detail=f"missing backend env vars: {', '.join(missing)}")
 
     planned_steps = _normalize_steps(payload.steps)
     async with fetch_jobs_lock:
@@ -573,9 +816,11 @@ async def start_fetch_job(
                 raise HTTPException(status_code=409, detail="another fetch job is already running")
 
         job_id = uuid.uuid4().hex
+        job_logs[job_id] = []
         job = {
             "jobId": job_id,
             "status": "queued",
+            "projectId": payload.project_id,
             "requestedSteps": payload.steps if payload.steps else list(FETCH_STEP_ORDER),
             "plannedSteps": planned_steps,
             "completedSteps": [],

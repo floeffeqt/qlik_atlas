@@ -1,13 +1,531 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Lineage Explorer</title>
-    <link rel="icon" href="data:," />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard – Lineage Explorer</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --accent: #667eea;
+      --accent2: #764ba2;
+      --text: #fff;
+      --text-muted: rgba(255,255,255,0.5);
+      --text-dim: rgba(255,255,255,0.3);
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15,20,40,0.7);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 700;
+      font-size: 1.05rem;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .brand-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .nav-links {
+      display: flex;
+      gap: 0.25rem;
+      margin-left: 1rem;
+    }
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-link:hover, .nav-link.active {
+      color: var(--text);
+      background: var(--surface-hover);
+    }
+    .nav-link.active { color: var(--accent); }
+    .nav-spacer { flex: 1; }
+    .nav-user {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .nav-user-email {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+    .btn-sm {
+      padding: 0.4rem 0.9rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-sm:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    /* ── LAYOUT ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    .page-header {
+      margin-bottom: 2rem;
+    }
+    .page-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .page-subtitle { color: var(--text-muted); font-size: 0.9rem; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── STATS GRID ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .stat-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+    }
+    .stat-icon.purple { background: rgba(102,126,234,0.15); }
+    .stat-icon.teal   { background: rgba(20,184,166,0.15); }
+    .stat-icon.orange { background: rgba(245,158,11,0.15); }
+    .stat-icon.green  { background: rgba(34,197,94,0.15); }
+    .stat-value { font-size: 1.75rem; font-weight: 700; line-height: 1; }
+    .stat-label { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.2rem; }
+
+    /* ── CONTENT GRID ── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 700px) { .content-grid { grid-template-columns: 1fr; } }
+
+    /* ── STATUS BADGE ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 100px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-green  { background: rgba(34,197,94,0.15);  color: #4ade80; }
+    .badge-yellow { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .badge-red    { background: rgba(239,68,68,0.15);  color: #f87171; }
+    .badge-gray   { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* ── STATUS ROW ── */
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .status-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .status-row:first-child { padding-top: 0; }
+    .status-label { font-size: 0.875rem; color: var(--text-muted); }
+
+    /* ── JOBS TABLE ── */
+    .jobs-list { margin-top: 0.5rem; }
+    .job-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.7rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .job-row:last-child { border-bottom: none; }
+    .job-id { color: var(--text-dim); font-family: monospace; font-size: 0.75rem; }
+    .job-steps { color: var(--text-muted); font-size: 0.78rem; }
+    .job-time { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
+
+    /* ── FETCH BUTTON ── */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--text-dim);
+      font-size: 0.875rem;
+    }
+    .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.4; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: rgba(30,40,70,0.95);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      color: var(--text);
+      backdrop-filter: blur(10px);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      max-width: 320px;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/">
+    <div class="brand-icon">⬡</div>
+    Lineage Explorer
+  </a>
+  <div class="nav-links">
+    <a class="nav-link active" href="/">Dashboard</a>
+    <a class="nav-link" href="/customers.html">Kunden</a>
+    <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/lineage.html">Lineage</a>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-user">
+    <span class="nav-user-email" id="userEmail">—</span>
+    <button class="btn-sm" id="logoutBtn">Sign out</button>
+  </div>
+</nav>
+
+<main>
+  <div class="page-header">
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle" id="lastUpdated">Loading…</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon purple">⬡</div>
+      <div>
+        <div class="stat-value" id="statNodes">—</div>
+        <div class="stat-label">Graph nodes</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon teal">↔</div>
+      <div>
+        <div class="stat-value" id="statEdges">—</div>
+        <div class="stat-label">Graph edges</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon orange">📄</div>
+      <div>
+        <div class="stat-value" id="statFiles">—</div>
+        <div class="stat-label">Files loaded</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green">✓</div>
+      <div>
+        <div class="stat-value" id="statStatus">—</div>
+        <div class="stat-label">System status</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content grid -->
+  <div class="content-grid">
+
+    <!-- Qlik API Status -->
+    <div class="card">
+      <div class="card-title">Qlik API Connection</div>
+      <div id="qlikStatus">
+        <div class="status-row">
+          <span class="status-label">Connection status</span>
+          <span class="badge badge-gray" id="qlikConnBadge"><span class="dot"></span> Checking…</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Missing config</span>
+          <span id="qlikMissingEnv" style="font-size:0.8rem;color:var(--text-muted)">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Active job</span>
+          <span id="qlikActiveJob" style="font-size:0.8rem;color:var(--text-muted)">None</span>
+        </div>
+        <div style="margin-top:1rem">
+          <button class="btn-primary" id="fetchBtn" disabled>
+            ▶ Start data fetch
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Jobs -->
+    <div class="card">
+      <div class="section-header">
+        <div class="card-title" style="margin-bottom:0">Recent fetch jobs</div>
+        <button class="btn-sm" id="refreshJobsBtn">↻ Refresh</button>
+      </div>
+      <div id="jobsList" class="jobs-list">
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          No jobs yet
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ── Auth guard ──
+  const token = localStorage.getItem('auth_access_token');
+  if (!token) { window.location.href = '/login.html'; }
+
+  // ── Helpers ──
+  function showToast(msg, duration) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
+  }
+
+  async function apiFetch(path) {
+    var res = await fetch(path, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('auth_access_token');
+      window.location.href = '/login.html';
+    }
+    return res;
+  }
+
+  function statusBadge(status) {
+    if (status === 'completed') return '<span class="badge badge-green"><span class="dot"></span>Completed</span>';
+    if (status === 'running')   return '<span class="badge badge-yellow"><span class="dot"></span>Running</span>';
+    if (status === 'failed')    return '<span class="badge badge-red"><span class="dot"></span>Failed</span>';
+    if (status === 'queued')    return '<span class="badge badge-yellow"><span class="dot"></span>Queued</span>';
+    return '<span class="badge badge-gray">' + status + '</span>';
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+
+  // ── Load health ──
+  async function loadHealth() {
+    try {
+      var res = await apiFetch('/api/health');
+      var d = await res.json();
+      document.getElementById('statNodes').textContent = d.nodesCount.toLocaleString();
+      document.getElementById('statEdges').textContent = d.edgesCount.toLocaleString();
+      document.getElementById('statFiles').textContent = d.filesLoaded.toLocaleString();
+      document.getElementById('statStatus').textContent = d.status === 'ok' ? 'OK' : d.status;
+      document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+    } catch(e) {
+      document.getElementById('lastUpdated').textContent = 'Failed to load stats';
+    }
+  }
+
+  // ── Load fetch status ──
+  async function loadFetchStatus() {
+    try {
+      var res = await apiFetch('/api/fetch/status');
+      var d = await res.json();
+      var badge = document.getElementById('qlikConnBadge');
+      if (d.canRun) {
+        badge.className = 'badge badge-green';
+        badge.innerHTML = '<span class="dot"></span>Ready';
+      } else {
+        badge.className = 'badge badge-yellow';
+        badge.innerHTML = '<span class="dot"></span>Not configured';
+      }
+      var missing = d.missingEnv && d.missingEnv.length ? d.missingEnv.join(', ') : 'None';
+      document.getElementById('qlikMissingEnv').textContent = missing;
+      document.getElementById('qlikActiveJob').textContent = d.runningJobId || 'None';
+
+      var fetchBtn = document.getElementById('fetchBtn');
+      fetchBtn.disabled = !d.canRun || !!d.runningJobId;
+    } catch(e) {}
+  }
+
+  // ── Load jobs ──
+  async function loadJobs() {
+    try {
+      var res = await apiFetch('/api/fetch/jobs');
+      var d = await res.json();
+      var jobs = d.jobs || [];
+      var el = document.getElementById('jobsList');
+      if (!jobs.length) {
+        el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>No jobs yet</div>';
+        return;
+      }
+      el.innerHTML = jobs.slice(0, 6).map(function(j) {
+        var steps = (j.completedSteps || []).length + '/' + (j.plannedSteps || []).length + ' steps';
+        return '<div class="job-row">'
+          + statusBadge(j.status)
+          + '<span class="job-steps">' + steps + '</span>'
+          + '<span class="job-time">' + fmtDate(j.createdAt) + '</span>'
+          + '<span class="job-id">' + (j.jobId || '').slice(0,8) + '</span>'
+          + '</div>';
+      }).join('');
+    } catch(e) {}
+  }
+
+  // ── Start fetch ──
+  document.getElementById('fetchBtn').addEventListener('click', async function() {
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ Starting…';
+    try {
+      var res = await fetch('/api/fetch/jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ steps: null, clearOutputs: false })
+      });
+      if (res.ok) {
+        showToast('✓ Fetch job started');
+        setTimeout(function() { loadJobs(); loadFetchStatus(); }, 1000);
+      } else {
+        var err = await res.json().catch(function(){ return {}; });
+        showToast('Error: ' + (err.detail || 'Could not start job'));
+      }
+    } catch(e) {
+      showToast('Network error');
+    }
+    btn.textContent = '▶ Start data fetch';
+    setTimeout(function() { loadFetchStatus(); }, 2000);
+  });
+
+  // ── Logout ──
+  document.getElementById('logoutBtn').addEventListener('click', function() {
+    localStorage.removeItem('auth_access_token');
+    window.location.href = '/login.html';
+  });
+
+  // ── Refresh jobs ──
+  document.getElementById('refreshJobsBtn').addEventListener('click', function() {
+    loadJobs(); loadFetchStatus();
+    showToast('Refreshed', 1500);
+  });
+
+  // ── User email from token ──
+  try {
+    var payload = JSON.parse(atob(token.split('.')[1]));
+    // JWT sub is user id; just show a placeholder
+    document.getElementById('userEmail').textContent = 'User #' + (payload.sub || '—');
+  } catch(e) {}
+
+  // ── Init ──
+  loadHealth();
+  loadFetchStatus();
+  loadJobs();
+  setInterval(loadHealth, 30000);
+  setInterval(function() { loadFetchStatus(); loadJobs(); }, 15000);
+</script>
+</body>
 </html>

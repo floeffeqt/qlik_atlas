@@ -20,7 +20,7 @@ class Settings:
 
 def load_settings() -> Settings:
     env = os.getenv("APP_ENV", "dev").lower()
-    base = Path(__file__).resolve().parents[2]
+    base = Path(__file__).resolve().parents[1]
 
     default_data_dir = base / "output" / "lineage_success"
     fallback_data_dir = base / "output" / "lineage"

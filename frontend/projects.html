@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projekte – Lineage Explorer</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --accent: #667eea;
+      --accent2: #764ba2;
+      --text: #fff;
+      --text-muted: rgba(255,255,255,0.5);
+      --text-dim: rgba(255,255,255,0.3);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); }
+
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
+    .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
+    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+    .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
+    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
+    .nav-link:hover { color: var(--text); background: var(--surface-hover); }
+    .nav-link.active { color: var(--accent); background: var(--surface-hover); }
+    .nav-spacer { flex: 1; }
+    .nav-user { display: flex; align-items: center; gap: 0.75rem; }
+    .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
+    .btn-sm { padding: 0.4rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
+    .btn-sm:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+    .page-title { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .page-subtitle { color: var(--text-muted); font-size: 0.9rem; }
+
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-fetch { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-fetch:hover { background: rgba(34,197,94,0.3); }
+    .btn-fetch:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-lineage { background: rgba(102,126,234,0.15); border: 1px solid rgba(102,126,234,0.3); color: #a5b4fc; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; }
+    .btn-lineage:hover { background: rgba(102,126,234,0.3); }
+    .btn-edit { background: rgba(255,255,255,0.07); border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-edit:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-danger { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-danger:hover { background: rgba(239,68,68,0.3); }
+
+    /* ── CARDS GRID ── */
+    .projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem; }
+    .project-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 0.75rem; }
+    .project-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+    .project-name { font-size: 1rem; font-weight: 700; line-height: 1.3; }
+    .project-desc { color: var(--text-muted); font-size: 0.83rem; line-height: 1.5; }
+    .project-meta { display: flex; flex-direction: column; gap: 0.3rem; }
+    .meta-row { display: flex; gap: 0.5rem; font-size: 0.78rem; align-items: center; }
+    .meta-key { color: var(--text-dim); min-width: 60px; }
+    .meta-val { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .project-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.25rem; }
+
+    .badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem; border-radius: 100px; font-size: 0.72rem; font-weight: 600; }
+    .badge-green  { background: rgba(34,197,94,0.15);  color: #4ade80; }
+    .badge-yellow { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .badge-red    { background: rgba(239,68,68,0.15);  color: #f87171; }
+    .badge-gray   { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+    .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+    .empty-state { text-align: center; padding: 4rem 1rem; color: var(--text-dim); }
+    .empty-icon { font-size: 2.5rem; opacity: 0.3; margin-bottom: 0.75rem; }
+
+    /* ── MODAL ── */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 480px; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.5rem; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .modal-close:hover { color: var(--text); }
+    .form-group { margin-bottom: 1.1rem; }
+    label { display: block; color: rgba(255,255,255,0.7); font-size: 0.82rem; font-weight: 500; margin-bottom: 0.45rem; }
+    input[type="text"], select, textarea { width: 100%; padding: 0.7rem 0.9rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; font-size: 0.9rem; outline: none; transition: border-color 0.2s; font-family: inherit; }
+    input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.3); }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    select option { background: #1a1a2e; }
+    textarea { resize: vertical; min-height: 80px; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+    .btn-modal-cancel { padding: 0.6rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.875rem; cursor: pointer; }
+    .btn-modal-cancel:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-modal-save { padding: 0.6rem 1.3rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-modal-save:hover { opacity: 0.9; }
+    .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .alert { border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
+    .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
+
+    .confirm-modal { max-width: 380px; }
+    .confirm-msg { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.5; }
+
+    #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(10px); background: rgba(30,40,70,0.95); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-size: 0.875rem; color: var(--text); backdrop-filter: blur(10px); opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; max-width: 320px; z-index: 500; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── LOG POPUP – DOS STYLE ── */
+    .log-popup {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      width: 520px;
+      max-width: calc(100vw - 3rem);
+      background: #000000;
+      border: 2px solid #00aa00;
+      border-radius: 0;
+      z-index: 400;
+      box-shadow: 0 0 18px rgba(0,200,0,0.25), 0 20px 50px rgba(0,0,0,0.9);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    .log-popup.hidden { display: none; }
+
+    /* Title bar – classic blue DOS dialog */
+    .log-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.5rem;
+      background: #0000aa;
+      border-bottom: 1px solid #00aa00;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    /* Status badge replaces dot */
+    .log-status-dot {
+      font-family: 'Courier New', monospace;
+      font-size: 0.65rem;
+      font-weight: bold;
+      padding: 0.05rem 0.3rem;
+      border: 1px solid currentColor;
+      flex-shrink: 0;
+      line-height: 1.4;
+    }
+    .log-status-dot.running { color: #ffff55; border-color: #ffff55; animation: logpulse 1.2s ease-in-out infinite; }
+    .log-status-dot.failed  { color: #ff5555; border-color: #ff5555; }
+    .log-status-dot.done    { color: #55ff55; border-color: #55ff55; }
+    @keyframes logpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .log-title-text {
+      flex: 1;
+      font-size: 0.75rem;
+      font-weight: bold;
+      color: #ffffff;
+      font-family: 'Courier New', monospace;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      letter-spacing: 0.03em;
+    }
+    .log-controls { display: flex; gap: 0.3rem; flex-shrink: 0; }
+    .log-ctrl-btn {
+      background: #0000aa;
+      border: 1px solid #ffffff;
+      color: #ffffff;
+      font-family: 'Courier New', monospace;
+      font-size: 0.65rem;
+      font-weight: bold;
+      cursor: pointer;
+      padding: 0.05rem 0.35rem;
+      line-height: 1.4;
+      transition: background 0.1s, color 0.1s;
+    }
+    .log-ctrl-btn:hover { background: #ffffff; color: #0000aa; }
+
+    /* Log body */
+    .log-body {
+      padding: 0.5rem 0.65rem;
+      height: 240px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      scrollbar-width: thin;
+      scrollbar-color: #00aa00 #000;
+      position: relative;
+    }
+    /* CRT scanlines */
+    .log-body::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,0.18) 3px,
+        rgba(0,0,0,0.18) 4px
+      );
+      pointer-events: none;
+      z-index: 2;
+    }
+    .log-popup.minimized .log-body { display: none; }
+
+    .log-line {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.72rem;
+      line-height: 1.5;
+      color: #aaffaa;
+      white-space: pre-wrap;
+      word-break: break-all;
+      position: relative;
+      z-index: 3;
+    }
+    .log-line.log-ok   { color: #55ff55; }
+    .log-line.log-err  { color: #ff5555; }
+    .log-line.log-step { color: #55ffff; }
+
+    /* Blinking cursor at end */
+    #logCursor {
+      display: inline-block;
+      width: 0.5rem; height: 0.85em;
+      background: #aaffaa;
+      vertical-align: text-bottom;
+      margin-left: 1px;
+      animation: blink 1s step-end infinite;
+      position: relative; z-index: 3;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ── RECENT JOBS BUTTON – DOS STYLE ── */
+    .recent-jobs-wrap {
+      position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 390;
+    }
+    .recent-jobs-wrap.hidden { display: none; }
+    .recent-jobs-toggle {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.3rem 0.75rem;
+      background: #000000;
+      border: 2px solid #00aa00;
+      border-radius: 0;
+      color: #aaffaa;
+      font-family: 'Courier New', monospace;
+      font-size: 0.72rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0,180,0,0.2);
+      transition: all 0.1s;
+      letter-spacing: 0.03em;
+    }
+    .recent-jobs-toggle:hover { background: #00aa00; color: #000; }
+    .recent-jobs-list {
+      position: absolute; bottom: calc(100% + 0.4rem); right: 0;
+      width: 300px;
+      background: #000000;
+      border: 2px solid #00aa00;
+      border-radius: 0;
+      box-shadow: 0 0 16px rgba(0,180,0,0.2);
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+    }
+    .recent-jobs-list.hidden { display: none; }
+    .rj-header {
+      padding: 0.3rem 0.6rem;
+      font-size: 0.68rem; font-weight: bold;
+      color: #000; background: #00aa00;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      border-bottom: 1px solid #00aa00;
+    }
+    .recent-job-item {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.4rem 0.6rem;
+      border-bottom: 1px solid #003300;
+      cursor: pointer; transition: background 0.1s;
+    }
+    .recent-job-item:last-child { border-bottom: none; }
+    .recent-job-item:hover { background: #001a00; }
+    .rji-dot { font-size: 0.65rem; font-weight: bold; flex-shrink: 0; min-width: 36px; font-family: 'Courier New', monospace; }
+    .rji-name { flex: 1; font-size: 0.72rem; color: #aaffaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rji-label { font-size: 0.65rem; color: #558855; }
+    .rji-open { font-size: 0.65rem; color: #55ffff; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/"><div class="brand-icon">⬡</div>Lineage Explorer</a>
+  <div class="nav-links">
+    <a class="nav-link" href="/">Dashboard</a>
+    <a class="nav-link" href="/customers.html">Kunden</a>
+    <a class="nav-link active" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/lineage.html">Lineage</a>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-user">
+    <span class="nav-user-email" id="userEmail">—</span>
+    <button class="btn-sm" id="logoutBtn">Sign out</button>
+  </div>
+</nav>
+
+<main>
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Projekte</h1>
+      <p class="page-subtitle">Lineage-Projekte verwalten und Daten laden</p>
+    </div>
+    <button class="btn-primary" id="newProjectBtn">+ Neues Projekt</button>
+  </div>
+
+  <div id="projectsWrap">
+    <div class="empty-state">
+      <div class="empty-icon">📁</div>
+      <div>Noch keine Projekte. Erstelle zuerst einen Kunden, dann ein Projekt.</div>
+    </div>
+  </div>
+</main>
+
+<!-- Create / Edit Modal -->
+<div class="modal-backdrop" id="editModal">
+  <div class="modal">
+    <button class="modal-close" id="modalClose">✕</button>
+    <div class="modal-title" id="modalTitle">Neues Projekt</div>
+    <div class="alert alert-error" id="modalError"></div>
+    <form id="projectForm">
+      <input type="hidden" id="editingId" value="" />
+      <div class="form-group">
+        <label for="fName">Bezeichnung *</label>
+        <input id="fName" type="text" placeholder="Projektname" required />
+      </div>
+      <div class="form-group">
+        <label for="fCustomer">Kunde *</label>
+        <select id="fCustomer" required>
+          <option value="">— Kunden wählen —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="fDesc">Beschreibung</label>
+        <textarea id="fDesc" placeholder="Optionale Beschreibung des Projekts…"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="modalCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="modalSave">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Confirm Delete -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal confirm-modal">
+    <div class="modal-title">Projekt löschen?</div>
+    <div class="confirm-msg" id="confirmMsg"></div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" id="confirmCancel">Abbrechen</button>
+      <button class="btn-modal-save" id="confirmOk" style="background:linear-gradient(135deg,#ef4444,#dc2626)">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── LOG POPUP ── -->
+<div class="log-popup hidden" id="logPopup">
+  <div class="log-header">
+    <span class="log-status-dot done" id="logDot">OK</span>
+    <span class="log-title-text" id="logTitle">FETCH-JOB</span>
+    <div class="log-controls">
+      <button class="log-ctrl-btn" id="logMinimize">[-]</button>
+      <button class="log-ctrl-btn" id="logClose">[X]</button>
+    </div>
+  </div>
+  <div class="log-body" id="logBody">
+    <div id="logLines"></div>
+    <span id="logCursor"></span>
+  </div>
+</div>
+
+<!-- ── RECENT JOBS BUTTON ── -->
+<div class="recent-jobs-wrap hidden" id="recentJobsWrap">
+  <div class="recent-jobs-list hidden" id="recentJobsList">
+    <div class="rj-header">Letzte Jobs</div>
+  </div>
+  <button class="recent-jobs-toggle" id="recentJobsBtn">&gt; FETCH LOG</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  var token = localStorage.getItem('auth_access_token');
+  if (!token) { window.location.href = '/login.html'; }
+
+  try {
+    var jp = JSON.parse(atob(token.split('.')[1]));
+    document.getElementById('userEmail').textContent = 'User #' + (jp.sub || '—');
+  } catch(e) {}
+
+  document.getElementById('logoutBtn').addEventListener('click', function() {
+    localStorage.removeItem('auth_access_token');
+    window.location.href = '/login.html';
+  });
+
+  function showToast(msg, dur) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, dur || 3000);
+  }
+
+  async function apiFetch(path, opts) {
+    var headers = Object.assign({'Authorization': 'Bearer ' + token}, (opts && opts.headers) || {});
+    var res = await fetch(path, Object.assign({}, opts || {}, {headers: headers}));
+    if (res.status === 401) { localStorage.removeItem('auth_access_token'); window.location.href = '/login.html'; }
+    return res;
+  }
+
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'});
+  }
+
+  function statusBadge(status) {
+    if (status === 'completed') return '<span class="badge badge-green"><span class="dot"></span>Abgeschlossen</span>';
+    if (status === 'running')   return '<span class="badge badge-yellow"><span class="dot"></span>Läuft…</span>';
+    if (status === 'failed')    return '<span class="badge badge-red"><span class="dot"></span>Fehlgeschlagen</span>';
+    if (status === 'queued')    return '<span class="badge badge-yellow"><span class="dot"></span>Warteschlange</span>';
+    return '<span class="badge badge-gray">—</span>';
+  }
+
+  var projects = [];
+  var customers = [];
+  var projectJobStatus = {};
+
+  async function loadData() {
+    var [projRes, custRes] = await Promise.all([
+      apiFetch('/api/projects'),
+      apiFetch('/api/customers')
+    ]);
+    projects = await projRes.json();
+    customers = await custRes.json();
+    renderProjects();
+    populateCustomerDropdown();
+  }
+
+  function populateCustomerDropdown() {
+    var sel = document.getElementById('fCustomer');
+    var current = sel.value;
+    sel.innerHTML = '<option value="">— Kunden wählen —</option>'
+      + customers.map(function(c) {
+          return '<option value="' + c.id + '"' + (String(c.id) === current ? ' selected' : '') + '>'
+            + escHtml(c.name) + ' (' + escHtml(c.tenant_url.replace(/^https?:\/\//, '').split('/')[0]) + ')'
+            + '</option>';
+        }).join('');
+  }
+
+  function renderProjects() {
+    var wrap = document.getElementById('projectsWrap');
+    if (!projects.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📁</div><div>Noch keine Projekte. Erstelle zuerst einen Kunden, dann ein Projekt.</div></div>';
+      return;
+    }
+    var cards = projects.map(function(p) {
+      var jobInfo = projectJobStatus[p.id] || {};
+      var lastStatus = jobInfo.status ? statusBadge(jobInfo.status) : statusBadge('');
+      var custName = p.customer ? escHtml(p.customer.name) : '—';
+      var custUrl = p.customer ? escHtml(p.customer.tenant_url) : '—';
+      var isBusy = jobInfo.status === 'running' || jobInfo.status === 'queued';
+      return '<div class="project-card">'
+        + '<div class="project-card-header">'
+        + '<div class="project-name">' + escHtml(p.name) + '</div>'
+        + lastStatus
+        + '</div>'
+        + (p.description ? '<div class="project-desc">' + escHtml(p.description) + '</div>' : '')
+        + '<div class="project-meta">'
+        + '<div class="meta-row"><span class="meta-key">Kunde</span><span class="meta-val">' + custName + '</span></div>'
+        + '<div class="meta-row"><span class="meta-key">Tenant</span><span class="meta-val" title="' + custUrl + '">' + custUrl.replace(/^https?:\/\//, '') + '</span></div>'
+        + '<div class="meta-row"><span class="meta-key">Erstellt</span><span class="meta-val">' + fmtDate(p.created_at) + '</span></div>'
+        + '</div>'
+        + '<div class="project-actions">'
+        + '<button class="btn-fetch" id="fetchBtn-' + p.id + '" onclick="startFetch(' + p.id + ')" ' + (isBusy ? 'disabled' : '') + '>▶ Daten laden</button>'
+        + '<a class="btn-lineage" href="/lineage.html?project=' + p.id + '">⬡ Lineage</a>'
+        + '<button class="btn-edit" onclick="openEdit(' + p.id + ')">Bearbeiten</button>'
+        + '<button class="btn-danger" onclick="openDelete(' + p.id + ', \'' + escHtml(p.name) + '\')">Löschen</button>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+    wrap.innerHTML = '<div class="projects-grid">' + cards + '</div>';
+  }
+
+  // ── LOG POPUP ─────────────────────────────────────────────────────
+
+  var currentLogJobId = null;
+  var logPolling = false;
+  var lastLogCount = 0;
+  var recentJobs = [];      // [{jobId, projectName, status, projectId}]
+  var recentJobsOpen = false;
+
+  function setLogDot(status) {
+    var dot = document.getElementById('logDot');
+    if (status === 'running' || status === 'queued') {
+      dot.className = 'log-status-dot running';
+      dot.textContent = 'RUN';
+    } else if (status === 'failed') {
+      dot.className = 'log-status-dot failed';
+      dot.textContent = 'ERR';
+    } else {
+      dot.className = 'log-status-dot done';
+      dot.textContent = 'OK';
+    }
+    // Hide cursor when done/failed
+    var cursor = document.getElementById('logCursor');
+    if (cursor) cursor.style.display = (status === 'running' || status === 'queued') ? '' : 'none';
+  }
+
+  function logLineClass(text) {
+    if (/^✓/.test(text) || /✓/.test(text.replace(/\[\d{2}:\d{2}:\d{2}\]\s*/, ''))) return 'log-line log-ok';
+    if (/^✗/.test(text) || /Fehler/.test(text)) return 'log-line log-err';
+    if (/Schritt \d+\//.test(text)) return 'log-line log-step';
+    return 'log-line';
+  }
+
+  function appendLogLine(text) {
+    var el = document.createElement('div');
+    el.className = logLineClass(text);
+    el.textContent = text;
+    document.getElementById('logLines').appendChild(el);
+    var body = document.getElementById('logBody');
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function openLogPopup(jobId, projectName, status) {
+    currentLogJobId = jobId;
+    lastLogCount = 0;
+    document.getElementById('logTitle').textContent = projectName.toUpperCase();
+    document.getElementById('logLines').innerHTML = '';
+    setLogDot(status || 'queued');
+    document.getElementById('logPopup').classList.remove('hidden', 'minimized');
+    document.getElementById('logMinimize').textContent = '[-]';
+    document.getElementById('recentJobsWrap').classList.add('hidden');
+    recentJobsOpen = false;
+  }
+
+  function closeLogPopup() {
+    logPolling = false;
+    document.getElementById('logPopup').classList.add('hidden');
+    if (recentJobs.length > 0) {
+      document.getElementById('recentJobsWrap').classList.remove('hidden');
+    }
+  }
+
+  document.getElementById('logMinimize').addEventListener('click', function() {
+    var popup = document.getElementById('logPopup');
+    popup.classList.toggle('minimized');
+    this.textContent = popup.classList.contains('minimized') ? '[+]' : '[-]';
+  });
+  document.getElementById('logClose').addEventListener('click', closeLogPopup);
+
+  async function pollLogs(jobId, projectId) {
+    logPolling = true;
+    while (logPolling && currentLogJobId === jobId) {
+      try {
+        var res = await apiFetch('/api/fetch/jobs/' + jobId + '/logs');
+        if (!res.ok) break;
+        var data = await res.json();
+
+        var logs = data.logs || [];
+        for (var i = lastLogCount; i < logs.length; i++) {
+          appendLogLine(logs[i]);
+        }
+        lastLogCount = logs.length;
+
+        setLogDot(data.status);
+
+        if (projectId != null) {
+          projectJobStatus[projectId] = {status: data.status, jobId: jobId};
+          renderProjects();
+        }
+
+        // Update recent jobs list entry
+        var rj = recentJobs.find(function(j) { return j.jobId === jobId; });
+        if (rj) rj.status = data.status;
+
+        if (data.status === 'completed' || data.status === 'failed') {
+          if (data.status === 'completed') showToast('✓ Daten erfolgreich geladen');
+          else showToast('✗ Fehler beim Laden – siehe Log');
+          logPolling = false;
+          break;
+        }
+      } catch(e) {
+        logPolling = false;
+        break;
+      }
+      await new Promise(function(r) { setTimeout(r, 2000); });
+    }
+  }
+
+  // ── RECENT JOBS ───────────────────────────────────────────────────
+
+  function addToRecentJobs(jobId, projectName, projectId, status) {
+    recentJobs = recentJobs.filter(function(j) { return j.jobId !== jobId; });
+    recentJobs.unshift({jobId: jobId, projectName: projectName, projectId: projectId, status: status});
+    if (recentJobs.length > 6) recentJobs = recentJobs.slice(0, 6);
+  }
+
+  function statusDotColor(status) {
+    if (status === 'completed') return '#4ade80';
+    if (status === 'failed')    return '#f87171';
+    return '#fbbf24';
+  }
+
+  function statusLabel(status) {
+    if (status === 'completed') return 'Abgeschlossen';
+    if (status === 'failed')    return 'Fehler';
+    if (status === 'running')   return 'Läuft';
+    return 'Warteschlange';
+  }
+
+  function renderRecentJobsList() {
+    var list = document.getElementById('recentJobsList');
+    var items = recentJobs.map(function(j) {
+      var dotColor = j.status === 'completed' ? '#55ff55' : j.status === 'failed' ? '#ff5555' : '#ffff55';
+      var dotText  = j.status === 'completed' ? '[OK]'   : j.status === 'failed' ? '[ERR]'  : '[RUN]';
+      return '<div class="recent-job-item" onclick="reopenLog(\'' + j.jobId + '\', \'' + j.projectName.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\', ' + (j.projectId || 'null') + ')">'
+        + '<span class="rji-dot" style="color:' + dotColor + '">' + dotText + '</span>'
+        + '<span class="rji-name">' + escHtml(j.projectName.toUpperCase()) + '</span>'
+        + '<span class="rji-label">' + statusLabel(j.status).toUpperCase() + '</span>'
+        + '<span class="rji-open">&gt;LOG</span>'
+        + '</div>';
+    }).join('');
+    list.innerHTML = '<div class="rj-header">Letzte Jobs</div>' + (items || '<div style="padding:0.65rem 0.9rem;font-size:0.78rem;color:rgba(255,255,255,0.3);">Keine Jobs vorhanden</div>');
+  }
+
+  document.getElementById('recentJobsBtn').addEventListener('click', function() {
+    recentJobsOpen = !recentJobsOpen;
+    renderRecentJobsList();
+    document.getElementById('recentJobsList').classList.toggle('hidden', !recentJobsOpen);
+  });
+
+  async function reopenLog(jobId, projectName, projectId) {
+    recentJobsOpen = false;
+    document.getElementById('recentJobsList').classList.add('hidden');
+    openLogPopup(jobId, projectName, 'queued');
+    try {
+      var res = await apiFetch('/api/fetch/jobs/' + jobId + '/logs');
+      var data = await res.json();
+      var logs = data.logs || [];
+      for (var i = 0; i < logs.length; i++) { appendLogLine(logs[i]); }
+      lastLogCount = logs.length;
+      setLogDot(data.status);
+      if (data.status === 'running' || data.status === 'queued') {
+        pollLogs(jobId, projectId);
+      }
+    } catch(e) {
+      showToast('Fehler beim Laden des Logs');
+    }
+  }
+
+  // ── FETCH JOB ─────────────────────────────────────────────────────
+
+  async function startFetch(projectId) {
+    var project = projects.find(function(p) { return p.id === projectId; });
+    var projectName = project ? project.name : 'Projekt ' + projectId;
+    var btn = document.getElementById('fetchBtn-' + projectId);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Startet…'; }
+    try {
+      var res = await apiFetch('/api/fetch/jobs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({project_id: projectId, steps: null})
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function(){ return {}; });
+        throw new Error(err.detail || 'Fehler beim Starten');
+      }
+      var job = await res.json();
+      projectJobStatus[projectId] = {status: 'queued', jobId: job.jobId};
+      addToRecentJobs(job.jobId, projectName, projectId, 'queued');
+      openLogPopup(job.jobId, projectName, 'queued');
+      renderProjects();
+      pollLogs(job.jobId, projectId);
+    } catch(e) {
+      showToast('Fehler: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Daten laden'; }
+    }
+  }
+
+  // ── MODAL ─────────────────────────────────────────────────────────
+
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  function resetForm() {
+    document.getElementById('editingId').value = '';
+    document.getElementById('fName').value = '';
+    document.getElementById('fCustomer').value = '';
+    document.getElementById('fDesc').value = '';
+    document.getElementById('modalError').style.display = 'none';
+    document.getElementById('modalTitle').textContent = 'Neues Projekt';
+    document.getElementById('modalSave').disabled = false;
+    document.getElementById('modalSave').textContent = 'Speichern';
+  }
+
+  document.getElementById('newProjectBtn').addEventListener('click', function() { resetForm(); openModal('editModal'); });
+  document.getElementById('modalClose').addEventListener('click', function() { closeModal('editModal'); });
+  document.getElementById('modalCancel').addEventListener('click', function() { closeModal('editModal'); });
+  document.getElementById('editModal').addEventListener('click', function(e) { if (e.target === this) closeModal('editModal'); });
+
+  function openEdit(id) {
+    var p = projects.find(function(x) { return x.id === id; });
+    if (!p) return;
+    resetForm();
+    document.getElementById('editingId').value = String(id);
+    document.getElementById('fName').value = p.name;
+    document.getElementById('fCustomer').value = String(p.customer_id);
+    document.getElementById('fDesc').value = p.description || '';
+    document.getElementById('modalTitle').textContent = 'Projekt bearbeiten';
+    openModal('editModal');
+  }
+
+  document.getElementById('projectForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var errorEl = document.getElementById('modalError');
+    errorEl.style.display = 'none';
+    var saveBtn = document.getElementById('modalSave');
+    var editingId = document.getElementById('editingId').value;
+    var name = document.getElementById('fName').value.trim();
+    var customerId = parseInt(document.getElementById('fCustomer').value, 10);
+    var desc = document.getElementById('fDesc').value.trim() || null;
+
+    if (!customerId) {
+      errorEl.textContent = 'Bitte einen Kunden wählen.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Speichern…';
+    try {
+      var url = editingId ? '/api/projects/' + editingId : '/api/projects';
+      var method = editingId ? 'PUT' : 'POST';
+      var body = {name: name, customer_id: customerId, description: desc};
+      var res = await apiFetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function(){ return {}; });
+        throw new Error(err.detail || 'Fehler beim Speichern');
+      }
+      closeModal('editModal');
+      showToast('✓ Projekt gespeichert');
+      await loadData();
+    } catch(err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Speichern';
+  });
+
+  // ── DELETE ────────────────────────────────────────────────────────
+
+  var deleteTargetId = null;
+  function openDelete(id, name) {
+    deleteTargetId = id;
+    document.getElementById('confirmMsg').textContent = 'Projekt "' + name + '" und alle zugehörigen Lineage-Daten werden unwiderruflich gelöscht.';
+    openModal('confirmModal');
+  }
+  document.getElementById('confirmCancel').addEventListener('click', function() { closeModal('confirmModal'); });
+  document.getElementById('confirmModal').addEventListener('click', function(e) { if (e.target === this) closeModal('confirmModal'); });
+  document.getElementById('confirmOk').addEventListener('click', async function() {
+    if (!deleteTargetId) return;
+    this.disabled = true;
+    this.textContent = '⏳ Löschen…';
+    try {
+      var res = await apiFetch('/api/projects/' + deleteTargetId, {method: 'DELETE'});
+      if (!res.ok && res.status !== 204) throw new Error('Fehler beim Löschen');
+      closeModal('confirmModal');
+      showToast('✓ Projekt gelöscht');
+      await loadData();
+    } catch(e) {
+      showToast('Fehler: ' + e.message);
+    }
+    this.disabled = false;
+    this.textContent = 'Löschen';
+    deleteTargetId = null;
+  });
+
+  loadData();
+</script>
+</body>
+</html>
