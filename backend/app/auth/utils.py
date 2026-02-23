@@ -21,9 +21,9 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(subject: str, role: str = "user", email: str = "") -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_EXPIRE_MINUTES)
-    to_encode = {"exp": expire, "sub": str(subject)}
+    to_encode = {"exp": expire, "sub": str(subject), "role": role, "email": email}
     return jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
 
 
@@ -40,3 +40,29 @@ async def get_current_user_id(
         return user_id
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> dict:
+    """Returns {"user_id": str, "role": str} from the JWT."""
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[ALGORITHM])
+        user_id: str | None = payload.get("sub")
+        role: str = payload.get("role", "user")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        return {"user_id": user_id, "role": role}
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+
+async def require_admin(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Raises 403 if the authenticated user is not an admin."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user

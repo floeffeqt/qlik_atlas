@@ -298,6 +298,25 @@
       z-index: 200;
     }
     #toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── ADMIN FAB ── */
+    .admin-fab {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 1.5rem;
+      padding: 0.6rem 1.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      z-index: 90;
+      box-shadow: 0 4px 16px rgba(102,126,234,0.3);
+      transition: opacity 0.2s, transform 0.1s;
+      display: none;
+    }
+    .admin-fab:hover { opacity: 0.9; transform: translateY(-1px); }
   </style>
 </head>
 <body>
@@ -309,7 +328,6 @@
   </a>
   <div class="nav-links">
     <a class="nav-link" href="/">Dashboard</a>
-    <a class="nav-link" href="/customers.html">Kunden</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
     <a class="nav-link active" href="/lineage.html">Lineage</a>
   </div>
@@ -361,7 +379,7 @@
 
   <div id="emptyState">
     <div class="empty-icon">⬡</div>
-    <div class="empty-msg">No graph data found. Configure your Qlik credentials in Settings and start a data fetch from the Dashboard.</div>
+    <div class="empty-msg">No graph data found. Configure a customer with Qlik credentials under Kunden and start a data fetch from the Projekte page.</div>
   </div>
 
   <div id="loadingOverlay">
@@ -396,6 +414,7 @@
   </div>
 </div>
 
+<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
 <div id="toast"></div>
 
 <!-- D3 v7 from CDN -->
@@ -404,10 +423,13 @@
   var token = localStorage.getItem('auth_access_token');
   if (!token) { window.location.href = '/login.html'; }
 
-  // ── User ──
+  // ── User & admin FAB ──
   try {
     var jwtPayload = JSON.parse(atob(token.split('.')[1]));
-    document.getElementById('userEmail').textContent = 'User #' + (jwtPayload.sub || '—');
+    document.getElementById('userEmail').textContent = jwtPayload.email || 'User #' + (jwtPayload.sub || '—');
+    if (jwtPayload.role === 'admin') {
+      document.getElementById('adminFab').style.display = 'inline-block';
+    }
   } catch(e) {}
 
   // ── Logout ──
@@ -615,7 +637,7 @@
   document.getElementById('detailClose').addEventListener('click', closeDetail);
 
   function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   // ── Load projects into dropdown ──
@@ -647,7 +669,7 @@
     if (projectId) {
       url = '/api/graph/project/' + projectId;
     } else {
-      url = '/api/graph/all';
+      url = '/api/graph/db';
     }
 
     try {

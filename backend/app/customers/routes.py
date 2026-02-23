@@ -6,7 +6,7 @@ from typing import Optional
 
 from ..database import get_session
 from ..models import Customer
-from ..auth.utils import get_current_user_id
+from ..auth.utils import get_current_user_id, require_admin
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -37,6 +37,11 @@ class CustomerOut(BaseModel):
     updated_at: str
 
 
+class CustomerNameOut(BaseModel):
+    id: int
+    name: str
+
+
 def _mask_key(api_key: str) -> str:
     return ("••••••••" + api_key[-4:]) if len(api_key) > 4 else "••••"
 
@@ -53,12 +58,24 @@ def _to_out(c: Customer) -> CustomerOut:
     )
 
 
-# ── Routes ──
+# ── Public route (all authenticated users) — must be before /{customer_id} ──
+
+@router.get("/names", response_model=list[CustomerNameOut])
+async def list_customer_names(
+    session: AsyncSession = Depends(get_session),
+    _user: str = Depends(get_current_user_id),
+):
+    """Minimal customer list for dropdowns — no credentials exposed."""
+    result = await session.execute(select(Customer.id, Customer.name).order_by(Customer.name))
+    return [CustomerNameOut(id=row.id, name=row.name) for row in result]
+
+
+# ── Admin-only routes ──
 
 @router.get("", response_model=list[CustomerOut])
 async def list_customers(
     session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    _admin: dict = Depends(require_admin),
 ):
     result = await session.execute(select(Customer).order_by(Customer.name))
     return [_to_out(c) for c in result.scalars()]
@@ -68,7 +85,7 @@ async def list_customers(
 async def create_customer(
     payload: CustomerIn,
     session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    _admin: dict = Depends(require_admin),
 ):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="name must not be empty")
@@ -93,7 +110,7 @@ async def create_customer(
 async def get_customer(
     customer_id: int,
     session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    _admin: dict = Depends(require_admin),
 ):
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()
@@ -107,7 +124,7 @@ async def update_customer(
     customer_id: int,
     payload: CustomerUpdate,
     session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    _admin: dict = Depends(require_admin),
 ):
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()
@@ -138,7 +155,7 @@ async def update_customer(
 async def delete_customer(
     customer_id: int,
     session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    _admin: dict = Depends(require_admin),
 ):
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()

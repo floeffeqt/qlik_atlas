@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin – Lineage Explorer</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --accent: #667eea;
+      --accent2: #764ba2;
+      --text: #fff;
+      --text-muted: rgba(255,255,255,0.5);
+      --text-dim: rgba(255,255,255,0.3);
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 220px;
+      background: rgba(15,20,40,0.92); backdrop-filter: blur(20px);
+      border-right: 1px solid var(--border); z-index: 50;
+      display: flex; flex-direction: column; padding: 0;
+    }
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 1rem; border-bottom: 1px solid var(--border);
+    }
+    .sidebar-brand {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-weight: 700; font-size: 1rem; color: var(--text); text-decoration: none; margin-bottom: 0.6rem;
+    }
+    .sidebar-brand-icon {
+      width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem;
+    }
+    .sidebar-back {
+      display: flex; align-items: center; gap: 0.4rem;
+      color: var(--text-muted); text-decoration: none; font-size: 0.78rem; transition: color 0.15s;
+    }
+    .sidebar-back:hover { color: var(--text); }
+    .sidebar-nav { padding: 1rem 0; flex: 1; }
+    .sidebar-link {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.65rem 1.25rem; color: var(--text-muted); text-decoration: none; font-size: 0.875rem;
+      border-left: 3px solid transparent; transition: all 0.15s; cursor: pointer;
+    }
+    .sidebar-link:hover { background: var(--surface-hover); color: var(--text); }
+    .sidebar-link.active { color: var(--accent); border-left-color: var(--accent); background: var(--surface); }
+    .sidebar-link-icon { font-size: 1rem; width: 1.2rem; text-align: center; }
+    .sidebar-footer {
+      padding: 1rem 1.25rem; border-top: 1px solid var(--border);
+      font-size: 0.75rem; color: var(--text-dim);
+    }
+
+    /* ── CONTENT ── */
+    .admin-content { margin-left: 220px; padding: 2rem 2.5rem; min-height: 100vh; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+    .page-title { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .page-subtitle { color: var(--text-muted); font-size: 0.9rem; }
+
+    /* ── SHARED COMPONENTS ── */
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-danger { background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.35); color: #f87171; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-danger:hover { background: rgba(239,68,68,0.35); }
+    .btn-edit { background: rgba(102,126,234,0.15); border: 1px solid rgba(102,126,234,0.3); color: #a5b4fc; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-edit:hover { background: rgba(102,126,234,0.3); }
+    .btn-sm { padding: 0.4rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
+    .btn-sm:hover { background: var(--surface-hover); color: var(--text); }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); backdrop-filter: blur(10px); overflow: hidden; }
+    .card-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .card-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border); }
+    td { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface-hover); }
+    .td-name { font-weight: 600; }
+    .td-url { color: var(--text-muted); font-family: monospace; font-size: 0.8rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .td-key { color: var(--text-dim); font-family: monospace; font-size: 0.8rem; }
+    .td-actions { display: flex; gap: 0.4rem; justify-content: flex-end; white-space: nowrap; }
+
+    .badge { padding: 0.2rem 0.6rem; border-radius: 100px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+    .badge-admin { background: rgba(102,126,234,0.2); color: #a5b4fc; }
+    .badge-user { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+    .badge-active { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-inactive { background: rgba(239,68,68,0.15); color: #f87171; }
+
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-dim); }
+    .empty-icon { font-size: 2.5rem; opacity: 0.3; margin-bottom: 0.75rem; }
+
+    /* ── MODAL ── */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 480px; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.5rem; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .modal-close:hover { color: var(--text); }
+    .form-group { margin-bottom: 1.1rem; }
+    label { display: block; color: rgba(255,255,255,0.7); font-size: 0.82rem; font-weight: 500; margin-bottom: 0.45rem; letter-spacing: 0.03em; }
+    input[type="text"], input[type="url"], input[type="email"], input[type="password"], textarea, select {
+      width: 100%; padding: 0.7rem 0.9rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px; color: #fff; font-size: 0.9rem; outline: none; transition: border-color 0.2s; font-family: inherit;
+    }
+    select { cursor: pointer; }
+    select option { background: #1a1a2e; color: #fff; }
+    input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.3); }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; }
+    .hint { color: rgba(255,255,255,0.35); font-size: 0.75rem; margin-top: 0.3rem; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+    .btn-modal-cancel { padding: 0.6rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.875rem; cursor: pointer; }
+    .btn-modal-cancel:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-modal-save { padding: 0.6rem 1.3rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-modal-save:hover { opacity: 0.9; }
+    .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .alert { border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
+    .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
+    .confirm-modal { max-width: 380px; }
+    .confirm-msg { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.5; }
+
+    #toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: rgba(30,40,70,0.95); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-size: 0.875rem; color: var(--text); backdrop-filter: blur(10px); opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; max-width: 320px; z-index: 300; }
+    #toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ── -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <a class="sidebar-brand" href="/admin.html"><div class="sidebar-brand-icon">⬡</div>Admin</a>
+    <a class="sidebar-back" href="/">← Zurück zur App</a>
+  </div>
+  <nav class="sidebar-nav">
+    <a class="sidebar-link active" data-section="users"><span class="sidebar-link-icon">👤</span> Benutzer</a>
+    <a class="sidebar-link" data-section="customers"><span class="sidebar-link-icon">🏢</span> Kunden</a>
+  </nav>
+  <div class="sidebar-footer" id="adminEmail">—</div>
+</aside>
+
+<!-- ── CONTENT ── -->
+<div class="admin-content">
+
+  <!-- === USERS SECTION === -->
+  <div class="section active" id="usersSection">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Benutzer</h1>
+        <p class="page-subtitle">Benutzer und Rollen verwalten</p>
+      </div>
+      <button class="btn-primary" id="newUserBtn">+ Neuer Benutzer</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Alle Benutzer</span>
+        <span id="userCount" style="font-size:0.8rem;color:var(--text-dim)">—</span>
+      </div>
+      <div id="usersTableWrap">
+        <div class="empty-state"><div class="empty-icon">👤</div>Lade...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- === CUSTOMERS SECTION === -->
+  <div class="section" id="customersSection">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Kunden</h1>
+        <p class="page-subtitle">Qlik Cloud Tenants verwalten</p>
+      </div>
+      <button class="btn-primary" id="newCustomerBtn">+ Neuer Kunde</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Alle Kunden</span>
+        <span id="customerCount" style="font-size:0.8rem;color:var(--text-dim)">—</span>
+      </div>
+      <div id="customersTableWrap">
+        <div class="empty-state"><div class="empty-icon">🏢</div>Lade...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODALS ══════════════ -->
+
+<!-- Create User Modal -->
+<div class="modal-backdrop" id="userModal">
+  <div class="modal">
+    <button class="modal-close" id="userModalClose">✕</button>
+    <div class="modal-title" id="userModalTitle">Neuer Benutzer</div>
+    <div class="alert alert-error" id="userModalError"></div>
+    <form id="userForm">
+      <input type="hidden" id="editingUserId" value="" />
+      <div class="form-group" id="userEmailGroup">
+        <label for="uEmail">E-Mail *</label>
+        <input id="uEmail" type="email" placeholder="benutzer@firma.de" required />
+      </div>
+      <div class="form-group" id="userPasswordGroup">
+        <label for="uPassword">Passwort *</label>
+        <input id="uPassword" type="password" placeholder="Min. 8 Zeichen" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label for="uRole">Rolle</label>
+        <select id="uRole">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-group" id="userActiveGroup" style="display:none">
+        <label for="uActive">Status</label>
+        <select id="uActive">
+          <option value="true">Aktiv</option>
+          <option value="false">Deaktiviert</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="userModalCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="userModalSave">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Create/Edit Customer Modal -->
+<div class="modal-backdrop" id="custModal">
+  <div class="modal">
+    <button class="modal-close" id="custModalClose">✕</button>
+    <div class="modal-title" id="custModalTitle">Neuer Kunde</div>
+    <div class="alert alert-error" id="custModalError"></div>
+    <form id="custForm">
+      <input type="hidden" id="editingCustId" value="" />
+      <div class="form-group">
+        <label for="cName">Name *</label>
+        <input id="cName" type="text" placeholder="Kundenname" required />
+      </div>
+      <div class="form-group">
+        <label for="cUrl">Tenant URL *</label>
+        <input id="cUrl" type="url" placeholder="https://your-tenant.us.qlikcloud.com" required spellcheck="false" />
+      </div>
+      <div class="form-group">
+        <label for="cKey" id="cKeyLabel">API Key *</label>
+        <input id="cKey" type="password" placeholder="Qlik Cloud API Key" spellcheck="false" autocomplete="new-password" />
+        <p class="hint" id="cKeyHint">Eingabe erforderlich</p>
+      </div>
+      <div class="form-group">
+        <label for="cNotes">Notizen</label>
+        <textarea id="cNotes" placeholder="Optionale Notizen zum Kunden…"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="custModalCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="custModalSave">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal confirm-modal">
+    <div class="modal-title" id="confirmTitle">Löschen?</div>
+    <div class="confirm-msg" id="confirmMsg"></div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" id="confirmCancel">Abbrechen</button>
+      <button class="btn-modal-save" id="confirmOk" style="background:linear-gradient(135deg,#ef4444,#dc2626)">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  var token = localStorage.getItem('auth_access_token');
+  if (!token) { window.location.href = '/login.html'; }
+
+  // Check admin role
+  var currentRole = 'user';
+  try {
+    var jp = JSON.parse(atob(token.split('.')[1]));
+    currentRole = jp.role || 'user';
+    document.getElementById('adminEmail').textContent = jp.email || 'User #' + (jp.sub || '');
+  } catch(e) {}
+  if (currentRole !== 'admin') { window.location.href = '/'; }
+
+  function showToast(msg, dur) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, dur || 3000);
+  }
+
+  async function apiFetch(path, opts) {
+    var headers = Object.assign({'Authorization': 'Bearer ' + token}, (opts && opts.headers) || {});
+    var res = await fetch(path, Object.assign({}, opts || {}, {headers: headers}));
+    if (res.status === 401) { localStorage.removeItem('auth_access_token'); window.location.href = '/login.html'; }
+    return res;
+  }
+
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  // ══════════════ SIDEBAR NAVIGATION ══════════════
+  document.querySelectorAll('.sidebar-link[data-section]').forEach(function(link) {
+    link.addEventListener('click', function() {
+      document.querySelectorAll('.sidebar-link').forEach(function(l) { l.classList.remove('active'); });
+      this.classList.add('active');
+      document.querySelectorAll('.section').forEach(function(s) { s.classList.remove('active'); });
+      document.getElementById(this.dataset.section + 'Section').classList.add('active');
+    });
+  });
+
+  // ══════════════ USERS ══════════════
+  var users = [];
+
+  async function loadUsers() {
+    try {
+      var res = await apiFetch('/api/admin/users');
+      if (!res.ok) throw new Error('Failed');
+      users = await res.json();
+      renderUsers();
+    } catch(e) { showToast('Fehler beim Laden der Benutzer'); }
+  }
+
+  function renderUsers() {
+    var wrap = document.getElementById('usersTableWrap');
+    document.getElementById('userCount').textContent = users.length + ' Benutzer';
+    if (!users.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div>Keine Benutzer</div>';
+      return;
+    }
+    var rows = users.map(function(u) {
+      var roleBadge = u.role === 'admin'
+        ? '<span class="badge badge-admin">Admin</span>'
+        : '<span class="badge badge-user">User</span>';
+      var statusBadge = u.is_active
+        ? '<span class="badge badge-active">Aktiv</span>'
+        : '<span class="badge badge-inactive">Inaktiv</span>';
+      return '<tr>'
+        + '<td class="td-name">' + escHtml(u.email) + '</td>'
+        + '<td>' + roleBadge + '</td>'
+        + '<td>' + statusBadge + '</td>'
+        + '<td style="color:var(--text-dim);font-size:0.8rem">' + escHtml(u.created_at ? u.created_at.split('T')[0] : '') + '</td>'
+        + '<td><div class="td-actions"><button class="btn-edit" data-edit-user="' + u.id + '">Bearbeiten</button></div></td>'
+        + '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table><thead><tr><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Erstellt</th><th style="text-align:right">Aktionen</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    wrap.querySelectorAll('[data-edit-user]').forEach(function(btn) {
+      btn.addEventListener('click', function() { openEditUser(parseInt(this.dataset.editUser, 10)); });
+    });
+  }
+
+  // ── User Modal ──
+  document.getElementById('newUserBtn').addEventListener('click', function() {
+    document.getElementById('editingUserId').value = '';
+    document.getElementById('uEmail').value = '';
+    document.getElementById('uPassword').value = '';
+    document.getElementById('uRole').value = 'user';
+    document.getElementById('userModalError').style.display = 'none';
+    document.getElementById('userModalTitle').textContent = 'Neuer Benutzer';
+    document.getElementById('userEmailGroup').style.display = '';
+    document.getElementById('userPasswordGroup').style.display = '';
+    document.getElementById('userActiveGroup').style.display = 'none';
+    document.getElementById('uEmail').required = true;
+    document.getElementById('uPassword').required = true;
+    openModal('userModal');
+  });
+
+  function openEditUser(id) {
+    var u = users.find(function(x) { return x.id === id; });
+    if (!u) return;
+    document.getElementById('editingUserId').value = String(id);
+    document.getElementById('uRole').value = u.role;
+    document.getElementById('uActive').value = String(u.is_active);
+    document.getElementById('userModalError').style.display = 'none';
+    document.getElementById('userModalTitle').textContent = 'Benutzer bearbeiten: ' + u.email;
+    document.getElementById('userEmailGroup').style.display = 'none';
+    document.getElementById('userPasswordGroup').style.display = 'none';
+    document.getElementById('userActiveGroup').style.display = '';
+    document.getElementById('uEmail').required = false;
+    document.getElementById('uPassword').required = false;
+    openModal('userModal');
+  }
+
+  document.getElementById('userModalClose').addEventListener('click', function() { closeModal('userModal'); });
+  document.getElementById('userModalCancel').addEventListener('click', function() { closeModal('userModal'); });
+  document.getElementById('userModal').addEventListener('click', function(e) { if (e.target === this) closeModal('userModal'); });
+
+  document.getElementById('userForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var errorEl = document.getElementById('userModalError');
+    errorEl.style.display = 'none';
+    var saveBtn = document.getElementById('userModalSave');
+    var editingId = document.getElementById('editingUserId').value;
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Speichern...';
+
+    try {
+      var res;
+      if (editingId) {
+        // Update role/status
+        var body = { role: document.getElementById('uRole').value, is_active: document.getElementById('uActive').value === 'true' };
+        res = await apiFetch('/api/admin/users/' + editingId, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+      } else {
+        // Create new user
+        var body = {
+          email: document.getElementById('uEmail').value.trim(),
+          password: document.getElementById('uPassword').value,
+          role: document.getElementById('uRole').value
+        };
+        res = await apiFetch('/api/auth/register', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+      }
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'Fehler');
+      }
+      closeModal('userModal');
+      showToast(editingId ? 'Benutzer aktualisiert' : 'Benutzer erstellt');
+      await loadUsers();
+    } catch(err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Speichern';
+  });
+
+  // ══════════════ CUSTOMERS ══════════════
+  var customers = [];
+
+  async function loadCustomers() {
+    try {
+      var res = await apiFetch('/api/customers');
+      if (!res.ok) throw new Error('Failed');
+      customers = await res.json();
+      renderCustomers();
+    } catch(e) { showToast('Fehler beim Laden der Kunden'); }
+  }
+
+  function renderCustomers() {
+    var wrap = document.getElementById('customersTableWrap');
+    document.getElementById('customerCount').textContent = customers.length + ' Kunde' + (customers.length !== 1 ? 'n' : '');
+    if (!customers.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">🏢</div>Noch keine Kunden angelegt.</div>';
+      return;
+    }
+    var rows = customers.map(function(c) {
+      return '<tr>'
+        + '<td class="td-name">' + escHtml(c.name) + '</td>'
+        + '<td class="td-url" title="' + escHtml(c.tenant_url) + '">' + escHtml(c.tenant_url) + '</td>'
+        + '<td class="td-key">' + escHtml(c.api_key_preview) + '</td>'
+        + '<td><div class="td-actions">'
+        + '<button class="btn-edit" data-edit-cust="' + c.id + '">Bearbeiten</button>'
+        + '<button class="btn-danger" data-delete-cust="' + c.id + '">Löschen</button>'
+        + '</div></td>'
+        + '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table><thead><tr><th>Name</th><th>Tenant URL</th><th>API Key</th><th style="text-align:right">Aktionen</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    wrap.querySelectorAll('[data-edit-cust]').forEach(function(btn) {
+      btn.addEventListener('click', function() { openEditCust(parseInt(this.dataset.editCust, 10)); });
+    });
+    wrap.querySelectorAll('[data-delete-cust]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = parseInt(this.dataset.deleteCust, 10);
+        var c = customers.find(function(x) { return x.id === id; });
+        openDeleteCust(id, c ? c.name : '');
+      });
+    });
+  }
+
+  // ── Customer Modal ──
+  function resetCustForm() {
+    document.getElementById('editingCustId').value = '';
+    document.getElementById('cName').value = '';
+    document.getElementById('cUrl').value = '';
+    document.getElementById('cKey').value = '';
+    document.getElementById('cNotes').value = '';
+    document.getElementById('custModalError').style.display = 'none';
+    document.getElementById('cKey').required = true;
+    document.getElementById('cKeyLabel').textContent = 'API Key *';
+    document.getElementById('cKeyHint').textContent = 'Eingabe erforderlich';
+    document.getElementById('custModalTitle').textContent = 'Neuer Kunde';
+  }
+
+  document.getElementById('newCustomerBtn').addEventListener('click', function() { resetCustForm(); openModal('custModal'); });
+  document.getElementById('custModalClose').addEventListener('click', function() { closeModal('custModal'); });
+  document.getElementById('custModalCancel').addEventListener('click', function() { closeModal('custModal'); });
+  document.getElementById('custModal').addEventListener('click', function(e) { if (e.target === this) closeModal('custModal'); });
+
+  function openEditCust(id) {
+    var c = customers.find(function(x) { return x.id === id; });
+    if (!c) return;
+    resetCustForm();
+    document.getElementById('editingCustId').value = String(id);
+    document.getElementById('cName').value = c.name;
+    document.getElementById('cUrl').value = c.tenant_url;
+    document.getElementById('cNotes').value = c.notes || '';
+    document.getElementById('cKey').required = false;
+    document.getElementById('cKeyLabel').textContent = 'API Key';
+    document.getElementById('cKeyHint').textContent = 'Leer lassen = bestehenden Key behalten';
+    document.getElementById('custModalTitle').textContent = 'Kunde bearbeiten';
+    openModal('custModal');
+  }
+
+  document.getElementById('custForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var errorEl = document.getElementById('custModalError');
+    errorEl.style.display = 'none';
+    var saveBtn = document.getElementById('custModalSave');
+    var editingId = document.getElementById('editingCustId').value;
+    var name = document.getElementById('cName').value.trim();
+    var tenantUrl = document.getElementById('cUrl').value.trim();
+    var apiKey = document.getElementById('cKey').value.trim();
+    var notes = document.getElementById('cNotes').value.trim() || null;
+
+    if (!editingId && !apiKey) {
+      errorEl.textContent = 'API Key ist beim Erstellen erforderlich.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Speichern...';
+
+    try {
+      var url, method, body;
+      if (editingId) {
+        url = '/api/customers/' + editingId;
+        method = 'PUT';
+        body = {name: name, tenant_url: tenantUrl, notes: notes};
+        if (apiKey) body.api_key = apiKey;
+      } else {
+        url = '/api/customers';
+        method = 'POST';
+        body = {name: name, tenant_url: tenantUrl, api_key: apiKey, notes: notes};
+      }
+      var res = await apiFetch(url, { method: method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'Fehler');
+      }
+      closeModal('custModal');
+      showToast('Kunde gespeichert');
+      await loadCustomers();
+    } catch(err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Speichern';
+  });
+
+  // ── Customer Delete ──
+  var deleteTargetId = null;
+  function openDeleteCust(id, name) {
+    deleteTargetId = id;
+    document.getElementById('confirmTitle').textContent = 'Kunde löschen?';
+    document.getElementById('confirmMsg').textContent = 'Kunde "' + name + '" und alle zugehörigen Projekte werden unwiderruflich gelöscht.';
+    openModal('confirmModal');
+  }
+  document.getElementById('confirmCancel').addEventListener('click', function() { closeModal('confirmModal'); });
+  document.getElementById('confirmModal').addEventListener('click', function(e) { if (e.target === this) closeModal('confirmModal'); });
+  document.getElementById('confirmOk').addEventListener('click', async function() {
+    if (!deleteTargetId) return;
+    this.disabled = true;
+    this.textContent = 'Löschen...';
+    try {
+      var res = await apiFetch('/api/customers/' + deleteTargetId, {method: 'DELETE'});
+      if (!res.ok && res.status !== 204) throw new Error('Fehler');
+      closeModal('confirmModal');
+      showToast('Kunde gelöscht');
+      await loadCustomers();
+    } catch(e) { showToast('Fehler: ' + e.message); }
+    this.disabled = false;
+    this.textContent = 'Löschen';
+    deleteTargetId = null;
+  });
+
+  // ══════════════ INIT ══════════════
+  loadUsers();
+  loadCustomers();
+</script>
+</body>
+</html>

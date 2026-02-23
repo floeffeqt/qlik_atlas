@@ -270,6 +270,25 @@
       max-width: 320px;
     }
     #toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── ADMIN FAB ── */
+    .admin-fab {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 1.5rem;
+      padding: 0.6rem 1.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      z-index: 90;
+      box-shadow: 0 4px 16px rgba(102,126,234,0.3);
+      transition: opacity 0.2s, transform 0.1s;
+      display: none;
+    }
+    .admin-fab:hover { opacity: 0.9; transform: translateY(-1px); }
   </style>
 </head>
 <body>
@@ -281,7 +300,6 @@
   </a>
   <div class="nav-links">
     <a class="nav-link active" href="/">Dashboard</a>
-    <a class="nav-link" href="/customers.html">Kunden</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
   </div>
@@ -338,21 +356,17 @@
       <div class="card-title">Qlik API Connection</div>
       <div id="qlikStatus">
         <div class="status-row">
-          <span class="status-label">Connection status</span>
+          <span class="status-label">Kunden konfiguriert</span>
           <span class="badge badge-gray" id="qlikConnBadge"><span class="dot"></span> Checking…</span>
-        </div>
-        <div class="status-row">
-          <span class="status-label">Missing config</span>
-          <span id="qlikMissingEnv" style="font-size:0.8rem;color:var(--text-muted)">—</span>
         </div>
         <div class="status-row">
           <span class="status-label">Active job</span>
           <span id="qlikActiveJob" style="font-size:0.8rem;color:var(--text-muted)">None</span>
         </div>
         <div style="margin-top:1rem">
-          <button class="btn-primary" id="fetchBtn" disabled>
-            ▶ Start data fetch
-          </button>
+          <a href="/projects.html" class="btn-primary" style="text-decoration:none;display:inline-block;text-align:center">
+            Daten laden via Projekte
+          </a>
         </div>
       </div>
     </div>
@@ -374,6 +388,7 @@
   </div>
 </main>
 
+<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
 <div id="toast"></div>
 
 <script>
@@ -434,19 +449,15 @@
       var res = await apiFetch('/api/fetch/status');
       var d = await res.json();
       var badge = document.getElementById('qlikConnBadge');
-      if (d.canRun) {
+      var count = d.customersConfigured || 0;
+      if (count > 0) {
         badge.className = 'badge badge-green';
-        badge.innerHTML = '<span class="dot"></span>Ready';
+        badge.innerHTML = '<span class="dot"></span>' + count + ' Kunde(n)';
       } else {
         badge.className = 'badge badge-yellow';
-        badge.innerHTML = '<span class="dot"></span>Not configured';
+        badge.innerHTML = '<span class="dot"></span>Keine Kunden';
       }
-      var missing = d.missingEnv && d.missingEnv.length ? d.missingEnv.join(', ') : 'None';
-      document.getElementById('qlikMissingEnv').textContent = missing;
       document.getElementById('qlikActiveJob').textContent = d.runningJobId || 'None';
-
-      var fetchBtn = document.getElementById('fetchBtn');
-      fetchBtn.disabled = !d.canRun || !!d.runningJobId;
     } catch(e) {}
   }
 
@@ -473,34 +484,6 @@
     } catch(e) {}
   }
 
-  // ── Start fetch ──
-  document.getElementById('fetchBtn').addEventListener('click', async function() {
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = '⏳ Starting…';
-    try {
-      var res = await fetch('/api/fetch/jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({ steps: null, clearOutputs: false })
-      });
-      if (res.ok) {
-        showToast('✓ Fetch job started');
-        setTimeout(function() { loadJobs(); loadFetchStatus(); }, 1000);
-      } else {
-        var err = await res.json().catch(function(){ return {}; });
-        showToast('Error: ' + (err.detail || 'Could not start job'));
-      }
-    } catch(e) {
-      showToast('Network error');
-    }
-    btn.textContent = '▶ Start data fetch';
-    setTimeout(function() { loadFetchStatus(); }, 2000);
-  });
-
   // ── Logout ──
   document.getElementById('logoutBtn').addEventListener('click', function() {
     localStorage.removeItem('auth_access_token');
@@ -513,11 +496,13 @@
     showToast('Refreshed', 1500);
   });
 
-  // ── User email from token ──
+  // ── User email & admin FAB from token ──
   try {
     var payload = JSON.parse(atob(token.split('.')[1]));
-    // JWT sub is user id; just show a placeholder
-    document.getElementById('userEmail').textContent = 'User #' + (payload.sub || '—');
+    document.getElementById('userEmail').textContent = payload.email || 'User #' + (payload.sub || '—');
+    if (payload.role === 'admin') {
+      document.getElementById('adminFab').style.display = 'inline-block';
+    }
   } catch(e) {}
 
   // ── Init ──
