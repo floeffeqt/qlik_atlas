@@ -33,6 +33,11 @@ Default pgAdmin login (override in `.env`):
 - Email: `pgadmin@local.dev`
 - Password: `change_me_for_local_dev`
 
+Newer pgAdmin versions may also ask for a local **Master Password** after login (used by pgAdmin to protect saved server credentials).
+- Master Password (placeholder/example): `<SET_YOUR_LOCAL_PGADMIN_MASTER_PASSWORD>`
+- This is separate from `PGADMIN_DEFAULT_PASSWORD` and can be any local dev password you choose.
+- The pgAdmin login credentials and PostgreSQL connection credentials are also available in your local `.env` file.
+
 To connect pgAdmin to PostgreSQL, add a server with:
 - Host: `db`
 - Port: `5432`
