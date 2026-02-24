@@ -4,11 +4,27 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
 
-from ..database import get_session
+from ..database import get_session, apply_rls_context
 from ..models import Customer
-from ..auth.utils import get_current_user_id, require_admin
+from ..auth.utils import get_current_user, require_admin
 
 router = APIRouter(prefix="/customers", tags=["customers"])
+
+
+async def _user_scoped_session(
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> AsyncSession:
+    await apply_rls_context(session, current_user["user_id"], current_user.get("role", "user"))
+    return session
+
+
+async def _admin_scoped_session(
+    session: AsyncSession = Depends(get_session),
+    admin_user: dict = Depends(require_admin),
+) -> AsyncSession:
+    await apply_rls_context(session, admin_user["user_id"], admin_user.get("role", "admin"))
+    return session
 
 
 # ── Pydantic schemas ──
@@ -62,8 +78,7 @@ def _to_out(c: Customer) -> CustomerOut:
 
 @router.get("/names", response_model=list[CustomerNameOut])
 async def list_customer_names(
-    session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    session: AsyncSession = Depends(_user_scoped_session),
 ):
     """Minimal customer list for dropdowns — no credentials exposed."""
     result = await session.execute(select(Customer.id, Customer.name).order_by(Customer.name))
@@ -74,8 +89,7 @@ async def list_customer_names(
 
 @router.get("", response_model=list[CustomerOut])
 async def list_customers(
-    session: AsyncSession = Depends(get_session),
-    _admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(_user_scoped_session),
 ):
     result = await session.execute(select(Customer).order_by(Customer.name))
     return [_to_out(c) for c in result.scalars()]
@@ -84,8 +98,7 @@ async def list_customers(
 @router.post("", response_model=CustomerOut, status_code=status.HTTP_201_CREATED)
 async def create_customer(
     payload: CustomerIn,
-    session: AsyncSession = Depends(get_session),
-    _admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(_admin_scoped_session),
 ):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="name must not be empty")
@@ -109,8 +122,7 @@ async def create_customer(
 @router.get("/{customer_id}", response_model=CustomerOut)
 async def get_customer(
     customer_id: int,
-    session: AsyncSession = Depends(get_session),
-    _admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(_user_scoped_session),
 ):
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()
@@ -123,8 +135,7 @@ async def get_customer(
 async def update_customer(
     customer_id: int,
     payload: CustomerUpdate,
-    session: AsyncSession = Depends(get_session),
-    _admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(_admin_scoped_session),
 ):
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()
@@ -154,8 +165,7 @@ async def update_customer(
 @router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_customer(
     customer_id: int,
-    session: AsyncSession = Depends(get_session),
-    _admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(_admin_scoped_session),
 ):
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()

@@ -11,5 +11,6 @@ alembic>=1.11,<2.0
 
 # Auth
 python-jose[cryptography]>=3.0
+cryptography>=42,<46
 passlib[bcrypt]>=1.7.4
 python-dotenv>=1.0

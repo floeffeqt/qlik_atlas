@@ -6,10 +6,10 @@ sleep 2
 
 echo "🔄 Running migrations..."
 cd /app
-alembic upgrade head || true
+alembic upgrade head
 
 echo "📝 Seeding database..."
-python -m scripts.seed_db || true
+python -m scripts.seed_db
 
 echo "🚀 Starting application..."
 exec uvicorn main:app --host 0.0.0.0 --port 8000 --proxy-headers

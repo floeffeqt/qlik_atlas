@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, func, Boolean, Text, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from .database import Base
+from .credentials_crypto import encrypt_credential, decrypt_credential
 
 
 class User(Base):
@@ -18,11 +19,35 @@ class Customer(Base):
     __tablename__ = "customers"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(200), nullable=False)
-    tenant_url = Column(String(500), nullable=False)
-    api_key = Column(Text, nullable=False)
+    _tenant_url_encrypted = Column("tenant_url", Text, nullable=False)
+    _api_key_encrypted = Column("api_key", Text, nullable=False)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    @property
+    def tenant_url(self) -> str:
+        return decrypt_credential(
+            self._tenant_url_encrypted,
+            context="customers.tenant_url",
+            allow_plaintext_fallback=True,
+        )
+
+    @tenant_url.setter
+    def tenant_url(self, value: str) -> None:
+        self._tenant_url_encrypted = encrypt_credential(value, context="customers.tenant_url")
+
+    @property
+    def api_key(self) -> str:
+        return decrypt_credential(
+            self._api_key_encrypted,
+            context="customers.api_key",
+            allow_plaintext_fallback=True,
+        )
+
+    @api_key.setter
+    def api_key(self, value: str) -> None:
+        self._api_key_encrypted = encrypt_credential(value, context="customers.api_key")
 
 
 class Project(Base):
@@ -34,6 +59,15 @@ class Project(Base):
     customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UserCustomerAccess(Base):
+    """Customer assignments for non-admin users (admins effectively have full access)."""
+    __tablename__ = "user_customer_access"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "customer_id"),)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class QlikApp(Base):

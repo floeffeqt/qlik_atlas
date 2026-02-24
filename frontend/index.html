@@ -428,10 +428,10 @@
     return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
   }
 
-  // ── Load health ──
+  // ── Load dashboard stats (DB source of truth for graph counts) ──
   async function loadHealth() {
     try {
-      var res = await apiFetch('/api/health');
+      var res = await apiFetch('/api/dashboard/stats');
       var d = await res.json();
       document.getElementById('statNodes').textContent = d.nodesCount.toLocaleString();
       document.getElementById('statEdges').textContent = d.edgesCount.toLocaleString();

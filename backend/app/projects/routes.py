@@ -4,11 +4,19 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
 
-from ..database import get_session
+from ..database import get_session, apply_rls_context
 from ..models import Customer, Project
-from ..auth.utils import get_current_user_id
+from ..auth.utils import get_current_user
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+async def _scoped_session(
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> AsyncSession:
+    await apply_rls_context(session, current_user["user_id"], current_user.get("role", "user"))
+    return session
 
 
 # ── Pydantic schemas ──
@@ -70,8 +78,7 @@ async def _get_project_with_customer(
 
 @router.get("", response_model=list[ProjectOut])
 async def list_projects(
-    session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    session: AsyncSession = Depends(_scoped_session),
 ):
     projects_result = await session.execute(select(Project).order_by(Project.name))
     projects = list(projects_result.scalars())
@@ -90,8 +97,7 @@ async def list_projects(
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_project(
     payload: ProjectIn,
-    session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    session: AsyncSession = Depends(_scoped_session),
 ):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="name must not be empty")
@@ -115,8 +121,7 @@ async def create_project(
 @router.get("/{project_id}", response_model=ProjectOut)
 async def get_project(
     project_id: int,
-    session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    session: AsyncSession = Depends(_scoped_session),
 ):
     project, customer = await _get_project_with_customer(project_id, session)
     return _to_out(project, customer)
@@ -126,8 +131,7 @@ async def get_project(
 async def update_project(
     project_id: int,
     payload: ProjectUpdate,
-    session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    session: AsyncSession = Depends(_scoped_session),
 ):
     project, _ = await _get_project_with_customer(project_id, session)
 
@@ -151,8 +155,7 @@ async def update_project(
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: int,
-    session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    session: AsyncSession = Depends(_scoped_session),
 ):
     result = await session.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()

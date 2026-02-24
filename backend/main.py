@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func as sa_func
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -26,8 +27,8 @@ from shared.config import is_prod, settings
 from shared.models import GraphResponse, HealthResponse, InventoryResponse, OrphansReport
 from app.auth.routes import router as auth_router
 from app.customers.routes import router as customers_router
-from app.auth.utils import get_current_user_id
-from app.database import get_session
+from app.auth.utils import get_current_user, get_current_user_id, require_admin
+from app.database import get_session, apply_rls_context
 from app.projects.routes import router as projects_router
 from app.admin.routes import router as admin_router
 from shared.qlik_client import QlikClient
@@ -91,8 +92,56 @@ job_logs: dict[str, list[str]] = {}
 MAX_FINISHED_JOBS = 50
 
 
+async def _session_with_rls_context(
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> AsyncSession:
+    await apply_rls_context(session, current_user["user_id"], current_user.get("role", "user"))
+    return session
+
+
+async def _admin_session_with_rls_context(
+    session: AsyncSession = Depends(get_session),
+    admin_user: dict = Depends(require_admin),
+) -> AsyncSession:
+    await apply_rls_context(session, admin_user["user_id"], admin_user.get("role", "admin"))
+    return session
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+async def _load_graph_from_db(
+    session: AsyncSession,
+    *,
+    project_id: int | None = None,
+) -> GraphResponse:
+    """DB-backed graph read used by UI-facing lineage endpoints (RLS applies via session context)."""
+    from app.models import LineageNode, LineageEdge
+    from shared.models import Node, Edge
+
+    node_stmt = select(LineageNode)
+    edge_stmt = select(LineageEdge)
+    if project_id is not None:
+        node_stmt = node_stmt.where(LineageNode.project_id == project_id)
+        edge_stmt = edge_stmt.where(LineageEdge.project_id == project_id)
+
+    nodes_result = await session.execute(node_stmt)
+    edges_result = await session.execute(edge_stmt)
+    nodes: list[Node] = []
+    for n in nodes_result.scalars():
+        try:
+            nodes.append(Node(**n.data))
+        except Exception:
+            pass
+    edges: list[Edge] = []
+    for e in edges_result.scalars():
+        try:
+            edges.append(Edge(**e.data))
+        except Exception:
+            pass
+    return GraphResponse(nodes=nodes, edges=edges)
 
 
 def _prune_old_jobs() -> None:
@@ -414,7 +463,13 @@ async def _complete_job_step(job_id: str, step: FetchStep, result: dict[str, Any
         job["updatedAt"] = _utc_now_iso()
 
 
-async def _execute_fetch_job(job_id: str, request: FetchJobRequest, steps: list[FetchStep]) -> None:
+async def _execute_fetch_job(
+    job_id: str,
+    request: FetchJobRequest,
+    steps: list[FetchStep],
+    actor_user_id: int,
+    actor_role: str,
+) -> None:
     project_id = request.project_id
     apps_cache: list[dict[str, Any]] | None = None
     step_labels: dict[str, str] = {
@@ -430,7 +485,7 @@ async def _execute_fetch_job(job_id: str, request: FetchJobRequest, steps: list[
         await _append_log(job_id, f"Job gestartet · {len(steps)} Schritt(e) geplant")
 
         await _append_log(job_id, f"Lade Credentials für Projekt {project_id}…")
-        await _load_project_creds_to_env(project_id)
+        await _load_project_creds_to_env(project_id, actor_user_id=actor_user_id, actor_role=actor_role)
         await _append_log(job_id, "✓ Credentials geladen")
 
         cleared = _clear_outputs_for_steps(steps)
@@ -474,7 +529,7 @@ async def _execute_fetch_job(job_id: str, request: FetchJobRequest, steps: list[
 
         store.load()
         await _append_log(job_id, "Speichere Daten in Datenbank…")
-        db_result = await _run_db_store_step(project_id)
+        db_result = await _run_db_store_step(project_id, actor_user_id=actor_user_id, actor_role=actor_role)
         await _append_log(
             job_id,
             f"✓ Gespeichert: {db_result.get('apps', 0)} Apps · "
@@ -493,12 +548,13 @@ async def _execute_fetch_job(job_id: str, request: FetchJobRequest, steps: list[
         )
 
 
-async def _load_project_creds_to_env(project_id: int) -> None:
+async def _load_project_creds_to_env(project_id: int, *, actor_user_id: int, actor_role: str) -> None:
     """Load credentials from a project's customer into os.environ for the duration of a fetch."""
     from app.database import AsyncSessionLocal
     from app.models import Customer, Project
     from sqlalchemy import select
     async with AsyncSessionLocal() as session:
+        await apply_rls_context(session, actor_user_id, actor_role)
         proj_result = await session.execute(select(Project).where(Project.id == project_id))
         project = proj_result.scalar_one_or_none()
         if not project:
@@ -512,7 +568,7 @@ async def _load_project_creds_to_env(project_id: int) -> None:
         print(f"Loaded credentials for project {project_id} from customer '{customer.name}'")
 
 
-async def _run_db_store_step(project_id: int) -> dict[str, Any]:
+async def _run_db_store_step(project_id: int, *, actor_user_id: int, actor_role: str) -> dict[str, Any]:
     """After a fetch, persist graph data as JSONB in PostgreSQL (scoped by project_id)."""
     from app.database import AsyncSessionLocal
     from app.models import QlikApp, LineageNode, LineageEdge
@@ -521,6 +577,7 @@ async def _run_db_store_step(project_id: int) -> dict[str, Any]:
 
     try:
         async with AsyncSessionLocal() as session:
+            await apply_rls_context(session, actor_user_id, actor_role)
             # --- apps ---
             if APPS_INVENTORY_FILE.exists():
                 payload = read_json(APPS_INVENTORY_FILE)
@@ -604,6 +661,21 @@ async def api_health() -> HealthResponse:
     )
 
 
+@app.get("/api/dashboard/stats", response_model=HealthResponse)
+async def dashboard_stats(session: AsyncSession = Depends(_session_with_rls_context)) -> HealthResponse:
+    """Authenticated dashboard stats with DB graph counts as source of truth (RLS-scoped)."""
+    from app.models import LineageNode, LineageEdge
+
+    nodes_result = await session.execute(select(sa_func.count()).select_from(LineageNode))
+    edges_result = await session.execute(select(sa_func.count()).select_from(LineageEdge))
+    return HealthResponse(
+        status="ok",
+        filesLoaded=store.files_loaded,  # artifact pipeline metric retained for operator visibility
+        nodesCount=int(nodes_result.scalar() or 0),
+        edgesCount=int(edges_result.scalar() or 0),
+    )
+
+
 @app.get("/api/inventory", response_model=InventoryResponse)
 async def inventory(_user: str = Depends(get_current_user_id)) -> InventoryResponse:
     return store.inventory()
@@ -643,58 +715,21 @@ async def graph_for_app(app_id: str, depth: int = 1, _user: str = Depends(get_cu
 
 
 @app.get("/api/graph/all", response_model=GraphResponse)
-async def graph_all(_user: str = Depends(get_current_user_id)) -> GraphResponse:
-    return store.get_full_graph()
+async def graph_all(session: AsyncSession = Depends(_session_with_rls_context)) -> GraphResponse:
+    """Legacy alias kept for compatibility; now DB-backed to avoid stale local artifact results."""
+    return await _load_graph_from_db(session)
 
 
 @app.get("/api/graph/db", response_model=GraphResponse)
-async def graph_from_db(session: AsyncSession = Depends(get_session), _user: str = Depends(get_current_user_id)) -> GraphResponse:
+async def graph_from_db(session: AsyncSession = Depends(_session_with_rls_context)) -> GraphResponse:
     """Read all lineage graph data from PostgreSQL JSONB tables (all projects)."""
-    from app.models import LineageNode, LineageEdge
-    from sqlalchemy import select
-    from shared.models import Node, Edge
-    nodes_result = await session.execute(select(LineageNode))
-    edges_result = await session.execute(select(LineageEdge))
-    nodes: list[Node] = []
-    for n in nodes_result.scalars():
-        try:
-            nodes.append(Node(**n.data))
-        except Exception:
-            pass
-    edges: list[Edge] = []
-    for e in edges_result.scalars():
-        try:
-            edges.append(Edge(**e.data))
-        except Exception:
-            pass
-    return GraphResponse(nodes=nodes, edges=edges)
+    return await _load_graph_from_db(session)
 
 
 @app.get("/api/graph/project/{project_id}", response_model=GraphResponse)
-async def graph_for_project(project_id: int, session: AsyncSession = Depends(get_session), _user: str = Depends(get_current_user_id)) -> GraphResponse:
+async def graph_for_project(project_id: int, session: AsyncSession = Depends(_session_with_rls_context)) -> GraphResponse:
     """Read lineage graph data for a specific project from PostgreSQL."""
-    from app.models import LineageNode, LineageEdge
-    from sqlalchemy import select
-    from shared.models import Node, Edge
-    nodes_result = await session.execute(
-        select(LineageNode).where(LineageNode.project_id == project_id)
-    )
-    edges_result = await session.execute(
-        select(LineageEdge).where(LineageEdge.project_id == project_id)
-    )
-    nodes: list[Node] = []
-    for n in nodes_result.scalars():
-        try:
-            nodes.append(Node(**n.data))
-        except Exception:
-            pass
-    edges: list[Edge] = []
-    for e in edges_result.scalars():
-        try:
-            edges.append(Edge(**e.data))
-        except Exception:
-            pass
-    return GraphResponse(nodes=nodes, edges=edges)
+    return await _load_graph_from_db(session, project_id=project_id)
 
 
 @app.get("/api/graph/node/{node_id:path}", response_model=GraphResponse)
@@ -734,11 +769,9 @@ async def app_script(app_id: str, _user: str = Depends(get_current_user_id)):
 
 @app.get("/api/fetch/status")
 async def fetch_status(
-    session: AsyncSession = Depends(get_session),
-    _user: str = Depends(get_current_user_id),
+    session: AsyncSession = Depends(_admin_session_with_rls_context),
 ):
     from app.models import Customer
-    from sqlalchemy import select, func as sa_func
     count_result = await session.execute(select(sa_func.count()).select_from(Customer))
     customer_count = count_result.scalar() or 0
     running_job_id = None
@@ -756,7 +789,7 @@ async def fetch_status(
 
 
 @app.get("/api/fetch/jobs")
-async def list_fetch_jobs(_user: str = Depends(get_current_user_id)):
+async def list_fetch_jobs(_admin: dict = Depends(require_admin)):
     async with fetch_jobs_lock:
         jobs = [_public_job(job) for job in fetch_jobs_registry.values()]
     jobs.sort(key=lambda item: item.get("updatedAt", ""), reverse=True)
@@ -764,7 +797,7 @@ async def list_fetch_jobs(_user: str = Depends(get_current_user_id)):
 
 
 @app.get("/api/fetch/jobs/{job_id}")
-async def get_fetch_job(job_id: str, _user: str = Depends(get_current_user_id)):
+async def get_fetch_job(job_id: str, _admin: dict = Depends(require_admin)):
     async with fetch_jobs_lock:
         job = fetch_jobs_registry.get(job_id)
         if not job:
@@ -773,7 +806,7 @@ async def get_fetch_job(job_id: str, _user: str = Depends(get_current_user_id)):
 
 
 @app.get("/api/fetch/jobs/{job_id}/logs")
-async def get_fetch_job_logs(job_id: str, _user: str = Depends(get_current_user_id)):
+async def get_fetch_job_logs(job_id: str, _admin: dict = Depends(require_admin)):
     async with fetch_jobs_lock:
         job = fetch_jobs_registry.get(job_id)
         if not job:
@@ -790,7 +823,7 @@ async def get_fetch_job_logs(job_id: str, _user: str = Depends(get_current_user_
 async def start_fetch_job(
     payload: FetchJobRequest,
     x_fetch_token: str | None = Header(default=None, alias="X-Fetch-Token"),
-    _user: str = Depends(get_current_user_id),
+    admin_user: dict = Depends(require_admin),
 ):
     _assert_fetch_token(x_fetch_token)
     planned_steps = _normalize_steps(payload.steps)
@@ -815,11 +848,20 @@ async def start_fetch_job(
             "startedAt": _utc_now_iso(),
             "updatedAt": _utc_now_iso(),
             "finishedAt": None,
+            "triggeredByUserId": int(admin_user["user_id"]),
         }
         fetch_jobs_registry[job_id] = job
         _prune_old_jobs()
 
-    task = asyncio.create_task(_execute_fetch_job(job_id, payload, planned_steps))
+    task = asyncio.create_task(
+        _execute_fetch_job(
+            job_id,
+            payload,
+            planned_steps,
+            actor_user_id=int(admin_user["user_id"]),
+            actor_role=str(admin_user.get("role", "admin")),
+        )
+    )
     async with fetch_jobs_lock:
         fetch_jobs_registry[job_id]["_task"] = task
         return _public_job(fetch_jobs_registry[job_id])
