@@ -5,25 +5,12 @@ import json
 
 from shared.models import AppInfoRecord, EdgeRecord, GraphSnapshot, NodeRecord
 
-from .heuristics import dead_ends, never_referenced, orphan_outputs
-from .qlik_normalizer import normalize_file
-from .subgraph import bfs_subgraph
+from .qlik_normalizer import normalize_file, normalize_payload
 
 
 class LineageArtifactLoader:
-    def __init__(
-        self,
-        data_dir: Path,
-        spaces_file: Optional[Path] = None,
-        usage_dir: Optional[Path] = None,
-        scripts_dir: Optional[Path] = None,
-        data_connections_file: Optional[Path] = None,
-    ):
+    def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir)
-        self.spaces_file = spaces_file
-        self.usage_dir = Path(usage_dir) if usage_dir else None
-        self.scripts_dir = Path(scripts_dir) if scripts_dir else None
-        self.data_connections_file = Path(data_connections_file) if data_connections_file else None
         self.skipped_files: Dict[str, str] = {}
 
     def lineage_files(self) -> List[Path]:
@@ -40,111 +27,6 @@ class LineageArtifactLoader:
             except Exception as exc:
                 self.skipped_files[path.name] = str(exc)
         return records
-
-    def _load_json_file(self, path: Path) -> Any:
-        return json.loads(path.read_text(encoding="utf-8"))
-
-    def _find_app_artifact_file(
-        self,
-        directory: Optional[Path],
-        app_id: str,
-        suffixes: List[str],
-    ) -> Optional[Path]:
-        if not directory or not directory.exists() or not directory.is_dir():
-            return None
-
-        for suffix in suffixes:
-            exact = directory / f"{app_id}{suffix}"
-            if exact.exists() and exact.is_file():
-                return exact
-
-        for suffix in suffixes:
-            matches = sorted(directory.glob(f"*__{app_id}{suffix}"))
-            if matches:
-                return matches[-1]
-        return None
-
-    def get_data_connections(self) -> Dict[str, Any]:
-        candidates: List[Path] = []
-        if self.data_connections_file:
-            candidates.append(self.data_connections_file)
-        candidates.append(self.data_dir / "tenant_data_connections.json")
-        candidates.append(self.data_dir.parent / "lineage" / "tenant_data_connections.json")
-
-        for candidate in candidates:
-            if candidate.exists() and candidate.is_file():
-                payload = self._load_json_file(candidate)
-                if isinstance(payload, dict):
-                    return payload
-                break
-        raise FileNotFoundError("data connections artifact not found")
-
-    def get_app_usage(self, app_id: str) -> Dict[str, Any]:
-        usage_file = self._find_app_artifact_file(self.usage_dir, app_id, [".json"])
-        if not usage_file:
-            raise FileNotFoundError("usage artifact not found")
-
-        payload = self._load_json_file(usage_file)
-        if not isinstance(payload, dict):
-            raise ValueError("usage artifact is invalid")
-        payload.setdefault("appId", app_id)
-        payload.setdefault("fileName", usage_file.name)
-        return payload
-
-    def get_app_script(self, app_id: str) -> Dict[str, Any]:
-        script_file = self._find_app_artifact_file(self.scripts_dir, app_id, [".qvs", ".txt", ".json"])
-        if not script_file:
-            raise FileNotFoundError("script artifact not found")
-
-        if script_file.suffix.lower() == ".json":
-            payload = self._load_json_file(script_file)
-            if not isinstance(payload, dict):
-                raise ValueError("script artifact is invalid")
-            script_text = (
-                payload.get("script")
-                or payload.get("loadScript")
-                or payload.get("load_script")
-                or payload.get("text")
-            )
-            if not isinstance(script_text, str):
-                raise ValueError("script artifact is missing script text")
-            return {
-                "appId": app_id,
-                "script": script_text,
-                "fileName": script_file.name,
-                "source": "json",
-            }
-
-        script_text = script_file.read_text(encoding="utf-8")
-        return {
-            "appId": app_id,
-            "script": script_text,
-            "fileName": script_file.name,
-            "source": script_file.suffix.lower().lstrip("."),
-        }
-
-    def load_space_names(self) -> Dict[str, str]:
-        if not self.spaces_file or not self.spaces_file.exists():
-            return {}
-        try:
-            data = json.loads(self.spaces_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {}
-
-        mapping: Dict[str, str] = {}
-        if isinstance(data, dict):
-            for key, value in data.items():
-                if isinstance(value, str):
-                    mapping[str(key)] = value
-        elif isinstance(data, list):
-            for item in data:
-                if not isinstance(item, dict):
-                    continue
-                space_id = item.get("spaceId") or item.get("id")
-                space_name = item.get("spaceName") or item.get("name")
-                if space_id and space_name:
-                    mapping[str(space_id)] = str(space_name)
-        return mapping
 
 
 class GraphBuilder:
@@ -353,97 +235,22 @@ class GraphBuilder:
             return candidate > current
 
 
-class GraphStore:
-    def __init__(
-        self,
-        data_dir: Path,
-        spaces_file: Optional[Path] = None,
-        usage_dir: Optional[Path] = None,
-        scripts_dir: Optional[Path] = None,
-        data_connections_file: Optional[Path] = None,
-    ):
-        self.loader = LineageArtifactLoader(
-            data_dir=data_dir,
-            spaces_file=spaces_file,
-            usage_dir=usage_dir,
-            scripts_dir=scripts_dir,
-            data_connections_file=data_connections_file,
-        )
-        self.builder = GraphBuilder()
-        self.snapshot: GraphSnapshot = GraphSnapshot.empty()
+def build_snapshot_from_lineage_artifacts(data_dir: Path) -> tuple[GraphSnapshot, dict[str, str]]:
+    loader = LineageArtifactLoader(data_dir=data_dir)
+    files = loader.lineage_files()
+    records = loader.load_lineage_records(files)
+    snapshot = GraphBuilder().build(records, files_loaded=len(files))
+    return snapshot, dict(loader.skipped_files)
 
-        self.nodes: Dict[str, NodeRecord] = {}
-        self.edges: Dict[str, EdgeRecord] = {}
-        self.out_adj: Dict[str, Set[str]] = {}
-        self.in_adj: Dict[str, Set[str]] = {}
-        self.apps: Dict[str, AppInfoRecord] = {}
-        self.files_loaded = 0
-        self.space_names: Dict[str, str] = {}
-        self.skipped_lineage_files: Dict[str, str] = {}
 
-        self._apply_snapshot(self.snapshot)
-
-    def _apply_snapshot(self, snapshot: GraphSnapshot) -> None:
-        self.snapshot = snapshot
-        self.nodes = snapshot.nodes
-        self.edges = snapshot.edges
-        self.out_adj = snapshot.out_adj
-        self.in_adj = snapshot.in_adj
-        self.apps = snapshot.apps
-        self.files_loaded = snapshot.files_loaded
-
-    def load(self) -> None:
-        self.space_names = self.loader.load_space_names()
-        files = self.loader.lineage_files()
-        records = self.loader.load_lineage_records(files)
-        snapshot = self.builder.build(records, files_loaded=len(files))
-        self.skipped_lineage_files = dict(self.loader.skipped_files)
-        self._apply_snapshot(snapshot)
-
-    def inventory(self) -> Dict:
-        apps = []
-        for app in self.apps.values():
-            item = dict(app)
-            space_id = item.get("spaceId")
-            if space_id and space_id in self.space_names:
-                item["spaceName"] = self.space_names[space_id]
-            apps.append(item)
-        apps = sorted(apps, key=lambda x: (x.get("appName") or "", x.get("appId") or ""))
-        totals = {"files": self.files_loaded, "nodes": len(self.nodes), "edges": len(self.edges)}
-        return {"apps": apps, "totals": totals}
-
-    def get_data_connections(self) -> Dict[str, Any]:
-        return self.loader.get_data_connections()
-
-    def get_app_usage(self, app_id: str) -> Dict[str, Any]:
-        return self.loader.get_app_usage(app_id)
-
-    def get_app_script(self, app_id: str) -> Dict[str, Any]:
-        return self.loader.get_app_script(app_id)
-
-    def get_app_subgraph(self, app_id: str, depth: int) -> Dict:
-        app = self.apps.get(app_id)
-        if not app or not app.get("rootNodeId"):
-            raise KeyError("app not found")
-        return self.get_node_subgraph(app["rootNodeId"], "both", depth)
-
-    def get_full_graph(self) -> Dict:
-        nodes = list(self.nodes.values())
-        edges = list(self.edges.values())
-        return {"nodes": nodes, "edges": edges}
-
-    def get_node_subgraph(self, node_id: str, direction: str, depth: int) -> Dict:
-        nodes_set, edges_set = bfs_subgraph(self.snapshot, node_id, direction, depth)
-        nodes = [self.nodes[nid] for nid in nodes_set]
-        edges = [self.edges[eid] for eid in edges_set]
-        return {"nodes": nodes, "edges": edges}
-
-    def orphans_report(self) -> Dict:
-        never = never_referenced(self.snapshot)
-        dead = dead_ends(self.snapshot)
-        orphan = orphan_outputs(self.snapshot)
-        return {
-            "neverReferenced": [self.nodes[nid] for nid in never],
-            "deadEnds": [self.nodes[nid] for nid in dead],
-            "orphanOutputs": [self.nodes[nid] for nid in orphan],
-        }
+def build_snapshot_from_payloads(payloads: list[dict[str, Any]]) -> tuple[GraphSnapshot, dict[str, str]]:
+    records: list[Tuple[Dict, List[Dict], List[Dict]]] = []
+    skipped: dict[str, str] = {}
+    for idx, payload in enumerate(payloads, start=1):
+        file_name = str(payload.get("_artifactFileName") or payload.get("fileName") or f"in-memory-{idx}.json")
+        try:
+            records.append(normalize_payload(payload, file_name=file_name))
+        except Exception as exc:
+            skipped[file_name] = str(exc)
+    snapshot = GraphBuilder().build(records, files_loaded=0)
+    return snapshot, skipped

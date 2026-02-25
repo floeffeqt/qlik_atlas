@@ -16,19 +16,31 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from fetchers.fetch_apps import fetch_all_apps
 from fetchers.fetch_data_connections import fetch_all_data_connections
 from fetchers.fetch_lineage import fetch_app_edges_for_apps, fetch_lineage_for_apps
 from fetchers.fetch_spaces import fetch_all_spaces
 from fetchers.fetch_usage import fetch_usage_async
-from fetchers.graph_store import GraphStore
+from fetchers.artifact_graph import build_snapshot_from_lineage_artifacts, build_snapshot_from_payloads
 from shared.config import is_prod, settings
 from shared.models import GraphResponse, HealthResponse, InventoryResponse, OrphansReport
 from app.auth.routes import router as auth_router
 from app.customers.routes import router as customers_router
 from app.auth.utils import get_current_user, get_current_user_id, require_admin
 from app.database import get_session, apply_rls_context
+from app.db_runtime_views import (
+    load_app_script_payload,
+    load_app_subgraph,
+    load_app_usage_payload,
+    load_data_connections_payload,
+    load_graph_response,
+    load_inventory,
+    load_node_subgraph,
+    load_orphans_report,
+    load_spaces_payload,
+)
 from app.projects.routes import router as projects_router
 from app.admin.routes import router as admin_router
 from shared.qlik_client import QlikClient
@@ -79,17 +91,15 @@ app.add_middleware(
 )
 
 
-store = GraphStore(
-    settings.data_dir,
-    settings.spaces_file or SPACES_FILE,
-    usage_dir=settings.usage_dir,
-    scripts_dir=settings.scripts_dir,
-    data_connections_file=settings.data_connections_file,
-)
 fetch_jobs_registry: dict[str, dict[str, Any]] = {}
 fetch_jobs_lock = asyncio.Lock()
 job_logs: dict[str, list[str]] = {}
 MAX_FINISHED_JOBS = 50
+
+
+def _write_local_fetch_artifacts_enabled() -> bool:
+    raw = os.getenv("FETCH_WRITE_LOCAL_ARTIFACTS", "false").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 async def _session_with_rls_context(
@@ -118,30 +128,7 @@ async def _load_graph_from_db(
     project_id: int | None = None,
 ) -> GraphResponse:
     """DB-backed graph read used by UI-facing lineage endpoints (RLS applies via session context)."""
-    from app.models import LineageNode, LineageEdge
-    from shared.models import Node, Edge
-
-    node_stmt = select(LineageNode)
-    edge_stmt = select(LineageEdge)
-    if project_id is not None:
-        node_stmt = node_stmt.where(LineageNode.project_id == project_id)
-        edge_stmt = edge_stmt.where(LineageEdge.project_id == project_id)
-
-    nodes_result = await session.execute(node_stmt)
-    edges_result = await session.execute(edge_stmt)
-    nodes: list[Node] = []
-    for n in nodes_result.scalars():
-        try:
-            nodes.append(Node(**n.data))
-        except Exception:
-            pass
-    edges: list[Edge] = []
-    for e in edges_result.scalars():
-        try:
-            edges.append(Edge(**e.data))
-        except Exception:
-            pass
-    return GraphResponse(nodes=nodes, edges=edges)
+    return await load_graph_response(session, project_id=project_id)
 
 
 def _prune_old_jobs() -> None:
@@ -338,12 +325,15 @@ async def _run_apps_step(request: FetchJobRequest) -> tuple[list[dict[str, Any]]
     finally:
         await client.close()
 
-    ensure_dir(APPS_INVENTORY_FILE.parent)
-    write_json(APPS_INVENTORY_FILE, {"count": len(apps), "apps": apps})
-    return apps, {"count": len(apps), "output": str(APPS_INVENTORY_FILE)}
+    wrote_local = False
+    if _write_local_fetch_artifacts_enabled():
+        ensure_dir(APPS_INVENTORY_FILE.parent)
+        write_json(APPS_INVENTORY_FILE, {"count": len(apps), "apps": apps})
+        wrote_local = True
+    return apps, {"count": len(apps), "storage": "db-first-memory", "localArtifactWritten": wrote_local}
 
 
-async def _run_spaces_step() -> dict[str, Any]:
+async def _run_spaces_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     client = _build_qlik_client()
     limit = int(os.getenv("FETCH_SPACES_LIMIT", "100"))
     try:
@@ -351,12 +341,15 @@ async def _run_spaces_step() -> dict[str, Any]:
     finally:
         await client.close()
 
-    ensure_dir(SPACES_FILE.parent)
-    write_json(SPACES_FILE, {"count": len(spaces), "spaces": spaces})
-    return {"count": len(spaces), "output": str(SPACES_FILE)}
+    wrote_local = False
+    if _write_local_fetch_artifacts_enabled():
+        ensure_dir(SPACES_FILE.parent)
+        write_json(SPACES_FILE, {"count": len(spaces), "spaces": spaces})
+        wrote_local = True
+    return spaces, {"count": len(spaces), "storage": "db-first-memory", "localArtifactWritten": wrote_local}
 
 
-async def _run_data_connections_step() -> dict[str, Any]:
+async def _run_data_connections_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     client = _build_qlik_client()
     limit = int(os.getenv("FETCH_DATA_CONNECTIONS_LIMIT", "100"))
     try:
@@ -364,55 +357,74 @@ async def _run_data_connections_step() -> dict[str, Any]:
     finally:
         await client.close()
 
-    ensure_dir(TENANT_DATA_CONNECTIONS_FILE.parent)
-    write_json(TENANT_DATA_CONNECTIONS_FILE, {"count": len(connections), "data": connections})
-    return {"count": len(connections), "output": str(TENANT_DATA_CONNECTIONS_FILE)}
+    wrote_local = False
+    if _write_local_fetch_artifacts_enabled():
+        ensure_dir(TENANT_DATA_CONNECTIONS_FILE.parent)
+        write_json(TENANT_DATA_CONNECTIONS_FILE, {"count": len(connections), "data": connections})
+        wrote_local = True
+    return connections, {"count": len(connections), "storage": "db-first-memory", "localArtifactWritten": wrote_local}
 
 
-async def _run_lineage_step(request: FetchJobRequest, apps: list[dict[str, Any]]) -> dict[str, Any]:
-    ensure_dir(LINEAGE_OUT_DIR)
+async def _run_lineage_step(
+    request: FetchJobRequest,
+    apps: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    write_local = _write_local_fetch_artifacts_enabled()
+    if write_local:
+        ensure_dir(LINEAGE_OUT_DIR)
 
     lineage_concurrency = request.lineageConcurrency or int(os.getenv("QLIK_LINEAGE_CONCURRENCY", "5"))
     client = _build_qlik_client()
+    lineage_payloads: list[dict[str, Any]] = []
     lineage_result = await fetch_lineage_for_apps(
         client=client,
         apps=apps,
-        outdir=LINEAGE_OUT_DIR,
+        outdir=LINEAGE_OUT_DIR if write_local else None,
         success_outdir=None,
         concurrency=lineage_concurrency,
+        collector=lineage_payloads,
     )
-    return {
+    return lineage_payloads, {
         "apps": len(apps),
         "lineage": lineage_result,
-        "output": str(LINEAGE_OUT_DIR),
+        "storage": "db-first-memory",
+        "localArtifactWritten": write_local,
     }
 
 
-async def _run_app_edges_step(request: FetchJobRequest, apps: list[dict[str, Any]]) -> dict[str, Any]:
-    ensure_dir(APP_EDGES_DIR)
-    _clear_app_edges_artifacts(APP_EDGES_DIR)
+async def _run_app_edges_step(
+    request: FetchJobRequest,
+    apps: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    write_local = _write_local_fetch_artifacts_enabled()
+    if write_local:
+        ensure_dir(APP_EDGES_DIR)
+        _clear_app_edges_artifacts(APP_EDGES_DIR)
     eligible_apps, filter_source = _select_apps_for_app_edges(apps)
     if not eligible_apps:
-        return {
+        return [], {
             "apps": len(apps),
             "eligibleApps": 0,
             "filterSource": filter_source,
             "appEdges": {"success": 0, "failed": 0, "edges": 0},
-            "output": str(APP_EDGES_DIR),
+            "storage": "db-first-memory",
+            "localArtifactWritten": False,
         }
 
     lineage_concurrency = request.lineageConcurrency or int(os.getenv("QLIK_LINEAGE_CONCURRENCY", "5"))
     client = _build_qlik_client()
+    app_edges_payloads: list[dict[str, Any]] = []
     edges_result = await fetch_app_edges_for_apps(
         client=client,
         apps=eligible_apps,
-        outdir=APP_EDGES_DIR,
+        outdir=APP_EDGES_DIR if write_local else None,
         success_outdir=None,
         concurrency=lineage_concurrency,
         up_depth=os.getenv("QLIK_APP_EDGES_UP_DEPTH", "-1"),
         collapse=os.getenv("QLIK_APP_EDGES_COLLAPSE", "true"),
+        collector=app_edges_payloads,
     )
-    return {
+    return app_edges_payloads, {
         "apps": len(apps),
         "eligibleApps": len(eligible_apps),
         "filterSource": filter_source,
@@ -421,22 +433,30 @@ async def _run_app_edges_step(request: FetchJobRequest, apps: list[dict[str, Any
             "failed": edges_result.get("failed", 0),
             "edges": len(edges_result.get("edges", [])),
         },
-        "output": str(APP_EDGES_DIR),
+        "storage": "db-first-memory",
+        "localArtifactWritten": write_local,
     }
 
 
-async def _run_usage_step(request: FetchJobRequest, apps: list[dict[str, Any]]) -> dict[str, Any]:
-    ensure_dir(APP_USAGE_DIR)
+async def _run_usage_step(
+    request: FetchJobRequest,
+    apps: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    write_local = _write_local_fetch_artifacts_enabled()
+    if write_local:
+        ensure_dir(APP_USAGE_DIR)
     client = _build_qlik_client()
+    usage_payloads: list[dict[str, Any]] = []
     await fetch_usage_async(
         apps=apps,
         client=client,
         window_days=request.usageWindowDays,
-        outdir=APP_USAGE_DIR,
+        outdir=APP_USAGE_DIR if write_local else None,
         concurrency=request.usageConcurrency,
         close_client=True,
+        collector=usage_payloads,
     )
-    return {"apps": len(apps), "output": str(APP_USAGE_DIR)}
+    return usage_payloads, {"apps": len(apps), "storage": "db-first-memory", "localArtifactWritten": write_local}
 
 
 async def _update_job(job_id: str, **values: Any) -> None:
@@ -472,6 +492,10 @@ async def _execute_fetch_job(
 ) -> None:
     project_id = request.project_id
     apps_cache: list[dict[str, Any]] | None = None
+    spaces_cache: list[dict[str, Any]] | None = None
+    data_connections_cache: list[dict[str, Any]] | None = None
+    usage_payloads: list[dict[str, Any]] = []
+    app_edges_payloads: list[dict[str, Any]] = []
     step_labels: dict[str, str] = {
         "spaces": "Spaces laden",
         "apps": "Apps laden",
@@ -488,9 +512,13 @@ async def _execute_fetch_job(
         await _load_project_creds_to_env(project_id, actor_user_id=actor_user_id, actor_role=actor_role)
         await _append_log(job_id, "✓ Credentials geladen")
 
-        cleared = _clear_outputs_for_steps(steps)
-        if cleared.get("files") or cleared.get("dirs"):
-            await _append_log(job_id, "Alte Ausgabedateien bereinigt")
+        if _write_local_fetch_artifacts_enabled():
+            cleared = _clear_outputs_for_steps(steps)
+            if cleared.get("files") or cleared.get("dirs"):
+                await _append_log(job_id, "Alte Ausgabedateien bereinigt")
+        else:
+            cleared = {"files": [], "dirs": [], "skipped": True, "reason": "local artifacts disabled (DB-first mode)"}
+            await _append_log(job_id, "Lokale Fetch-Artefakte deaktiviert (DB-first Mode)")
         await _update_job(job_id, cleanup=cleared)
 
         for i, step in enumerate(steps, 1):
@@ -499,37 +527,54 @@ async def _execute_fetch_job(
             await _update_job(job_id, currentStep=step)
 
             if step == "spaces":
-                result = await _run_spaces_step()
+                spaces_cache, result = await _run_spaces_step()
                 await _append_log(job_id, f"✓ {result.get('count', 0)} Spaces geladen")
             elif step == "apps":
                 apps_cache, result = await _run_apps_step(request)
                 await _append_log(job_id, f"✓ {result.get('count', 0)} Apps geladen")
             elif step == "data-connections":
-                result = await _run_data_connections_step()
+                data_connections_cache, result = await _run_data_connections_step()
                 await _append_log(job_id, f"✓ {result.get('count', 0)} Datenverbindungen geladen")
             elif step == "lineage":
                 if apps_cache is None:
-                    apps_cache = _load_apps_inventory()
-                result = await _run_lineage_step(request, apps_cache)
+                    if _write_local_fetch_artifacts_enabled():
+                        apps_cache = _load_apps_inventory()
+                    else:
+                        raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'lineage'")
+                _lineage_payloads, result = await _run_lineage_step(request, apps_cache)
                 await _append_log(job_id, f"✓ Lineage für {len(apps_cache)} Apps berechnet")
             elif step == "app-edges":
                 if apps_cache is None:
-                    apps_cache = _load_apps_inventory()
-                result = await _run_app_edges_step(request, apps_cache)
+                    if _write_local_fetch_artifacts_enabled():
+                        apps_cache = _load_apps_inventory()
+                    else:
+                        raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'app-edges'")
+                app_edges_payloads, result = await _run_app_edges_step(request, apps_cache)
                 edges = result.get("appEdges", {}).get("edges", 0)
                 await _append_log(job_id, f"✓ {edges} App-Kanten gefunden")
             elif step == "usage":
                 if apps_cache is None:
-                    apps_cache = _load_apps_inventory()
-                result = await _run_usage_step(request, apps_cache)
+                    if _write_local_fetch_artifacts_enabled():
+                        apps_cache = _load_apps_inventory()
+                    else:
+                        raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'usage'")
+                usage_payloads, result = await _run_usage_step(request, apps_cache)
                 await _append_log(job_id, f"✓ Usage-Daten geladen")
             else:
                 continue
             await _complete_job_step(job_id, step, result)
 
-        store.load()
         await _append_log(job_id, "Speichere Daten in Datenbank…")
-        db_result = await _run_db_store_step(project_id, actor_user_id=actor_user_id, actor_role=actor_role)
+        db_result = await _run_db_store_step(
+            project_id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            apps_data=apps_cache,
+            spaces_data=spaces_cache,
+            data_connections_data=data_connections_cache,
+            usage_payloads=usage_payloads,
+            app_edges_payloads=app_edges_payloads,
+        )
         await _append_log(
             job_id,
             f"✓ Gespeichert: {db_result.get('apps', 0)} Apps · "
@@ -568,62 +613,316 @@ async def _load_project_creds_to_env(project_id: int, *, actor_user_id: int, act
         print(f"Loaded credentials for project {project_id} from customer '{customer.name}'")
 
 
-async def _run_db_store_step(project_id: int, *, actor_user_id: int, actor_role: str) -> dict[str, Any]:
-    """After a fetch, persist graph data as JSONB in PostgreSQL (scoped by project_id)."""
+def _iter_usage_artifacts(directory: Path) -> list[dict[str, Any]]:
+    if not directory.exists() or not directory.is_dir():
+        return []
+    payloads: list[dict[str, Any]] = []
+    for path in sorted(directory.glob("*.json")):
+        try:
+            payload = read_json(path)
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    return payloads
+
+
+def _infer_app_id_from_script_artifact(path: Path, payload: dict[str, Any] | None = None) -> str | None:
+    payload = payload or {}
+    candidate = payload.get("appId")
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
+    stem = path.stem
+    if "__" in stem:
+        last = stem.split("__")[-1].strip()
+        if last:
+            return last
+    return stem.strip() or None
+
+
+def _iter_script_artifacts(directory: Path) -> list[dict[str, Any]]:
+    if not directory.exists() or not directory.is_dir():
+        return []
+    artifacts: list[dict[str, Any]] = []
+    for path in sorted(directory.iterdir()):
+        if not path.is_file():
+            continue
+        suffix = path.suffix.lower()
+        if suffix not in {".json", ".qvs", ".txt"}:
+            continue
+        payload: dict[str, Any]
+        script_text: str | None = None
+        source = suffix.lstrip(".")
+
+        if suffix == ".json":
+            try:
+                raw = read_json(path)
+            except Exception:
+                continue
+            if not isinstance(raw, dict):
+                continue
+            payload = dict(raw)
+            candidate_script = (
+                payload.get("script")
+                or payload.get("loadScript")
+                or payload.get("load_script")
+                or payload.get("text")
+            )
+            if not isinstance(candidate_script, str):
+                continue
+            script_text = candidate_script
+            source = str(payload.get("source") or source)
+        else:
+            try:
+                script_text = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            payload = {
+                "script": script_text,
+                "source": source,
+                "fileName": path.name,
+            }
+
+        app_id = _infer_app_id_from_script_artifact(path, payload)
+        if not app_id or script_text is None:
+            continue
+        payload.setdefault("appId", app_id)
+        payload.setdefault("fileName", path.name)
+        payload.setdefault("source", source)
+        artifacts.append(
+            {
+                "appId": app_id,
+                "script": script_text,
+                "source": str(payload.get("source") or source),
+                "fileName": str(payload.get("fileName") or path.name),
+                "data": payload,
+            }
+        )
+    return artifacts
+
+
+async def _run_db_store_step(
+    project_id: int,
+    *,
+    actor_user_id: int,
+    actor_role: str,
+    apps_data: list[dict[str, Any]] | None = None,
+    spaces_data: list[dict[str, Any]] | None = None,
+    data_connections_data: list[dict[str, Any]] | None = None,
+    usage_payloads: list[dict[str, Any]] | None = None,
+    app_edges_payloads: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Persist fetch outputs into PostgreSQL (DB-first; artifact fallback when needed)."""
     from app.database import AsyncSessionLocal
-    from app.models import QlikApp, LineageNode, LineageEdge
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
-    stored: dict[str, int] = {"apps": 0, "nodes": 0, "edges": 0}
+    from app.models import (
+        LineageEdge,
+        LineageNode,
+        QlikApp,
+        QlikAppScript,
+        QlikAppUsage,
+        QlikDataConnection,
+        QlikSpace,
+    )
+
+    stored: dict[str, int] = {
+        "apps": 0,
+        "nodes": 0,
+        "edges": 0,
+        "spaces": 0,
+        "dataConnections": 0,
+        "usage": 0,
+        "scripts": 0,
+        "skippedLineageFiles": 0,
+    }
+
+    if app_edges_payloads is not None:
+        snapshot, skipped_lineage_files = build_snapshot_from_payloads(app_edges_payloads)
+    elif _write_local_fetch_artifacts_enabled():
+        snapshot, skipped_lineage_files = build_snapshot_from_lineage_artifacts(APP_EDGES_DIR)
+    else:
+        snapshot, skipped_lineage_files = build_snapshot_from_payloads([])
+    stored["skippedLineageFiles"] = len(skipped_lineage_files)
+
+    apps_inventory_by_id: dict[str, dict[str, Any]] = {}
+    if apps_data is not None:
+        apps_list = apps_data
+    elif _write_local_fetch_artifacts_enabled() and APPS_INVENTORY_FILE.exists():
+        payload = read_json(APPS_INVENTORY_FILE)
+        apps_list = payload.get("apps", payload) if isinstance(payload, dict) else payload
+    else:
+        apps_list = []
+    if apps_list is not None:
+        for app_data in (apps_list if isinstance(apps_list, list) else []):
+            if not isinstance(app_data, dict):
+                continue
+            app_id = app_data.get("appId")
+            if not app_id:
+                continue
+            apps_inventory_by_id[str(app_id)] = dict(app_data)
 
     try:
         async with AsyncSessionLocal() as session:
             await apply_rls_context(session, actor_user_id, actor_role)
-            # --- apps ---
-            if APPS_INVENTORY_FILE.exists():
-                payload = read_json(APPS_INVENTORY_FILE)
-                apps_list = payload.get("apps", payload) if isinstance(payload, dict) else payload
-                for app_data in (apps_list if isinstance(apps_list, list) else []):
-                    app_id = app_data.get("appId")
-                    if not app_id:
+            # --- apps (merge inventory + lineage-derived metadata for UI transformations) ---
+            all_app_ids = set(apps_inventory_by_id) | set(snapshot.apps)
+            for app_id in sorted(all_app_ids):
+                inventory_payload = dict(apps_inventory_by_id.get(app_id) or {})
+                lineage_app = dict(snapshot.apps.get(app_id) or {})
+                merged_data: dict[str, Any] = {}
+                merged_data.update(inventory_payload)
+                merged_data.update(lineage_app)
+                merged_data.setdefault("appId", app_id)
+                if "appName" not in merged_data and inventory_payload.get("name"):
+                    merged_data["appName"] = inventory_payload.get("name")
+                if "name" not in merged_data and merged_data.get("appName"):
+                    merged_data["name"] = merged_data.get("appName")
+
+                stmt = pg_insert(QlikApp).values(
+                    project_id=project_id,
+                    app_id=app_id,
+                    space_id=merged_data.get("spaceId"),
+                    data=merged_data,
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "app_id"],
+                    set_={"data": merged_data, "space_id": merged_data.get("spaceId")},
+                )
+                await session.execute(stmt)
+                stored["apps"] += 1
+
+            # --- spaces ---
+            if spaces_data is not None:
+                spaces_list = spaces_data
+            elif _write_local_fetch_artifacts_enabled() and SPACES_FILE.exists():
+                spaces_payload = read_json(SPACES_FILE)
+                spaces_list = spaces_payload.get("spaces", []) if isinstance(spaces_payload, dict) else []
+            else:
+                spaces_list = []
+            if spaces_list:
+                for item in spaces_list if isinstance(spaces_list, list) else []:
+                    if not isinstance(item, dict):
                         continue
-                    stmt = pg_insert(QlikApp).values(
+                    space_id = item.get("spaceId") or item.get("id")
+                    if not space_id:
+                        continue
+                    stmt = pg_insert(QlikSpace).values(
                         project_id=project_id,
-                        app_id=app_id,
-                        space_id=app_data.get("spaceId"),
-                        data=app_data,
+                        space_id=str(space_id),
+                        data=item,
                     ).on_conflict_do_update(
-                        index_elements=["project_id", "app_id"],
-                        set_={"data": app_data, "space_id": app_data.get("spaceId")},
+                        index_elements=["project_id", "space_id"],
+                        set_={"data": item},
                     )
                     await session.execute(stmt)
-                    stored["apps"] += 1
+                    stored["spaces"] += 1
+
+            # --- data connections ---
+            if data_connections_data is not None:
+                connections = data_connections_data
+            elif _write_local_fetch_artifacts_enabled() and TENANT_DATA_CONNECTIONS_FILE.exists():
+                connections_payload = read_json(TENANT_DATA_CONNECTIONS_FILE)
+                connections = connections_payload.get("data", []) if isinstance(connections_payload, dict) else []
+            else:
+                connections = []
+            if connections:
+                for item in connections if isinstance(connections, list) else []:
+                    if not isinstance(item, dict):
+                        continue
+                    connection_id = item.get("id") or item.get("qID") or item.get("qEngineObjectID")
+                    if not connection_id:
+                        continue
+                    stmt = pg_insert(QlikDataConnection).values(
+                        project_id=project_id,
+                        connection_id=str(connection_id),
+                        space_id=item.get("space"),
+                        data=item,
+                    ).on_conflict_do_update(
+                        index_elements=["project_id", "connection_id"],
+                        set_={"data": item, "space_id": item.get("space")},
+                    )
+                    await session.execute(stmt)
+                    stored["dataConnections"] += 1
+
+            # --- usage ---
+            if usage_payloads is not None:
+                usage_records = usage_payloads
+            elif _write_local_fetch_artifacts_enabled():
+                usage_records = _iter_usage_artifacts(APP_USAGE_DIR)
+            else:
+                usage_records = []
+            for usage_payload in usage_records:
+                app_id = usage_payload.get("appId")
+                if not app_id:
+                    continue
+                stmt = pg_insert(QlikAppUsage).values(
+                    project_id=project_id,
+                    app_id=str(app_id),
+                    data=usage_payload,
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "app_id"],
+                    set_={"data": usage_payload},
+                )
+                await session.execute(stmt)
+                stored["usage"] += 1
+
+            # --- scripts (optional local source for now; DB becomes runtime source) ---
+            script_artifacts = _iter_script_artifacts(settings.scripts_dir) if _write_local_fetch_artifacts_enabled() else []
+            for script_artifact in script_artifacts:
+                stmt = pg_insert(QlikAppScript).values(
+                    project_id=project_id,
+                    app_id=str(script_artifact["appId"]),
+                    script=str(script_artifact["script"]),
+                    source=script_artifact.get("source"),
+                    file_name=script_artifact.get("fileName"),
+                    data=script_artifact["data"],
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "app_id"],
+                    set_={
+                        "script": str(script_artifact["script"]),
+                        "source": script_artifact.get("source"),
+                        "file_name": script_artifact.get("fileName"),
+                        "data": script_artifact["data"],
+                    },
+                )
+                await session.execute(stmt)
+                stored["scripts"] += 1
 
             # --- nodes ---
-            for node_id, node in store.nodes.items():
+            for node_id, node in snapshot.nodes.items():
                 stmt = pg_insert(LineageNode).values(
                     project_id=project_id,
                     node_id=node_id,
-                    app_id=node.get("group"),
+                    app_id=(node.get("meta") or {}).get("id") if node.get("type") == "app" else None,
                     node_type=node.get("type"),
                     data=dict(node),
                 ).on_conflict_do_update(
                     index_elements=["project_id", "node_id"],
-                    set_={"data": dict(node), "node_type": node.get("type")},
+                    set_={
+                        "data": dict(node),
+                        "node_type": node.get("type"),
+                        "app_id": (node.get("meta") or {}).get("id") if node.get("type") == "app" else None,
+                    },
                 )
                 await session.execute(stmt)
                 stored["nodes"] += 1
 
             # --- edges ---
-            for edge_id, edge in store.edges.items():
+            for edge_id, edge in snapshot.edges.items():
+                edge_context = edge.get("context") or {}
                 stmt = pg_insert(LineageEdge).values(
                     project_id=project_id,
                     edge_id=edge_id,
+                    app_id=edge_context.get("appId"),
                     source_node_id=edge.get("source"),
                     target_node_id=edge.get("target"),
                     data=dict(edge),
                 ).on_conflict_do_update(
                     index_elements=["project_id", "edge_id"],
-                    set_={"data": dict(edge)},
+                    set_={
+                        "data": dict(edge),
+                        "app_id": edge_context.get("appId"),
+                        "source_node_id": edge.get("source"),
+                        "target_node_id": edge.get("target"),
+                    },
                 )
                 await session.execute(stmt)
                 stored["edges"] += 1
@@ -636,7 +935,6 @@ async def _run_db_store_step(project_id: int, *, actor_user_id: int, actor_role:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    store.load()
     yield
 
 app.router.lifespan_context = lifespan
@@ -655,61 +953,55 @@ async def log_and_secure(request: Request, call_next):
 async def api_health() -> HealthResponse:
     return HealthResponse(
         status="ok",
-        filesLoaded=store.files_loaded,
-        nodesCount=len(store.nodes),
-        edgesCount=len(store.edges),
+        filesLoaded=0,
+        nodesCount=0,
+        edgesCount=0,
     )
 
 
 @app.get("/api/dashboard/stats", response_model=HealthResponse)
 async def dashboard_stats(session: AsyncSession = Depends(_session_with_rls_context)) -> HealthResponse:
-    """Authenticated dashboard stats with DB graph counts as source of truth (RLS-scoped)."""
-    from app.models import LineageNode, LineageEdge
+    """Authenticated dashboard stats with DB-backed app/node/edge counts (RLS-scoped)."""
+    from app.models import QlikApp, LineageNode, LineageEdge
 
+    apps_result = await session.execute(select(sa_func.count()).select_from(QlikApp))
     nodes_result = await session.execute(select(sa_func.count()).select_from(LineageNode))
     edges_result = await session.execute(select(sa_func.count()).select_from(LineageEdge))
     return HealthResponse(
         status="ok",
-        filesLoaded=store.files_loaded,  # artifact pipeline metric retained for operator visibility
+        filesLoaded=int(apps_result.scalar() or 0),  # backward-compatible field name; DB metric for dashboard UI
         nodesCount=int(nodes_result.scalar() or 0),
         edgesCount=int(edges_result.scalar() or 0),
     )
 
 
 @app.get("/api/inventory", response_model=InventoryResponse)
-async def inventory(_user: str = Depends(get_current_user_id)) -> InventoryResponse:
-    return store.inventory()
+async def inventory(session: AsyncSession = Depends(_session_with_rls_context)) -> InventoryResponse:
+    return await load_inventory(session)
 
 
 @app.get("/api/apps", response_model=InventoryResponse)
-async def apps(_user: str = Depends(get_current_user_id)) -> InventoryResponse:
-    return store.inventory()
+async def apps(session: AsyncSession = Depends(_session_with_rls_context)) -> InventoryResponse:
+    return await load_inventory(session)
 
 
 @app.get("/api/data-connections")
-async def data_connections(_user: str = Depends(get_current_user_id)):
+async def data_connections(session: AsyncSession = Depends(_session_with_rls_context)):
     try:
-        return store.get_data_connections()
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="data connections artifact not found")
-    except ValueError:
-        raise HTTPException(status_code=500, detail="data connections artifact is invalid")
+        return await load_data_connections_payload(session)
+    except Exception:
+        raise HTTPException(status_code=500, detail="data connections query failed")
 
 
 @app.get("/api/spaces")
-async def spaces(_user: str = Depends(get_current_user_id)):
-    if not SPACES_FILE.exists():
-        raise HTTPException(status_code=404, detail="spaces artifact not found")
-    payload = read_json(SPACES_FILE)
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=500, detail="spaces artifact is invalid")
-    return payload
+async def spaces(session: AsyncSession = Depends(_session_with_rls_context)):
+    return await load_spaces_payload(session)
 
 
 @app.get("/api/graph/app/{app_id:path}", response_model=GraphResponse)
-async def graph_for_app(app_id: str, depth: int = 1, _user: str = Depends(get_current_user_id)) -> GraphResponse:
+async def graph_for_app(app_id: str, depth: int = 1, session: AsyncSession = Depends(_session_with_rls_context)) -> GraphResponse:
     try:
-        return store.get_app_subgraph(app_id, depth)
+        return await load_app_subgraph(session, app_id, depth=depth)
     except KeyError:
         raise HTTPException(status_code=404, detail="app not found")
 
@@ -733,38 +1025,43 @@ async def graph_for_project(project_id: int, session: AsyncSession = Depends(_se
 
 
 @app.get("/api/graph/node/{node_id:path}", response_model=GraphResponse)
-async def graph_for_node(node_id: str, direction: str = "both", depth: int = 1, _user: str = Depends(get_current_user_id)) -> GraphResponse:
+async def graph_for_node(
+    node_id: str,
+    direction: str = "both",
+    depth: int = 1,
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> GraphResponse:
     if direction not in {"up", "down", "both"}:
         raise HTTPException(status_code=400, detail="invalid direction")
-    result = store.get_node_subgraph(node_id, direction, depth)
-    if not result["nodes"]:
+    result = await load_node_subgraph(session, node_id, direction=direction, depth=depth)
+    if not result.nodes:
         raise HTTPException(status_code=404, detail="node not found")
     return result
 
 
 @app.get("/api/reports/orphans", response_model=OrphansReport)
-async def orphans(_user: str = Depends(get_current_user_id)) -> OrphansReport:
-    return store.orphans_report()
+async def orphans(session: AsyncSession = Depends(_session_with_rls_context)) -> OrphansReport:
+    return await load_orphans_report(session)
 
 
 @app.get("/api/app/{app_id:path}/usage")
-async def app_usage(app_id: str, _user: str = Depends(get_current_user_id)):
+async def app_usage(app_id: str, session: AsyncSession = Depends(_session_with_rls_context)):
     try:
-        return store.get_app_usage(app_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="usage artifact not found")
-    except ValueError:
-        raise HTTPException(status_code=500, detail="usage artifact is invalid")
+        return await load_app_usage_payload(session, app_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="usage not found")
+    except Exception:
+        raise HTTPException(status_code=500, detail="usage query failed")
 
 
 @app.get("/api/app/{app_id:path}/script")
-async def app_script(app_id: str, _user: str = Depends(get_current_user_id)):
+async def app_script(app_id: str, session: AsyncSession = Depends(_session_with_rls_context)):
     try:
-        return store.get_app_script(app_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="script artifact not found")
-    except ValueError:
-        raise HTTPException(status_code=500, detail="script artifact is invalid")
+        return await load_app_script_payload(session, app_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="script not found")
+    except Exception:
+        raise HTTPException(status_code=500, detail="script query failed")
 
 
 @app.get("/api/fetch/status")

@@ -147,3 +147,45 @@ All code should now build and run without errors. If you encounter any issues, c
 - `docker compose logs backend` — for Python errors
 - `docker compose logs db` — for database issues
 - `docker compose logs frontend` — for nginx issues
+
+---
+
+## Additional Architecture Fixes (2026-02-25) - DB Runtime Source of Truth
+
+### 15. ✅ Misleading Dashboard "Files loaded" metric replaced by DB metric
+- **Issue**: Dashboard showed local artifact file count even when database was empty
+- **Fix**:
+  - `/api/dashboard/stats` now returns DB app count (`qlik_apps`) in the existing `filesLoaded` field (backward-compatible key)
+  - Frontend label updated to **"Apps in DB"**
+
+### 16. ✅ Legacy `GraphStore` runtime dependency removed
+- **Issue**: Multiple user-facing read endpoints still depended on local files / in-memory `GraphStore`
+- **Fix**:
+  - Implemented DB-only runtime read layer
+  - Removed `backend/fetchers/graph_store.py`
+
+### 17. ✅ DB-only runtime reads for graph/inventory-adjacent endpoints
+- **Migrated endpoints**:
+  - `/api/inventory`, `/api/apps`
+  - `/api/spaces`
+  - `/api/data-connections`
+  - `/api/graph/app/{app_id}`, `/api/graph/node/{node_id}`
+  - `/api/reports/orphans`
+  - `/api/app/{app_id}/usage`, `/api/app/{app_id}/script`
+- **Note**: Local artifacts remain only as transitional fetch/import staging for DB persistence
+
+### 18. ✅ DB schema extended for runtime-read completeness and graph linking
+- **Added**:
+  - `qlik_spaces`
+  - `qlik_data_connections`
+  - `qlik_app_usage`
+  - `qlik_app_scripts`
+  - `lineage_edges.app_id`
+- **Added**: RLS policies for the new project-scoped tables
+
+### 19. ✅ Fetch pipeline switched to DB-first (no local fetch artifacts by default)
+- **Issue**: Fetch job still used local JSON files as the normal intermediate storage before DB persistence
+- **Fix**:
+  - Fetch steps now keep fetched payloads in memory and persist to PostgreSQL in the DB store step
+  - Local fetch artifact writes are disabled by default (`FETCH_WRITE_LOCAL_ARTIFACTS=false`)
+  - Optional compatibility/debug mode remains available via `FETCH_WRITE_LOCAL_ARTIFACTS=true`

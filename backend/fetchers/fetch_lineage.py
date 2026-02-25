@@ -75,6 +75,7 @@ async def fetch_and_save_lineage_for_app(
     semaphore: asyncio.Semaphore,
     logger,
     results,
+    collector=None,
 ) -> None:
     app_id = str(app.get("appId", ""))
     app_name = app.get("name") or app_id
@@ -99,8 +100,13 @@ async def fetch_and_save_lineage_for_app(
     }
 
     file_name = f"{sanitize_name(str(app_name))}__{app_id}__lineage.json"
-    out_path = outdir / file_name
-    write_json(out_path, lineage)
+    out_path = None
+    if outdir is not None:
+        out_path = outdir / file_name
+        write_json(out_path, lineage)
+    if collector is not None:
+        lineage["_artifactFileName"] = file_name
+        collector.append(lineage)
 
     source_ok = _is_success(source_result)
     overview_ok = _is_success(overview_result)
@@ -136,7 +142,7 @@ async def fetch_and_save_lineage_for_app(
             app_id,
             source_result.get("status"),
             overview_result.get("status"),
-            out_path,
+            out_path or "memory",
         )
 
 
@@ -146,6 +152,7 @@ async def fetch_lineage_for_apps(
     outdir,
     success_outdir=None,
     concurrency: int = 5,
+    collector=None,
 ) -> Dict[str, Any]:
     semaphore = asyncio.Semaphore(concurrency)
     logger = resolve_logger(getattr(client, "logger", None), "qlik.fetch.lineage")
@@ -155,7 +162,7 @@ async def fetch_lineage_for_apps(
     total = len(apps)
     for idx, app in enumerate(apps, start=1):
         task = fetch_and_save_lineage_for_app(
-            idx, total, app, client, outdir, success_outdir, semaphore, logger, results
+            idx, total, app, client, outdir, success_outdir, semaphore, logger, results, collector
         )
         tasks.append(task)
 
@@ -198,6 +205,7 @@ async def fetch_app_edges_for_apps(
     concurrency: int = 5,
     up_depth: str = "-1",
     collapse: str = "true",
+    collector=None,
 ) -> Dict[str, Any]:
     semaphore = asyncio.Semaphore(concurrency)
     logger = resolve_logger(getattr(client, "logger", None), "qlik.fetch.lineage")
@@ -229,8 +237,13 @@ async def fetch_app_edges_for_apps(
         }
 
         file_name = f"{sanitize_name(str(app_name))}__{app_id}__app_edges.json"
-        out_path = outdir / file_name
-        write_json(out_path, payload)
+        out_path = None
+        if outdir is not None:
+            out_path = outdir / file_name
+            write_json(out_path, payload)
+        if collector is not None:
+            payload["_artifactFileName"] = file_name
+            collector.append(payload)
 
         if isinstance(result, dict) and 200 <= int(result.get("status") or 0) < 300:
             results["success"] += 1
@@ -252,7 +265,7 @@ async def fetch_app_edges_for_apps(
                 app_id,
                 result.get("status"),
                 len(edges),
-                out_path,
+                out_path or "memory",
             )
 
     tasks = []

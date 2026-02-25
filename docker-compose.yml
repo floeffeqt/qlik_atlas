@@ -28,6 +28,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - APP_ENV=${APP_ENV}
       - JWT_SECRET=${JWT_SECRET}
+      - CREDENTIALS_AES256_GCM_KEY_B64=${CREDENTIALS_AES256_GCM_KEY_B64}
+      - CREDENTIALS_AES256_GCM_KEY_ID=${CREDENTIALS_AES256_GCM_KEY_ID}
     depends_on:
       db:
         condition: service_healthy

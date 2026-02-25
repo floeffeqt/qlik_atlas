@@ -81,6 +81,50 @@ class QlikApp(Base):
     fetched_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class QlikSpace(Base):
+    """Qlik space metadata scoped to a project (composite PK)."""
+    __tablename__ = "qlik_spaces"
+    __table_args__ = (PrimaryKeyConstraint('project_id', 'space_id'),)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    space_id = Column(String(100), nullable=False)
+    data = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QlikDataConnection(Base):
+    """Qlik data connections scoped to a project (composite PK)."""
+    __tablename__ = "qlik_data_connections"
+    __table_args__ = (PrimaryKeyConstraint('project_id', 'connection_id'),)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    connection_id = Column(String(120), nullable=False)
+    space_id = Column(String(100), nullable=True, index=True)
+    data = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QlikAppUsage(Base):
+    """Latest app usage payload scoped to a project (composite PK)."""
+    __tablename__ = "qlik_app_usage"
+    __table_args__ = (PrimaryKeyConstraint('project_id', 'app_id'),)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    app_id = Column(String(100), nullable=False)
+    data = Column(JSONB, nullable=False)
+    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QlikAppScript(Base):
+    """App load script payload scoped to a project (composite PK)."""
+    __tablename__ = "qlik_app_scripts"
+    __table_args__ = (PrimaryKeyConstraint('project_id', 'app_id'),)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    app_id = Column(String(100), nullable=False)
+    script = Column(Text, nullable=False)
+    source = Column(String(40), nullable=True)
+    file_name = Column(String(255), nullable=True)
+    data = Column(JSONB, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class LineageNode(Base):
     """Lineage graph node scoped to a project (composite PK)."""
     __tablename__ = "lineage_nodes"
@@ -99,6 +143,7 @@ class LineageEdge(Base):
     __table_args__ = (PrimaryKeyConstraint('project_id', 'edge_id'),)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     edge_id = Column(Text, nullable=False)
+    app_id = Column(String(100), index=True)
     source_node_id = Column(Text, index=True)
     target_node_id = Column(Text, index=True)
     data = Column(JSONB, nullable=False)

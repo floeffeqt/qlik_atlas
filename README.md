@@ -11,6 +11,19 @@ cp .env.example .env
 # Edit .env if needed (defaults are safe for local dev)
 ```
 
+Required for customer creation / encrypted credential storage (AES-256-GCM):
+- `CREDENTIALS_AES256_GCM_KEY_B64` (Base64-encoded 32-byte key)
+- `CREDENTIALS_AES256_GCM_KEY_ID` (key version label, e.g. `local-dev-v1`)
+
+Generate a local dev key (PowerShell):
+```powershell
+python -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+```
+
+Important:
+- Keep the key stable once customer credentials are stored, otherwise existing values can no longer be decrypted.
+- Do not use production secrets in local/dev `.env` files.
+
 ### 2. Start Services
 ```bash
 docker compose up --build
@@ -125,6 +138,8 @@ docker compose down
 
 - `.env` is in `.gitignore` — never commit secrets
 - JWT_SECRET should be a strong random value in production
+- `CREDENTIALS_AES256_GCM_KEY_B64` must be set before creating customers (customer credentials are encrypted before DB persistence)
+- Keep `CREDENTIALS_AES256_GCM_KEY_B64` stable after data is written, or decryption of stored customer credentials will fail
 - Passwords hashed with bcrypt (cost factor 12 by default)
 - Non-root users in all containers
 - CORS configured for frontend origin
@@ -152,6 +167,8 @@ docker compose down
 
 **"Login fails"**: Ensure migrations ran (check logs: `docker compose logs backend`)
 
+**"missing encryption key env var: CREDENTIALS_AES256_GCM_KEY_B64"**: Add `CREDENTIALS_AES256_GCM_KEY_B64` and `CREDENTIALS_AES256_GCM_KEY_ID` to `.env`, then recreate the backend container (`docker compose up -d --force-recreate backend`)
+
 ---
 
 For detailed architecture discussions and implementation questions, see requirements section below.
@@ -177,6 +194,10 @@ python -m pip install -r requirements.txt
 # backend-only Qlik credentials (required for fetch jobs)
 $env:QLIK_TENANT_URL = "https://<tenant>.<region>.qlikcloud.com"
 $env:QLIK_API_KEY = "<qlik_api_key>"
+
+# required for customer credential encryption (AES-256-GCM)
+$env:CREDENTIALS_AES256_GCM_KEY_B64 = "<base64-encoded-32-byte-key>"
+$env:CREDENTIALS_AES256_GCM_KEY_ID = "local-dev-v1"
 
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -205,6 +226,8 @@ python -m pip install -r requirements.txt
 
 set QLIK_TENANT_URL=https://<tenant>.<region>.qlikcloud.com
 set QLIK_API_KEY=<qlik_api_key>
+set CREDENTIALS_AES256_GCM_KEY_B64=<base64-encoded-32-byte-key>
+set CREDENTIALS_AES256_GCM_KEY_ID=local-dev-v1
 
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```

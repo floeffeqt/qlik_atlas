@@ -570,7 +570,8 @@ async def _process_app(
     window_days: int,
     core_types: Dict[str, str],
     connection_types: List[str],
-    outdir: Path,
+    outdir: Optional[Path],
+    collector: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     app_id = str(app.get("appId") or app.get("id") or "").strip()
     if not app_id:
@@ -691,8 +692,13 @@ async def _process_app(
         }
 
         file_name = f"{sanitize_name(app_name)}__{app_id}.json"
-        out_path = outdir / file_name
-        write_json(out_path, payload)
+        out_path = None
+        if outdir is not None:
+            out_path = outdir / file_name
+            write_json(out_path, payload)
+        if collector is not None:
+            payload["_artifactFileName"] = file_name
+            collector.append(payload)
         logger.info(
             "[%s/%s] usage %s (%s) -> views=%s reloads=%s connections=%s -> %s",
             idx,
@@ -702,7 +708,7 @@ async def _process_app(
             sheet_views,
             reloads,
             len(connection_entries),
-            out_path,
+            out_path or "memory",
         )
 
 
@@ -738,14 +744,19 @@ async def fetch_usage_async(
     apps: List[Dict[str, Any]],
     client: QlikClient,
     window_days: Optional[int] = None,
-    outdir: Path | str = DEFAULT_OUTDIR,
+    outdir: Path | str | None = DEFAULT_OUTDIR,
     concurrency: Optional[int] = None,
     close_client: bool = True,
     logger: Optional[logging.Logger] = None,
+    collector: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     resolved_logger = _get_logger(logger or getattr(client, "logger", None))
-    outdir = Path(outdir)
-    ensure_dir(outdir)
+    resolved_outdir: Optional[Path]
+    if outdir is None:
+        resolved_outdir = None
+    else:
+        resolved_outdir = Path(outdir)
+        ensure_dir(resolved_outdir)
 
     window_days = _resolve_window_days(window_days)
     end = _utc_now()
@@ -778,7 +789,8 @@ async def fetch_usage_async(
                 window_days,
                 core_types,
                 connection_types,
-                outdir,
+                resolved_outdir,
+                collector,
             )
         )
 

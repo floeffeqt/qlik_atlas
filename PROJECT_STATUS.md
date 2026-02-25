@@ -264,3 +264,34 @@ Choose your priority:
 ---
 
 All code is ready to build and run now. No further development needed for basic functionality.
+
+---
+
+## Update (2026-02-25): DB-Only Runtime Reads (GraphStore Removed)
+
+### Completed in this step
+- ✅ User-facing read endpoints for graph/inventory-related data are now DB-backed (RLS-scoped):
+  - `/api/inventory`, `/api/apps`
+  - `/api/spaces`
+  - `/api/data-connections`
+  - `/api/graph/app/{app_id}`
+  - `/api/graph/node/{node_id}`
+  - `/api/reports/orphans`
+  - `/api/app/{app_id}/usage`
+  - `/api/app/{app_id}/script`
+- ✅ `GraphStore` runtime usage removed and legacy `backend/fetchers/graph_store.py` removed
+- ✅ Dashboard metric label updated from local file count to DB metric (`Apps in DB`)
+
+### Architecture status after this step
+- Runtime reads for the endpoints above use PostgreSQL as source of truth.
+- Fetch jobs now run DB-first (in-memory to PostgreSQL) by default; local fetch artifacts are disabled unless explicitly enabled.
+- Additional DB tables/models were introduced for runtime reads:
+  - `qlik_spaces`
+  - `qlik_data_connections`
+  - `qlik_app_usage`
+  - `qlik_app_scripts`
+  - `lineage_edges.app_id` for app graph linkage
+
+### Fetch pipeline mode (new default)
+- Default: `FETCH_WRITE_LOCAL_ARTIFACTS=false` (DB-first, no local fetch JSON staging)
+- Optional debug/compat mode: set `FETCH_WRITE_LOCAL_ARTIFACTS=true`

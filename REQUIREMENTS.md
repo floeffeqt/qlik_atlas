@@ -278,3 +278,13 @@ Design tables to replace JSON file storage:
    - Locally (current Docker Compose)?
    - Kubernetes cluster?
    - Cloud (AWS/GCP/Azure)?
+
+---
+
+## Progress Update (2026-02-25)
+
+- Runtime reads for dashboard/graph/inventory-adjacent data were moved to PostgreSQL (RLS-scoped) as source of truth.
+- Legacy `GraphStore` (file-backed runtime read path) was removed.
+- Fetch jobs now use a DB-first in-memory pipeline by default (no local fetch JSON artifacts in the standard path).
+- Optional debug/compat mode for local fetch artifacts can be enabled via `FETCH_WRITE_LOCAL_ARTIFACTS=true`.
+- Additional DB tables were introduced for runtime-read completeness (`qlik_spaces`, `qlik_data_connections`, `qlik_app_usage`, `qlik_app_scripts`) plus `lineage_edges.app_id` for app-linking.
