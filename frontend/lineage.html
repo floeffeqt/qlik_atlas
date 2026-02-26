@@ -110,6 +110,18 @@
     }
     select:focus { border-color: var(--accent); }
     select option { background: #1a1a2e; color: #fff; }
+    .toolbar-input {
+      min-width: 190px;
+      padding: 0.35rem 0.75rem;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 0.8rem;
+      outline: none;
+    }
+    .toolbar-input:focus { border-color: var(--accent); }
+    .toolbar-input::placeholder { color: var(--text-dim); }
     .btn-toolbar {
       padding: 0.35rem 0.9rem;
       background: var(--surface);
@@ -355,9 +367,19 @@
     <option value="file">File</option>
     <option value="other">Other</option>
   </select>
+  <span class="toolbar-label">App:</span>
+  <select id="appFilter">
+    <option value="">Alle</option>
+  </select>
+  <span class="toolbar-label">Bereich:</span>
+  <select id="areaFilter">
+    <option value="">Alle</option>
+  </select>
+  <input id="searchInput" class="toolbar-input" type="text" placeholder="Suche nach Name, ID, App, Bereich..." />
   <div class="toolbar-sep"></div>
   <button class="btn-toolbar primary" id="loadBtn">↻ Graph laden</button>
   <button class="btn-toolbar" id="resetViewBtn">⤢ Einpassen</button>
+  <button class="btn-toolbar" id="resetLayoutBtn">Layout Reset</button>
   <div class="toolbar-sep"></div>
   <span class="stat-pill" id="nodeCount">0 Nodes</span>
   <span class="stat-pill" id="edgeCount">0 Edges</span>
@@ -423,16 +445,15 @@
   var token = localStorage.getItem('auth_access_token');
   if (!token) { window.location.href = '/login.html'; }
 
-  // ── User & admin FAB ──
+  // User & admin FAB
   try {
     var jwtPayload = JSON.parse(atob(token.split('.')[1]));
-    document.getElementById('userEmail').textContent = jwtPayload.email || 'User #' + (jwtPayload.sub || '—');
+    document.getElementById('userEmail').textContent = jwtPayload.email || 'User #' + (jwtPayload.sub || '-');
     if (jwtPayload.role === 'admin') {
       document.getElementById('adminFab').style.display = 'inline-block';
     }
-  } catch(e) {}
+  } catch (e) {}
 
-  // ── Logout ──
   document.getElementById('logoutBtn').addEventListener('click', function() {
     localStorage.removeItem('auth_access_token');
     window.location.href = '/login.html';
@@ -445,14 +466,208 @@
     setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
   }
 
-  // ── Node colors ──
   var nodeColors = {
-    app: '#667eea', db: '#14b8a6', table: '#f59e0b',
-    dataset: '#8b5cf6', qvd: '#ef4444', file: '#06b6d4', other: '#6b7280'
+    app: '#667eea',
+    db: '#14b8a6',
+    table: '#f59e0b',
+    dataset: '#8b5cf6',
+    qvd: '#ef4444',
+    file: '#06b6d4',
+    other: '#6b7280'
   };
-  function nodeColor(type) { return nodeColors[type] || nodeColors.other; }
 
-  // ── D3 setup ──
+  function nodeColor(type) { return nodeColors[type] || nodeColors.other; }
+  function normalizedNodeType(type) {
+    var t = String(type || '').toLowerCase();
+    return nodeColors[t] ? t : 'other';
+  }
+  function nodeAppId(node) {
+    return String((node && (node.group || node.appId || (node.meta && (node.meta.appId || node.meta.app_id)))) || '').trim();
+  }
+  function nodeAppName(node) {
+    return String((node && ((node.meta && node.meta.appName) || (node.meta && node.meta.app_name) || (node.type === 'app' ? node.label : ''))) || '').trim();
+  }
+  function nodeSpaceId(node) {
+    return String((node && ((node.meta && (node.meta.spaceId || node.meta.space_id)) || (node.type === 'app' ? node.group : ''))) || '').trim();
+  }
+  function nodeSpaceName(node) {
+    return String((node && ((node.meta && (node.meta.spaceName || node.meta.space_name)) || (node.meta && node.meta.area) || '')) || '').trim();
+  }
+  function nodeAppFilterValue(node) {
+    var appName = nodeAppName(node);
+    var appId = nodeAppId(node);
+    return String(appName || appId || '').trim().toLowerCase();
+  }
+  function nodeAreaFilterValue(node) {
+    var spaceName = nodeSpaceName(node);
+    var spaceId = nodeSpaceId(node);
+    return String(spaceName || spaceId || '').trim().toLowerCase();
+  }
+  function nodeAreaValue(node) {
+    return String(nodeSpaceName(node) || nodeSpaceId(node) || '').trim();
+  }
+  function collectReachableNodeIds(seedIds, edges) {
+    var seeds = Array.from(seedIds || []);
+    if (!seeds.length) return new Set();
+    var adj = Object.create(null);
+    (edges || []).forEach(function(e) {
+      var s = edgeNodeId(e.source);
+      var t = edgeNodeId(e.target);
+      if (!s || !t) return;
+      if (!adj[s]) adj[s] = [];
+      if (!adj[t]) adj[t] = [];
+      adj[s].push(String(t));
+      adj[t].push(String(s));
+    });
+    var visited = new Set();
+    var queue = seeds.slice();
+    queue.forEach(function(id) { visited.add(String(id)); });
+    while (queue.length) {
+      var cur = String(queue.shift());
+      var nexts = adj[cur] || [];
+      nexts.forEach(function(nid) {
+        var id = String(nid);
+        if (visited.has(id)) return;
+        visited.add(id);
+        queue.push(id);
+      });
+    }
+    return visited;
+  }
+  function nodeSearchHaystack(node) {
+    var parts = [node.id, node.label, node.type, node.group, node.layer, node.subtype, nodeAppId(node), nodeAppName(node), nodeSpaceId(node), nodeSpaceName(node)];
+    if (node.meta && typeof node.meta === 'object') {
+      try { parts.push(JSON.stringify(node.meta)); } catch (e) {}
+    }
+    return parts.map(function(v) { return String(v || '').toLowerCase(); }).join(' ');
+  }
+  function edgeNodeId(value) {
+    return (value && typeof value === 'object') ? value.id : value;
+  }
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  var FILTER_DEBOUNCE_MS = 120;
+  var LAYOUT_STORAGE_KEY = 'lineage_layout_positions_v1';
+  var simulation = null;
+  var currentTransform = d3.zoomIdentity;
+  var lastData = null;
+  var autoFitPending = false;
+  var isProgrammaticZoom = false;
+  var filterDebounceTimer = null;
+  var layoutPositionsByScope = (function() {
+    try {
+      var raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  })();
+
+  function persistLayoutPositions() {
+    try { localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutPositionsByScope)); } catch (e) {}
+  }
+  function currentGraphScopeKey() {
+    var projectId = document.getElementById('projectSelect').value || 'all';
+    return 'project:' + String(projectId);
+  }
+  function scopedPinnedPositions() {
+    var key = currentGraphScopeKey();
+    if (!layoutPositionsByScope[key] || typeof layoutPositionsByScope[key] !== 'object') {
+      layoutPositionsByScope[key] = {};
+    }
+    return layoutPositionsByScope[key];
+  }
+  function applyPinnedPositions(simNodes) {
+    var pins = scopedPinnedPositions();
+    simNodes.forEach(function(n) {
+      var pin = pins[n.id];
+      if (!pin || typeof pin.x !== 'number' || typeof pin.y !== 'number') return;
+      n.x = pin.x;
+      n.y = pin.y;
+      n.fx = pin.x;
+      n.fy = pin.y;
+    });
+  }
+  function pinNodePosition(node) {
+    if (!node || !node.id || typeof node.fx !== 'number' || typeof node.fy !== 'number') return;
+    var pins = scopedPinnedPositions();
+    pins[node.id] = { x: node.fx, y: node.fy };
+    persistLayoutPositions();
+  }
+  function clearPinnedLayoutForCurrentScope() {
+    delete layoutPositionsByScope[currentGraphScopeKey()];
+    persistLayoutPositions();
+  }
+  function setSelectOptions(selectEl, values, placeholder) {
+    var current = selectEl.value || '';
+    var html = '<option value="">' + escHtml(placeholder || 'Alle') + '</option>';
+    values.forEach(function(v) {
+      var value = (v && typeof v === 'object') ? String(v.value || '') : String(v || '');
+      var label = (v && typeof v === 'object') ? String(v.label || value) : value;
+      html += '<option value="' + escHtml(value) + '"' + (value === current ? ' selected' : '') + '>' + escHtml(label) + '</option>';
+    });
+    selectEl.innerHTML = html;
+    var allowedValues = values.map(function(v) { return (v && typeof v === 'object') ? String(v.value || '') : String(v || ''); });
+    if (current && allowedValues.indexOf(current) === -1) {
+      selectEl.value = '';
+    }
+  }
+  function populateLineageFilters(data) {
+    var rawNodes = (data && data.nodes) || [];
+    var appSeen = Object.create(null);
+    var areaSeen = Object.create(null);
+    var appValues = [];
+    var areaValues = [];
+    rawNodes.forEach(function(n) {
+      var appId = nodeAppId(n);
+      var appName = nodeAppName(n);
+      var appFilterVal = nodeAppFilterValue(n);
+      var spaceId = nodeSpaceId(n);
+      var spaceName = nodeSpaceName(n);
+      var areaFilterVal = nodeAreaFilterValue(n);
+      if (appFilterVal && !appSeen[appFilterVal]) {
+        appSeen[appFilterVal] = true;
+        appValues.push({
+          value: appFilterVal,
+          label: appName ? (appId && appId !== appName ? (appName + ' (' + appId + ')') : appName) : appId
+        });
+      }
+      if (areaFilterVal && !areaSeen[areaFilterVal]) {
+        areaSeen[areaFilterVal] = true;
+        areaValues.push({
+          value: areaFilterVal,
+          label: spaceName ? (spaceId && spaceId !== spaceName ? (spaceName + ' (' + spaceId + ')') : spaceName) : spaceId
+        });
+      }
+    });
+    appValues.sort(function(a, b) {
+      return String(a.label || a.value).localeCompare(String(b.label || b.value));
+    });
+    areaValues.sort(function(a, b) {
+      return String(a.label || a.value).localeCompare(String(b.label || b.value));
+    });
+    setSelectOptions(document.getElementById('appFilter'), appValues, 'Alle');
+    setSelectOptions(document.getElementById('areaFilter'), areaValues, 'Alle');
+  }
+  function maybeRenderLastData() {
+    if (lastData) renderGraph(lastData);
+  }
+  function debounceRender() {
+    if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+    filterDebounceTimer = setTimeout(function() {
+      filterDebounceTimer = null;
+      maybeRenderLastData();
+    }, FILTER_DEBOUNCE_MS);
+  }
+
   var svg = d3.select('#graph-svg');
   var root = d3.select('#graph-root');
   var edgesLayer = d3.select('#edges-layer');
@@ -460,38 +675,71 @@
 
   var zoom = d3.zoom()
     .scaleExtent([0.05, 4])
-    .on('zoom', function(event) { root.attr('transform', event.transform); });
+    .on('start', function(event) {
+      if (!isProgrammaticZoom && event && event.sourceEvent) autoFitPending = false;
+    })
+    .on('zoom', function(event) {
+      currentTransform = event.transform;
+      root.attr('transform', event.transform);
+    });
   svg.call(zoom);
+  svg.on('dblclick.zoom', null);
 
-  var simulation = null;
-  var currentTransform = d3.zoomIdentity;
+  function applyZoomTransform(transform, durationMs) {
+    isProgrammaticZoom = true;
+    if (durationMs && durationMs > 0) {
+      svg.transition().duration(durationMs).call(zoom.transform, transform);
+      setTimeout(function() { isProgrammaticZoom = false; }, durationMs + 30);
+    } else {
+      svg.call(zoom.transform, transform);
+      isProgrammaticZoom = false;
+    }
+  }
 
   function fitView(nodes) {
     if (!nodes || !nodes.length) return;
     var width = svg.node().clientWidth;
     var height = svg.node().clientHeight;
-    var xs = nodes.map(function(n) { return n.x; });
-    var ys = nodes.map(function(n) { return n.y; });
+    var xs = nodes.map(function(n) { return n.x; }).filter(function(v) { return typeof v === 'number' && isFinite(v); });
+    var ys = nodes.map(function(n) { return n.y; }).filter(function(v) { return typeof v === 'number' && isFinite(v); });
+    if (!xs.length || !ys.length) return;
     var minX = d3.min(xs), maxX = d3.max(xs);
     var minY = d3.min(ys), maxY = d3.max(ys);
     var dx = maxX - minX || 1, dy = maxY - minY || 1;
     var scale = Math.min(0.9 * width / dx, 0.9 * height / dy, 2);
     var tx = width / 2 - scale * (minX + maxX) / 2;
     var ty = height / 2 - scale * (minY + maxY) / 2;
-    svg.transition().duration(600).call(
-      zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale)
-    );
+    applyZoomTransform(d3.zoomIdentity.translate(tx, ty).scale(scale), 450);
   }
 
-  // ── Render graph ──
   function renderGraph(data) {
-    var rawNodes = data.nodes || [];
-    var rawEdges = data.edges || [];
-
+    var rawNodes = (data && data.nodes) || [];
+    var rawEdges = (data && data.edges) || [];
     var typeFilter = document.getElementById('typeFilter').value;
-    var filteredNodes = typeFilter
-      ? rawNodes.filter(function(n) { return n.type === typeFilter; })
-      : rawNodes;
+    var appFilter = document.getElementById('appFilter').value;
+    var areaFilter = document.getElementById('areaFilter').value;
+    var searchTerm = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+
+    var baseVisibleNodeIds = null;
+    if (appFilter || areaFilter) {
+      var seedAppNodeIds = new Set(
+        rawNodes.filter(function(n) {
+          if (normalizedNodeType(n.type) !== 'app') return false;
+          if (appFilter && nodeAppFilterValue(n) !== String(appFilter).toLowerCase()) return false;
+          if (areaFilter && nodeAreaFilterValue(n) !== String(areaFilter).toLowerCase()) return false;
+          return true;
+        }).map(function(n) { return String(n.id); })
+      );
+      baseVisibleNodeIds = collectReachableNodeIds(seedAppNodeIds, rawEdges);
+    }
+
+    var filteredNodes = rawNodes.filter(function(n) {
+      if (baseVisibleNodeIds && !baseVisibleNodeIds.has(String(n.id))) return false;
+      if (typeFilter && normalizedNodeType(n.type) !== typeFilter) return false;
+      if (searchTerm && nodeSearchHaystack(n).indexOf(searchTerm) === -1) return false;
+      return true;
+    });
+
     var nodeIds = new Set(filteredNodes.map(function(n) { return n.id; }));
     var filteredEdges = rawEdges.filter(function(e) {
       return nodeIds.has(e.source) && nodeIds.has(e.target);
@@ -499,15 +747,8 @@
 
     document.getElementById('nodeCount').textContent = filteredNodes.length + ' nodes';
     document.getElementById('edgeCount').textContent = filteredEdges.length + ' edges';
+    document.getElementById('emptyState').classList.toggle('show', !filteredNodes.length);
 
-    var emptyState = document.getElementById('emptyState');
-    if (!filteredNodes.length) {
-      emptyState.classList.add('show');
-    } else {
-      emptyState.classList.remove('show');
-    }
-
-    // Build simulation nodes/links (d3 mutates source/target to objects)
     var simNodes = filteredNodes.map(function(n) { return Object.assign({}, n); });
     var nodeMap = {};
     simNodes.forEach(function(n) { nodeMap[n.id] = n; });
@@ -515,18 +756,31 @@
       return { source: e.source, target: e.target, relation: e.relation, id: e.id };
     }).filter(function(e) { return nodeMap[e.source] && nodeMap[e.target]; });
 
-    if (simulation) { simulation.stop(); }
+    if (simulation) simulation.stop();
+    applyPinnedPositions(simNodes);
+
+    var adjacency = Object.create(null);
+    simLinks.forEach(function(e) {
+      var sid = edgeNodeId(e.source);
+      var tid = edgeNodeId(e.target);
+      if (!sid || !tid) return;
+      if (!adjacency[sid]) adjacency[sid] = Object.create(null);
+      if (!adjacency[tid]) adjacency[tid] = Object.create(null);
+      adjacency[sid][tid] = true;
+      adjacency[tid][sid] = true;
+    });
 
     var width = svg.node().clientWidth;
     var height = svg.node().clientHeight;
 
     simulation = d3.forceSimulation(simNodes)
       .force('link', d3.forceLink(simLinks).id(function(d) { return d.id; }).distance(80))
-      .force('charge', d3.forceManyBody().strength(-200))
+      .force('charge', d3.forceManyBody().strength(-210))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide(22));
 
-    // ── Draw edges ──
+    autoFitPending = true;
+
     edgesLayer.selectAll('*').remove();
     var link = edgesLayer.selectAll('line')
       .data(simLinks)
@@ -535,8 +789,20 @@
         .attr('stroke-width', 1.5)
         .attr('marker-end', 'url(#arrow)');
 
-    // ── Draw nodes ──
     nodesLayer.selectAll('*').remove();
+
+    function nudgeNeighbors(nodeId, dx, dy) {
+      var neighbors = adjacency[nodeId];
+      if (!neighbors) return;
+      Object.keys(neighbors).forEach(function(neighborId) {
+        var neighbor = nodeMap[neighborId];
+        if (!neighbor) return;
+        if (typeof neighbor.fx === 'number' && typeof neighbor.fy === 'number') return;
+        neighbor.vx = (neighbor.vx || 0) + (dx || 0) * 0.12;
+        neighbor.vy = (neighbor.vy || 0) + (dy || 0) * 0.12;
+      });
+    }
+
     var nodeGroup = nodesLayer.selectAll('g')
       .data(simNodes)
       .enter().append('g')
@@ -544,13 +810,21 @@
         .style('cursor', 'pointer')
         .call(d3.drag()
           .on('start', function(event, d) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x; d.fy = d.y;
+            autoFitPending = false;
+            if (!event.active) simulation.alphaTarget(0.25).restart();
+            d.fx = (typeof d.x === 'number') ? d.x : event.x;
+            d.fy = (typeof d.y === 'number') ? d.y : event.y;
           })
-          .on('drag', function(event, d) { d.fx = event.x; d.fy = event.y; })
+          .on('drag', function(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+            nudgeNeighbors(d.id, event.dx, event.dy);
+          })
           .on('end', function(event, d) {
             if (!event.active) simulation.alphaTarget(0);
-            d.fx = null; d.fy = null;
+            d.fx = event.x;
+            d.fy = event.y;
+            pinNodePosition(d);
           })
         )
         .on('click', function(event, d) { showDetail(d); event.stopPropagation(); });
@@ -558,15 +832,15 @@
     nodeGroup.append('circle')
       .attr('r', 14)
       .attr('fill', function(d) { return nodeColor(d.type); })
-      .attr('fill-opacity', 0.85)
+      .attr('fill-opacity', 0.9)
       .attr('stroke', '#fff')
-      .attr('stroke-opacity', 0.15)
+      .attr('stroke-opacity', 0.16)
       .attr('stroke-width', 1.5);
 
     nodeGroup.append('text')
       .text(function(d) {
         var label = d.label || d.id || '';
-        return label.length > 16 ? label.slice(0, 14) + '…' : label;
+        return label.length > 16 ? label.slice(0, 14) + '...' : label;
       })
       .attr('text-anchor', 'middle')
       .attr('dy', 28)
@@ -574,28 +848,26 @@
       .attr('fill', 'rgba(255,255,255,0.6)')
       .style('pointer-events', 'none');
 
-    // Node hover highlight
     nodeGroup
       .on('mouseenter', function(event, d) {
         d3.select(this).select('circle')
           .attr('stroke', '#fff').attr('stroke-opacity', 0.8).attr('stroke-width', 2);
         link.attr('stroke', function(e) {
-          var sid = typeof e.source === 'object' ? e.source.id : e.source;
-          var tid = typeof e.target === 'object' ? e.target.id : e.target;
+          var sid = edgeNodeId(e.source);
+          var tid = edgeNodeId(e.target);
           return (sid === d.id || tid === d.id) ? 'rgba(102,126,234,0.7)' : 'rgba(255,255,255,0.08)';
         }).attr('stroke-width', function(e) {
-          var sid = typeof e.source === 'object' ? e.source.id : e.source;
-          var tid = typeof e.target === 'object' ? e.target.id : e.target;
+          var sid = edgeNodeId(e.source);
+          var tid = edgeNodeId(e.target);
           return (sid === d.id || tid === d.id) ? 2.5 : 1;
         });
       })
       .on('mouseleave', function() {
         d3.select(this).select('circle')
-          .attr('stroke', '#fff').attr('stroke-opacity', 0.15).attr('stroke-width', 1.5);
+          .attr('stroke', '#fff').attr('stroke-opacity', 0.16).attr('stroke-width', 1.5);
         link.attr('stroke', 'rgba(255,255,255,0.18)').attr('stroke-width', 1.5);
       });
 
-    // Close panel when clicking canvas
     svg.on('click', function() { closeDetail(); });
 
     simulation.on('tick', function() {
@@ -607,18 +879,22 @@
       nodeGroup.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
     });
 
-    simulation.on('end', function() { fitView(simNodes); });
+    simulation.on('end', function() {
+      if (autoFitPending) {
+        autoFitPending = false;
+        fitView(simNodes);
+      }
+    });
   }
 
-  // ── Detail panel ──
   function showDetail(d) {
     document.getElementById('detailType').textContent = (d.type || 'unknown').toUpperCase();
-    document.getElementById('detailLabel').textContent = d.label || d.id || '—';
+    document.getElementById('detailLabel').textContent = d.label || d.id || '-';
     var rows = '';
-    if (d.id)       rows += detailRow('ID', d.id);
-    if (d.group)    rows += detailRow('App', d.group);
-    if (d.layer)    rows += detailRow('Layer', d.layer);
-    if (d.subtype)  rows += detailRow('Subtype', d.subtype);
+    if (d.id) rows += detailRow('ID', d.id);
+    if (d.group) rows += detailRow('App', d.group);
+    if (d.layer) rows += detailRow('Layer', d.layer);
+    if (d.subtype) rows += detailRow('Subtype', d.subtype);
     if (d.meta && typeof d.meta === 'object') {
       Object.entries(d.meta).slice(0, 5).forEach(function(kv) {
         rows += detailRow(kv[0], JSON.stringify(kv[1]));
@@ -627,20 +903,17 @@
     document.getElementById('detailRows').innerHTML = rows;
     document.getElementById('detailPanel').classList.add('show');
   }
+
   function detailRow(key, val) {
     return '<div class="detail-row"><span class="detail-key">' + escHtml(key) + '</span>'
-         + '<span class="detail-val">' + escHtml(String(val)) + '</span></div>';
+      + '<span class="detail-val">' + escHtml(String(val)) + '</span></div>';
   }
+
   function closeDetail() {
     document.getElementById('detailPanel').classList.remove('show');
   }
   document.getElementById('detailClose').addEventListener('click', closeDetail);
 
-  function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-
-  // ── Load projects into dropdown ──
   async function loadProjects() {
     try {
       var res = await fetch('/api/projects', { headers: { 'Authorization': 'Bearer ' + token } });
@@ -648,29 +921,22 @@
       var projects = await res.json();
       var sel = document.getElementById('projectSelect');
       var urlProject = new URLSearchParams(window.location.search).get('project');
-      sel.innerHTML = '<option value="">— alle Projekte —</option>'
+      sel.innerHTML = '<option value="">- alle Projekte -</option>'
         + projects.map(function(p) {
             var custName = p.customer ? ' (' + p.customer.name + ')' : '';
             return '<option value="' + p.id + '"' + (String(p.id) === urlProject ? ' selected' : '') + '>'
-              + p.name + custName + '</option>';
+              + escHtml(p.name + custName) + '</option>';
           }).join('');
-    } catch(e) {}
+    } catch (e) {}
   }
 
-  // ── Load data ──
-  var lastData = null;
   async function loadGraph() {
     var loading = document.getElementById('loadingOverlay');
     loading.style.display = 'flex';
     closeDetail();
 
     var projectId = document.getElementById('projectSelect').value;
-    var url;
-    if (projectId) {
-      url = '/api/graph/project/' + projectId;
-    } else {
-      url = '/api/graph/db';
-    }
+    var url = projectId ? ('/api/graph/project/' + projectId) : '/api/graph/db';
 
     try {
       var res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
@@ -681,9 +947,10 @@
       }
       if (!res.ok) { throw new Error('HTTP ' + res.status); }
       lastData = await res.json();
+      populateLineageFilters(lastData);
       renderGraph(lastData);
-      showToast('Graph geladen — ' + (lastData.nodes || []).length + ' Nodes');
-    } catch(e) {
+      showToast('Graph geladen - ' + (lastData.nodes || []).length + ' Nodes');
+    } catch (e) {
       showToast('Fehler: ' + e.message);
       document.getElementById('emptyState').classList.add('show');
     }
@@ -691,26 +958,36 @@
     loading.style.display = 'none';
   }
 
-  // ── Toolbar actions ──
   document.getElementById('loadBtn').addEventListener('click', loadGraph);
-  document.getElementById('projectSelect').addEventListener('change', loadGraph);
+  document.getElementById('projectSelect').addEventListener('change', function() {
+    autoFitPending = false;
+    loadGraph();
+  });
   document.getElementById('resetViewBtn').addEventListener('click', function() {
     if (simulation) fitView(simulation.nodes());
-    else svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);
+    else applyZoomTransform(d3.zoomIdentity, 250);
   });
-  document.getElementById('typeFilter').addEventListener('change', function() {
-    if (lastData) renderGraph(lastData);
+  document.getElementById('resetLayoutBtn').addEventListener('click', function() {
+    clearPinnedLayoutForCurrentScope();
+    if (lastData) {
+      renderGraph(lastData);
+      showToast('Gespeichertes Layout fuer diese Ansicht zurueckgesetzt');
+    }
   });
+  document.getElementById('typeFilter').addEventListener('change', maybeRenderLastData);
+  document.getElementById('appFilter').addEventListener('change', maybeRenderLastData);
+  document.getElementById('areaFilter').addEventListener('change', maybeRenderLastData);
+  document.getElementById('searchInput').addEventListener('input', debounceRender);
 
-  // ── Zoom buttons ──
   document.getElementById('zoomIn').addEventListener('click', function() {
+    autoFitPending = false;
     svg.transition().duration(250).call(zoom.scaleBy, 1.4);
   });
   document.getElementById('zoomOut').addEventListener('click', function() {
+    autoFitPending = false;
     svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.4);
   });
 
-  // ── Initial load ──
   loadProjects().then(loadGraph);
 </script>
 </body>

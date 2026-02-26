@@ -34,6 +34,9 @@ related_docs:
 - Vorlage: `<KI_ROOT>\documentation\TEMPLATES\DOC_RELEASE_NOTES.md`
 - Vorhandene Eintraege:
   - `2026-02-25_db-only-runtime-reads-and-graphstore-removal.md`
+  - `2026-02-25_lineage-ui-search-layout-stability.md`
+  - `2026-02-25_lineage-appname-space-filter-and-qlik-spaces-columns.md`
+  - `2026-02-25_remove-legacy-qlik-credentials-table-plan-references.md`
 
 ## Open Questions / Risks
 

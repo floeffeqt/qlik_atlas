@@ -701,6 +701,130 @@ def _iter_script_artifacts(directory: Path) -> list[dict[str, Any]]:
     return artifacts
 
 
+def _space_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "space_type": None,
+            "owner_id": None,
+            "space_id_payload": None,
+            "tenant_id": None,
+            "created_at_source": None,
+            "space_name": None,
+            "updated_at_source": None,
+        }
+    return {
+        "space_type": item.get("type"),
+        "owner_id": item.get("ownerId") or item.get("ownerID"),
+        "space_id_payload": item.get("spaceId") or item.get("spaceID") or item.get("id"),
+        "tenant_id": item.get("tenantId") or item.get("tenantID"),
+        "created_at_source": item.get("createdAt"),
+        "space_name": item.get("spaceName") or item.get("spacename") or item.get("name"),
+        "updated_at_source": item.get("updatedAt"),
+    }
+
+
+def _str_or_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bool_or_none(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes", "y"}:
+        return True
+    if text in {"false", "0", "no", "n"}:
+        return False
+    return None
+
+
+def _datetime_or_none(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _app_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "name_value": None,
+            "app_id_payload": None,
+            "status": None,
+            "app_name": None,
+            "space_id_payload": None,
+            "file_name": None,
+            "item_type": None,
+            "edges_count": None,
+            "nodes_count": None,
+            "root_node_id": None,
+            "lineage_fetched": None,
+            "lineage_success": None,
+            "fetched_at": None,
+        }
+    return {
+        "name_value": _str_or_none(item.get("name")),
+        "app_id_payload": _str_or_none(item.get("appId") or item.get("id")),
+        "status": _int_or_none(item.get("status")),
+        "app_name": _str_or_none(item.get("appName") or item.get("name")),
+        "space_id_payload": _str_or_none(item.get("spaceId")),
+        "file_name": _str_or_none(item.get("fileName")),
+        "item_type": _str_or_none(item.get("itemType")),
+        "edges_count": _int_or_none(item.get("edgesCount")),
+        "nodes_count": _int_or_none(item.get("nodesCount")),
+        "root_node_id": _str_or_none(item.get("rootNodeId")),
+        "lineage_fetched": _bool_or_none(item.get("lineageFetched")),
+        "lineage_success": _bool_or_none(item.get("lineageSuccess")),
+        "fetched_at": _datetime_or_none(item.get("fetched_at")) or datetime.now(timezone.utc),
+    }
+
+
+def _usage_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
+    usage = item.get("usage") if isinstance(item.get("usage"), dict) else {}
+    generated_at_text = _str_or_none(item.get("generatedAt"))
+    return {
+        "app_id_payload": _str_or_none(item.get("appId")),
+        "app_name": _str_or_none(item.get("appName")),
+        "window_days": _int_or_none(item.get("windowDays")),
+        "usage_reloads": _int_or_none(usage.get("reloads")),
+        "usage_app_opens": _int_or_none(usage.get("appOpens")),
+        "usage_sheet_views": _int_or_none(usage.get("sheetViews")),
+        "usage_unique_users": _int_or_none(usage.get("uniqueUsers")),
+        "usage_last_reload_at": _str_or_none(usage.get("lastReloadAt")),
+        "usage_last_viewed_at": _str_or_none(usage.get("lastViewedAt")),
+        "usage_classification": _str_or_none(usage.get("classification")),
+        "connections": item.get("connections") if isinstance(item.get("connections"), list) else [],
+        "generated_at_payload": generated_at_text,
+        "artifact_file_name": _str_or_none(item.get("_artifactFileName")),
+        "generated_at": _datetime_or_none(generated_at_text) or datetime.now(timezone.utc),
+    }
+
+
 async def _run_db_store_step(
     project_id: int,
     *,
@@ -744,6 +868,7 @@ async def _run_db_store_step(
     stored["skippedLineageFiles"] = len(skipped_lineage_files)
 
     apps_inventory_by_id: dict[str, dict[str, Any]] = {}
+    app_lookup_for_nodes: dict[str, dict[str, Any]] = {}
     if apps_data is not None:
         apps_list = apps_data
     elif _write_local_fetch_artifacts_enabled() and APPS_INVENTORY_FILE.exists():
@@ -776,15 +901,21 @@ async def _run_db_store_step(
                     merged_data["appName"] = inventory_payload.get("name")
                 if "name" not in merged_data and merged_data.get("appName"):
                     merged_data["name"] = merged_data.get("appName")
+                app_lookup_for_nodes[app_id] = {
+                    "appName": merged_data.get("appName") or merged_data.get("name") or app_id,
+                    "spaceId": merged_data.get("spaceId"),
+                }
+                app_cols = _app_payload_columns(merged_data)
 
                 stmt = pg_insert(QlikApp).values(
                     project_id=project_id,
                     app_id=app_id,
                     space_id=merged_data.get("spaceId"),
+                    **app_cols,
                     data=merged_data,
                 ).on_conflict_do_update(
                     index_elements=["project_id", "app_id"],
-                    set_={"data": merged_data, "space_id": merged_data.get("spaceId")},
+                    set_={**app_cols, "data": merged_data, "space_id": merged_data.get("spaceId")},
                 )
                 await session.execute(stmt)
                 stored["apps"] += 1
@@ -798,22 +929,30 @@ async def _run_db_store_step(
             else:
                 spaces_list = []
             if spaces_list:
+                space_name_by_id: dict[str, str] = {}
                 for item in spaces_list if isinstance(spaces_list, list) else []:
                     if not isinstance(item, dict):
                         continue
                     space_id = item.get("spaceId") or item.get("id")
                     if not space_id:
                         continue
+                    space_name = item.get("spaceName") or item.get("spacename") or item.get("name")
+                    if isinstance(space_name, str) and space_name.strip():
+                        space_name_by_id[str(space_id)] = space_name.strip()
+                    space_cols = _space_payload_columns(item)
                     stmt = pg_insert(QlikSpace).values(
                         project_id=project_id,
                         space_id=str(space_id),
+                        **space_cols,
                         data=item,
                     ).on_conflict_do_update(
                         index_elements=["project_id", "space_id"],
-                        set_={"data": item},
+                        set_={**space_cols, "data": item},
                     )
                     await session.execute(stmt)
                     stored["spaces"] += 1
+            else:
+                space_name_by_id = {}
 
             # --- data connections ---
             if data_connections_data is not None:
@@ -853,13 +992,15 @@ async def _run_db_store_step(
                 app_id = usage_payload.get("appId")
                 if not app_id:
                     continue
+                usage_cols = _usage_payload_columns(usage_payload if isinstance(usage_payload, dict) else {})
                 stmt = pg_insert(QlikAppUsage).values(
                     project_id=project_id,
                     app_id=str(app_id),
+                    **usage_cols,
                     data=usage_payload,
                 ).on_conflict_do_update(
                     index_elements=["project_id", "app_id"],
-                    set_={"data": usage_payload},
+                    set_={**usage_cols, "data": usage_payload},
                 )
                 await session.execute(stmt)
                 stored["usage"] += 1
@@ -888,18 +1029,41 @@ async def _run_db_store_step(
 
             # --- nodes ---
             for node_id, node in snapshot.nodes.items():
+                node_payload = dict(node)
+                node_meta = dict(node_payload.get("meta") or {})
+                node_app_id = (
+                    node_payload.get("group")
+                    or node_meta.get("appId")
+                    or node_meta.get("app_id")
+                    or ((node_meta.get("id") if node_payload.get("type") == "app" else None))
+                )
+                if node_app_id:
+                    app_info = app_lookup_for_nodes.get(str(node_app_id))
+                    node_meta.setdefault("appId", str(node_app_id))
+                    if app_info:
+                        app_name_val = app_info.get("appName")
+                        space_id_val = app_info.get("spaceId")
+                        if app_name_val:
+                            node_meta.setdefault("appName", str(app_name_val))
+                        if space_id_val:
+                            node_meta.setdefault("spaceId", str(space_id_val))
+                            space_name_val = space_name_by_id.get(str(space_id_val))
+                            if space_name_val:
+                                node_meta.setdefault("spaceName", str(space_name_val))
+                if node_meta:
+                    node_payload["meta"] = node_meta
                 stmt = pg_insert(LineageNode).values(
                     project_id=project_id,
                     node_id=node_id,
-                    app_id=(node.get("meta") or {}).get("id") if node.get("type") == "app" else None,
-                    node_type=node.get("type"),
-                    data=dict(node),
+                    app_id=(node_meta or {}).get("id") if node_payload.get("type") == "app" else None,
+                    node_type=node_payload.get("type"),
+                    data=node_payload,
                 ).on_conflict_do_update(
                     index_elements=["project_id", "node_id"],
                     set_={
-                        "data": dict(node),
-                        "node_type": node.get("type"),
-                        "app_id": (node.get("meta") or {}).get("id") if node.get("type") == "app" else None,
+                        "data": node_payload,
+                        "node_type": node_payload.get("type"),
+                        "app_id": (node_meta or {}).get("id") if node_payload.get("type") == "app" else None,
                     },
                 )
                 await session.execute(stmt)

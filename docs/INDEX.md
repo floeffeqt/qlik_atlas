@@ -15,6 +15,7 @@ related_specs:
   - QLIK-PS-002
 related_docs:
   - docs/CONTEXT.md
+  - docs/DB_MODEL.md
   - REQUIREMENTS.md
   - PROJECT_STATUS.md
   - FIXES_APPLIED.md
@@ -43,8 +44,14 @@ related_docs:
 ## Project Docs
 
 - `CONTEXT.md` (projektbezogener Kontext und Doku-Nutzung)
+- `DB_MODEL.md` (aktuelle DB-Struktur: Tabellen, PK/FK, fachliche Joins, Mermaid-ERD)
 - `RELEASE_NOTES/README.md` (Struktur fuer kuenftige Release Notes im `docs`-Bereich)
 - `RELEASE_NOTES/2026-02-25_db-only-runtime-reads-and-graphstore-removal.md` (DB-only Runtime-Reads + GraphStore-Entfernung)
+
+## Documentation Maintenance Rules (Project)
+
+- Bei DB-Schema-/Modell-/Join-Aenderungen `docs/DB_MODEL.md` immer mitpruefen und bei Bedarf im gleichen Task aktualisieren.
+- Wenn keine Anpassung an `docs/DB_MODEL.md` noetig ist, kurz begruenden (z. B. reine Query-Logik ohne Schema-/Beziehungsänderung).
 
 ## Open Questions / Risks
 

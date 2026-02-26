@@ -1,265 +1,270 @@
-# Qlik Atlas — Containerized Stack
+# Qlik Atlas
 
-## Overview
-A containerized FastAPI backend + nginx frontend + PostgreSQL database stack for Qlik lineage exploration with authentication.
+Containerized Qlik lineage application with FastAPI backend, PostgreSQL, nginx frontend, authentication, customer/project management, and DB-backed lineage runtime reads.
 
-## Quick Start
+## Current Status
 
-### 1. Setup Environment
+- Docker-based stack is runnable end-to-end (`db`, `backend`, `frontend`, optional `pgadmin`)
+- Authentication and admin flows are available
+- Customer credentials are stored encrypted in the database (AES-256-GCM)
+- Runtime reads for dashboard/graph/inventory/spaces/data-connections/usage/scripts are DB-backed
+- Fetch pipeline is DB-first (`Qlik API -> in-memory transform -> PostgreSQL`)
+- Local fetch artifacts are no longer the application source of truth (optional debug mode only)
+
+## Quick Start (Docker)
+
+(Start einer neuen Session: Bitte zuerst AGENTS.md lesen, dann die zentrale private Bridge nutzen, Gateway anwenden und danach docs/INDEX.md + relevante Specs/Dokumente scannen, bevor du loslegst.
+)
+
+### 1. Configure environment
+
 ```bash
 cp .env.example .env
-# Edit .env if needed (defaults are safe for local dev)
 ```
 
-Required for customer creation / encrypted credential storage (AES-256-GCM):
-- `CREDENTIALS_AES256_GCM_KEY_B64` (Base64-encoded 32-byte key)
-- `CREDENTIALS_AES256_GCM_KEY_ID` (key version label, e.g. `local-dev-v1`)
+Edit `.env` and set at least:
 
-Generate a local dev key (PowerShell):
+- `JWT_SECRET`
+- `CREDENTIALS_AES256_GCM_KEY_B64`
+- `CREDENTIALS_AES256_GCM_KEY_ID`
+
+Optional (for real fetch jobs):
+
+- `QLIK_TENANT_URL`
+- `QLIK_API_KEY`
+
+Generate a local AES-256-GCM key (PowerShell, correct format):
+
 ```powershell
 python -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
 ```
 
 Important:
-- Keep the key stable once customer credentials are stored, otherwise existing values can no longer be decrypted.
-- Do not use production secrets in local/dev `.env` files.
 
-### 2. Start Services
+- `CREDENTIALS_AES256_GCM_KEY_B64` must decode to exactly 32 bytes
+- Keep the AES key stable after customer credentials have been stored
+- Do not use production secrets in local `.env`
+
+### 2. Start the stack
+
 ```bash
 docker compose up --build
 ```
 
-This will:
-- Build & start PostgreSQL container (connected on Docker network)
-- Build & start FastAPI backend (port 8000)
-- Build & start nginx frontend (port **4001**)
-- Start optional pgAdmin UI (port **5050**) for DB inspection
-- Run migrations automatically
-- Seed test user: `admin@admin.de` / `admin123`
+This starts:
 
-### 3. Access Application
-Open browser: **http://localhost:4001**
+- `db` (PostgreSQL)
+- `backend` (FastAPI, auto-migrations on startup)
+- `frontend` (nginx SPA on port `4001`)
+- `pgadmin` (optional, port `5050`)
 
-Optional database UI (pgAdmin): **http://localhost:5050**
+### 3. Open the app
 
-Default pgAdmin login (override in `.env`):
-- Email: `pgadmin@local.dev`
-- Password: `change_me_for_local_dev`
+- App: `http://localhost:4001`
+- pgAdmin (optional): `http://localhost:5050`
 
-Newer pgAdmin versions may also ask for a local **Master Password** after login (used by pgAdmin to protect saved server credentials).
-- Master Password (placeholder/example): `<SET_YOUR_LOCAL_PGADMIN_MASTER_PASSWORD>`
-- This is separate from `PGADMIN_DEFAULT_PASSWORD` and can be any local dev password you choose.
-- The pgAdmin login credentials and PostgreSQL connection credentials are also available in your local `.env` file.
+Default seeded admin user:
 
-To connect pgAdmin to PostgreSQL, add a server with:
-- Host: `db`
-- Port: `5432`
-- Database: `atlas_db`
-- Username: `atlas`
-- Password: `atlas_password` (or your `.env` value)
-
-Login with:
 - Email: `admin@admin.de`
 - Password: `admin123`
 
-## Architecture
+## Services and Ports
 
-### Services
-| Service | Port | Description |
-|---------|------|-------------|
-| **Frontend** | 4001 | nginx serving SPA, proxies /api to backend |
-| **Backend** | 8000 | FastAPI + Uvicorn (async) |
-| **Database** | 5432 | PostgreSQL 15 (internal only) |
-| **pgAdmin** | 5050 | PostgreSQL admin UI (optional, local dev) |
+| Service | Port | Purpose |
+|---|---:|---|
+| `frontend` | `4001` | UI (nginx) |
+| `backend` | `8000` | FastAPI API |
+| `db` | `5432` | PostgreSQL (internal/docker network) |
+| `pgadmin` | `5050` | Optional DB inspection UI |
 
-### Key Technologies
-- **Backend**: FastAPI, SQLAlchemy (async), asyncpg
-- **Auth**: JWT (HS256) + bcrypt password hashing
-- **Frontend**: Vanilla JS with localStorage for tokens
-- **DB**: PostgreSQL with Alembic migrations
-- **Docker**: Multi-stage builds, non-root users, health checks
+## Architecture (Current)
 
-## Authentication
+### Data flow
 
-### Endpoints
-- `POST /auth/register` — Create new user
-  - Body: `{ "email": "user@example.com", "password": "..." }`
-  - Returns: `{ "access_token": "...", "token_type": "bearer" }`
+1. Admin starts fetch job for a project
+2. Backend loads encrypted Qlik credentials from the project's customer
+3. Backend fetches Qlik data (spaces/apps/connections/lineage/usage)
+4. Payloads are normalized in memory
+5. Data is persisted to PostgreSQL
+6. Frontend runtime endpoints read from PostgreSQL (RLS-scoped)
 
-- `POST /auth/login` — Login existing user
-  - Body: `{ "email": "user@example.com", "password": "..." }`
-  - Returns: `{ "access_token": "...", "token_type": "bearer" }`
+### Runtime source of truth
 
-### Frontend Integration
-- Token stored in `localStorage` under key `auth_access_token`
-- Automatic redirect to `/login.html` on 401
-- All API requests include `Authorization: Bearer {token}` header
+- UI-facing runtime data is PostgreSQL (not local JSON files)
+- Local artifacts may still exist as optional debug outputs when explicitly enabled
 
-## Database Schema
+Debug/compat mode for local fetch artifacts (default is off):
 
-### Users Table
-```sql
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(320) UNIQUE NOT NULL,
-    password_hash VARCHAR(256) NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
+- `FETCH_WRITE_LOCAL_ARTIFACTS=true`
+
+## Authentication and Authorization
+
+### Auth endpoints
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+
+Frontend behavior:
+
+- Access token stored in `localStorage` (`auth_access_token`)
+- API calls use `Authorization: Bearer <token>`
+
+### Admin-only areas (high level)
+
+- Customer create/update/delete
+- Fetch job start/list/logs
+- Admin user assignment/management routes
+
+## Row-Level Security (RLS)
+
+PostgreSQL RLS is used for customer/project scoped access.
+
+Implementation summary:
+
+- App sets per-session DB context (`app.user_id`, `app.role`)
+- PostgreSQL policies evaluate access using helper SQL functions
+- Project-scoped runtime tables inherit visibility via `project_id`
+
+This applies to core runtime tables including:
+
+- `qlik_apps`
+- `lineage_nodes`
+- `lineage_edges`
+- `qlik_spaces`
+- `qlik_data_connections`
+- `qlik_app_usage`
+- `qlik_app_scripts`
+
+## Key API Areas (Current)
+
+### Runtime/UI reads (DB-backed)
+
+- `GET /api/dashboard/stats`
+- `GET /api/inventory`
+- `GET /api/apps`
+- `GET /api/spaces`
+- `GET /api/data-connections`
+- `GET /api/graph/all`
+- `GET /api/graph/app/{app_id}`
+- `GET /api/graph/node/{node_id}`
+- `GET /api/app/{app_id}/usage`
+- `GET /api/app/{app_id}/script`
+
+### Fetch jobs
+
+- `GET /api/fetch/status`
+- `GET /api/fetch/jobs`
+- `GET /api/fetch/jobs/{job_id}`
+- `GET /api/fetch/jobs/{job_id}/logs`
+- `POST /api/fetch/jobs`
 
 ## Development
 
-### Run Migrations Manually
+### Useful Docker commands
+
+Start / rebuild:
+
 ```bash
-cd backend
-alembic upgrade head
+docker compose up --build
 ```
 
-### Seed Database
+Restart backend after `.env` changes:
+
 ```bash
-cd backend
-python -m scripts.seed_db
+docker compose up -d --force-recreate backend
 ```
 
-### View Logs
+Logs:
+
 ```bash
 docker compose logs -f backend
 docker compose logs -f frontend
 docker compose logs -f db
 ```
 
-### Stop Everything
+Stop:
+
 ```bash
 docker compose down
 ```
 
+### Manual migrations (if needed)
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+### Upgrade Notes (after pulling changes)
+
+Use this sequence after code/config changes to avoid testing stale containers:
+
+1. Check local changes (`git status`) and keep/commit what you want to preserve.
+2. Rebuild and restart the stack:
+```bash
+docker compose down
+docker compose up --build
+```
+3. If you changed only `.env`, recreating the backend is usually enough:
+```bash
+docker compose up -d --force-recreate backend
+```
+4. Verify backend migrations completed in logs:
+```bash
+docker compose logs -f backend
+```
+5. Start a new fetch job from the UI if runtime data is empty (DB-backed runtime reads do not depend on old local artifacts).
+
 ## Security Notes
 
-- `.env` is in `.gitignore` — never commit secrets
-- JWT_SECRET should be a strong random value in production
-- `CREDENTIALS_AES256_GCM_KEY_B64` must be set before creating customers (customer credentials are encrypted before DB persistence)
-- Keep `CREDENTIALS_AES256_GCM_KEY_B64` stable after data is written, or decryption of stored customer credentials will fail
-- Passwords hashed with bcrypt (cost factor 12 by default)
-- Non-root users in all containers
-- CORS configured for frontend origin
-- Environment variables for all configuration
-
-## Next Steps / Roadmap
-
-- [ ] Admin UI for Qlik credential management (stored encrypted in DB)
-- [ ] Refresh token support + token revocation
-- [ ] Rate limiting on auth endpoints
-- [ ] PostgreSQL schema for lineage data (apps, spaces, connections)
-- [ ] Convert fetchers to write to DB instead of JSON
-- [ ] Complete API documentation (Swagger/OpenAPI)
-- [ ] Frontend pages for lineage visualization
-- [ ] Tests & CI/CD
-
+- `.env` is ignored by git; do not commit secrets
+- `JWT_SECRET` should be a strong random value
+- `CREDENTIALS_AES256_GCM_KEY_B64` is required before creating customers
+- Changing the AES key later breaks decryption of existing stored credentials
+- Use non-production/sanitized data in local development and agent sessions
 
 ## Troubleshooting
 
-**"Docker connection refused"**: Ensure Docker Desktop is running (Windows) or docker daemon is started
+**"missing encryption key env var: CREDENTIALS_AES256_GCM_KEY_B64"**
 
-**"Port 4001 already in use"**: Change port in `docker-compose.yml` frontend service
+- Add `CREDENTIALS_AES256_GCM_KEY_B64` and `CREDENTIALS_AES256_GCM_KEY_ID` to `.env`
+- Recreate backend container:
 
-**"Database connection failed"**: Check `DATABASE_URL` in `.env` matches postgres service credentials
-
-**"Login fails"**: Ensure migrations ran (check logs: `docker compose logs backend`)
-
-**"missing encryption key env var: CREDENTIALS_AES256_GCM_KEY_B64"**: Add `CREDENTIALS_AES256_GCM_KEY_B64` and `CREDENTIALS_AES256_GCM_KEY_ID` to `.env`, then recreate the backend container (`docker compose up -d --force-recreate backend`)
-
----
-
-For detailed architecture discussions and implementation questions, see requirements section below.
-# Lineage Explorer (Local-First)
-
-This repository is intentionally reduced to:
-- `backend/`
-- `frontend/`
-- `output/`
-
-`./output` is the single source of truth for generated lineage artifacts.
-
-## Run (Dev)
-
-1. Backend (port `8000`)
-
-```powershell
-cd backend
-python -m venv .venv
-# activate .venv
-python -m pip install -r requirements.txt
-
-# backend-only Qlik credentials (required for fetch jobs)
-$env:QLIK_TENANT_URL = "https://<tenant>.<region>.qlikcloud.com"
-$env:QLIK_API_KEY = "<qlik_api_key>"
-
-# required for customer credential encryption (AES-256-GCM)
-$env:CREDENTIALS_AES256_GCM_KEY_B64 = "<base64-encoded-32-byte-key>"
-$env:CREDENTIALS_AES256_GCM_KEY_ID = "local-dev-v1"
-
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```bash
+docker compose up -d --force-recreate backend
 ```
 
-2. Frontend (port `5173`)
+**Customer creation still fails after setting `.env`**
 
-```powershell
-cd frontend
-npm install
-# optional override (default is http://127.0.0.1:8000)
-$env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
-npm run dev
+- Check backend container env values:
+
+```bash
+docker compose exec backend sh -lc "env | grep CREDENTIALS_AES256_GCM"
 ```
 
-## Run (Dev - CMD)
+**No data visible in dashboard/graph after startup**
 
-Use two separate CMD terminals.
+- Start a new fetch job from the UI (data is DB-backed and may be empty initially)
+- Check fetch job logs in UI or `docker compose logs -f backend`
 
-1. Backend (CMD Terminal 1, port `8000`)
+**Ports already in use**
 
-```cmd
-cd C:\Users\MauriceOkoye\Desktop\Entwicklung\backend
-python -m venv .venv
-.venv\Scripts\activate.bat
-python -m pip install -r requirements.txt
+- Change port mappings in `docker-compose.yml` (`frontend`, `backend`, `pgadmin`)
 
-set QLIK_TENANT_URL=https://<tenant>.<region>.qlikcloud.com
-set QLIK_API_KEY=<qlik_api_key>
-set CREDENTIALS_AES256_GCM_KEY_B64=<base64-encoded-32-byte-key>
-set CREDENTIALS_AES256_GCM_KEY_ID=local-dev-v1
+## Documentation
 
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
+Project docs are split between root status docs and `docs/`:
 
-2. Frontend (CMD Terminal 2, port `5173`)
+- `docs/INDEX.md`
+- `docs/CONTEXT.md`
+- `docs/RELEASE_NOTES/README.md`
+- `REQUIREMENTS.md`
+- `PROJECT_STATUS.md`
+- `FIXES_APPLIED.md`
 
-```cmd
-cd C:\Users\MauriceOkoye\Desktop\Entwicklung\frontend
-npm install
-set VITE_API_BASE_URL=http://127.0.0.1:8000
-npm run dev
-```
+## Roadmap (remaining work)
 
-## API Expectations
-
-Frontend uses backend HTTP endpoints only:
-- `GET /api/apps`
-- `GET /api/spaces`
-- `GET /api/data-connections`
-- `GET /api/graph/app/{appId}?depth=...`
-- `GET /api/graph/node/{nodeId}?direction=...&depth=...`
-- `GET /api/graph/all`
-- `GET /api/app/{appId}/usage`
-- `GET /api/app/{appId}/script`
-- `GET /api/fetch/status`
-- `GET /api/fetch/jobs`
-- `GET /api/fetch/jobs/{jobId}`
-- `POST /api/fetch/jobs`
-
-No frontend token handling. No direct calls to Qlik Cloud from the frontend.
-
-## Frontend Tabs
-
-- `Datenfluss`: existing lineage explorer graph view.
-- `Datenabzug`: starts backend fetch jobs in the correct order (spaces -> apps -> data-connections -> lineage -> app-edges -> usage), supports optional cleanup of old artifacts, and shows job status.
+- Improve fetch-job progress visibility/details in the UI
+- Add/expand automated tests for DB-only runtime + fetch flows
+- Harden auth/session features (refresh token lifecycle, rate limiting)
+- Continue reducing optional local artifact fallback/debug paths

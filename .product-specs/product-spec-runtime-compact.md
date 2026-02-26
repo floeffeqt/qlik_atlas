@@ -10,3 +10,4 @@ Nutze diesen Ablauf fuer projektlokale Spec-Arbeit in `qlik_atlas`.
 6. Spec-konform arbeiten.
 7. Bei Code-/Feature-Aenderungen Testing gemaess `QLIK-PS-002` planen/durchfuehren und Testing Summary liefern.
 8. Keine produktiven Daten/Secrets in der Agent-Session verwenden.
+9. Bei DB-Schema-/Modell-/Join-Aenderungen `docs/DB_MODEL.md` immer in den Kontext einbeziehen und im selben Task aktualisieren (oder explizit begruenden, warum keine Aenderung noetig ist).

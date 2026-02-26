@@ -156,7 +156,7 @@ docker compose down -v
 - ✅ CORS middleware preventing cross-origin abuse
 
 ### Security Coming
-- 🔜 Qlik credentials encrypted at rest (database-level or application-level)
+- 🔜 Credential key rotation / secret-management hardening for encrypted customer credentials
 - 🔜 HTTPS/SSL in production
 - 🔜 Rate limiting to prevent brute force
 - 🔜 Input validation on all endpoints
@@ -185,7 +185,7 @@ CREATE TABLE users (
 - Lineage nodes/edges tables
 - Data connections table
 - App usage tracking table
-- Qlik credentials table (encrypted)
+- Customer credentials in `customers` table (encrypted)
 - Refresh tokens table
 - Fetch jobs history table
 
@@ -229,7 +229,7 @@ Internet
 - [ ] No refresh token support (only access tokens, 15-min expiration)
 - [ ] No token revocation (logout doesn't invalidate token)
 - [ ] No role-based access control (all users are equal)
-- [ ] No Qlik credentials management (not secure yet)
+- [ ] Customer credential management UX still needs hardening/polish (storage/encryption exists)
 - [ ] No rate limiting (vulnerable to brute force on auth)
 - [ ] Lineage data still in JSON (not persisted to DB)
 - [ ] Frontend only has login/register (no dashboard yet)
@@ -247,9 +247,9 @@ Choose your priority:
 - Show user dashboard
 
 ### B. Secure Qlik Credentials
-- Add QlikCredentials table
-- Create admin settings page
-- Implement encryption
+- Keep credentials in `customers` table (no separate `QlikCredentials` table)
+- Improve admin settings/customer credential UX
+- Harden key management / rotation and validation flows
 
 ### C. Persist Lineage to DB
 - Design full schema

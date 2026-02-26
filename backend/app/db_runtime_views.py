@@ -52,18 +52,133 @@ def _edge_record_from_payload(edge_id: str, payload: dict[str, Any]) -> dict[str
     }
 
 
+def _space_name_from_row(row: QlikSpace) -> str | None:
+    if getattr(row, "space_name", None):
+        return str(row.space_name)
+    payload = _safe_dict(row.data)
+    for key in ("spaceName", "spacename", "name"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _space_id_from_row(row: QlikSpace) -> str | None:
+    candidate = getattr(row, "space_id_payload", None) or getattr(row, "space_id", None)
+    if candidate is not None and str(candidate).strip():
+        return str(candidate).strip()
+    payload = _safe_dict(row.data)
+    for key in ("spaceId", "spaceID", "id"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _app_name_from_row(row: QlikApp) -> str | None:
+    if getattr(row, "app_name", None):
+        return str(row.app_name)
+    if getattr(row, "name_value", None):
+        return str(row.name_value)
+    payload = _safe_dict(row.data)
+    for key in ("appName", "name"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _app_space_id_from_row(row: QlikApp) -> str | None:
+    candidate = getattr(row, "space_id_payload", None) or getattr(row, "space_id", None)
+    if candidate is not None and str(candidate).strip():
+        return str(candidate).strip()
+    payload = _safe_dict(row.data)
+    value = payload.get("spaceId")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _app_lookup_keys_for_app_id(app_id: str) -> list[str]:
+    value = str(app_id or "").strip()
+    if not value:
+        return []
+    keys = [value]
+    if not value.startswith("qri:app:sense://"):
+        keys.append(f"qri:app:sense://{value}")
+    if value.startswith("qri:app:sense://"):
+        bare = value.split("://", 1)[1].strip()
+        if bare:
+            keys.append(bare)
+    # preserve order, remove duplicates
+    return list(dict.fromkeys(keys))
+
+
+def _node_app_lookup_candidates(row: LineageNode, record: dict[str, Any]) -> list[str]:
+    meta = record.get("meta") or {}
+    raw_candidates: list[Any] = [
+        getattr(row, "app_id", None),
+        meta.get("appId") if isinstance(meta, dict) else None,
+        meta.get("app_id") if isinstance(meta, dict) else None,
+    ]
+    if record.get("type") == "app":
+        raw_candidates.extend([
+            meta.get("id") if isinstance(meta, dict) else None,
+            record.get("id"),
+        ])
+    keys: list[str] = []
+    for raw in raw_candidates:
+        if raw is None:
+            continue
+        for key in _app_lookup_keys_for_app_id(str(raw)):
+            if key and key not in keys:
+                keys.append(key)
+    return keys
+
+
 def _build_snapshot_from_rows(
     node_rows: Iterable[LineageNode],
     edge_rows: Iterable[LineageEdge],
+    *,
+    app_info_by_project_and_app: dict[tuple[int, str], dict[str, Any]] | None = None,
 ) -> GraphSnapshot:
     nodes: dict[str, dict[str, Any]] = {}
     edges: dict[str, dict[str, Any]] = {}
     out_adj: dict[str, set[str]] = {}
     in_adj: dict[str, set[str]] = {}
 
+    app_info_by_project_and_app = app_info_by_project_and_app or {}
+
     for row in node_rows:
         payload = _safe_dict(row.data)
         record = _node_record_from_payload(str(row.node_id), payload)
+        app_info = None
+        app_lookup_key = None
+        for candidate in _node_app_lookup_candidates(row, record):
+            app_info = app_info_by_project_and_app.get((int(row.project_id), candidate))
+            if app_info:
+                app_lookup_key = candidate
+                break
+        if app_info or app_lookup_key:
+            meta = dict(record.get("meta") or {})
+            if app_info:
+                canonical_app_id = str(app_info.get("appId") or "")
+                if not record.get("group") and canonical_app_id:
+                    record["group"] = canonical_app_id
+                if canonical_app_id:
+                    meta.setdefault("appId", canonical_app_id)
+                app_name = app_info.get("appName")
+                space_id = app_info.get("spaceId")
+                space_name = app_info.get("spaceName")
+                if app_name:
+                    meta.setdefault("appName", str(app_name))
+                if space_id:
+                    meta.setdefault("spaceId", str(space_id))
+                if space_name:
+                    meta.setdefault("spaceName", str(space_name))
+            elif app_lookup_key:
+                meta.setdefault("appId", str(app_lookup_key))
+            record["meta"] = meta
         nodes[record["id"]] = record
 
     for row in edge_rows:
@@ -107,7 +222,49 @@ async def load_graph_snapshot(session: AsyncSession, *, project_id: int | None =
 
     node_rows = (await session.execute(node_stmt)).scalars().all()
     edge_rows = (await session.execute(edge_stmt)).scalars().all()
-    return _build_snapshot_from_rows(node_rows, edge_rows)
+    project_ids = sorted({int(r.project_id) for r in node_rows} | {int(r.project_id) for r in edge_rows})
+
+    app_info_by_project_and_app: dict[tuple[int, str], dict[str, Any]] = {}
+    if project_ids:
+        apps_rows = (
+            await session.execute(select(QlikApp).where(QlikApp.project_id.in_(project_ids)))
+        ).scalars().all()
+        spaces_rows = (
+            await session.execute(select(QlikSpace).where(QlikSpace.project_id.in_(project_ids)))
+        ).scalars().all()
+        space_name_by_project_and_space: dict[tuple[int, str], str] = {}
+        for row in spaces_rows:
+            space_id_val = _space_id_from_row(row)
+            space_name_val = _space_name_from_row(row)
+            if space_name_val:
+                if space_id_val:
+                    space_name_by_project_and_space[(int(row.project_id), space_id_val)] = space_name_val
+                if getattr(row, "space_id", None):
+                    space_name_by_project_and_space[(int(row.project_id), str(row.space_id))] = space_name_val
+
+        for row in apps_rows:
+            payload = _safe_dict(row.data)
+            app_id_val = str(row.app_id)
+            app_name_val = _app_name_from_row(row) or app_id_val
+            space_id_val = _app_space_id_from_row(row)
+            space_id_str = str(space_id_val) if space_id_val else None
+            app_info = {
+                "appId": app_id_val,
+                "appName": str(app_name_val),
+                "spaceId": space_id_str,
+                "spaceName": (
+                    space_name_by_project_and_space.get((int(row.project_id), space_id_str))
+                    if space_id_str else None
+                ),
+            }
+            for lookup_key in _app_lookup_keys_for_app_id(app_id_val):
+                app_info_by_project_and_app[(int(row.project_id), lookup_key)] = app_info
+
+    return _build_snapshot_from_rows(
+        node_rows,
+        edge_rows,
+        app_info_by_project_and_app=app_info_by_project_and_app,
+    )
 
 
 async def load_graph_response(session: AsyncSession, *, project_id: int | None = None) -> GraphResponse:
@@ -123,18 +280,23 @@ async def load_inventory(session: AsyncSession) -> InventoryResponse:
 
     space_names: dict[tuple[int, str], str] = {}
     for row in spaces_rows:
-        payload = _safe_dict(row.data)
-        space_name = payload.get("spaceName") or payload.get("name")
+        space_name = _space_name_from_row(row)
         if isinstance(space_name, str) and space_name:
-            space_names[(int(row.project_id), str(row.space_id))] = space_name
+            if getattr(row, "space_id", None):
+                space_names[(int(row.project_id), str(row.space_id))] = space_name
+            space_id_val = _space_id_from_row(row)
+            if space_id_val:
+                space_names[(int(row.project_id), str(space_id_val))] = space_name
 
     items: list[dict[str, Any]] = []
     for row in apps_rows:
         payload = _safe_dict(row.data)
         app_id = str(row.app_id)
-        app_name = payload.get("appName") or payload.get("name") or app_id
-        space_id = payload.get("spaceId") or row.space_id
-        status_raw = payload.get("status")
+        app_name = _app_name_from_row(row) or app_id
+        space_id = _app_space_id_from_row(row)
+        status_raw = getattr(row, "status", None)
+        if status_raw is None:
+            status_raw = payload.get("status")
         try:
             status_val = int(status_raw) if status_raw is not None else None
         except Exception:
@@ -145,12 +307,12 @@ async def load_inventory(session: AsyncSession) -> InventoryResponse:
             "appName": str(app_name),
             "spaceId": str(space_id) if space_id else None,
             "spaceName": None,
-            "rootNodeId": payload.get("rootNodeId"),
-            "nodesCount": int(payload.get("nodesCount") or 0),
-            "edgesCount": int(payload.get("edgesCount") or 0),
+            "rootNodeId": getattr(row, "root_node_id", None) or payload.get("rootNodeId"),
+            "nodesCount": int((getattr(row, "nodes_count", None) if getattr(row, "nodes_count", None) is not None else payload.get("nodesCount")) or 0),
+            "edgesCount": int((getattr(row, "edges_count", None) if getattr(row, "edges_count", None) is not None else payload.get("edgesCount")) or 0),
             "fetched_at": payload.get("fetched_at") or (row.fetched_at.isoformat() if row.fetched_at else None),
             "status": status_val,
-            "fileName": payload.get("fileName"),
+            "fileName": getattr(row, "file_name", None) or payload.get("fileName"),
         }
         if item["spaceId"]:
             item["spaceName"] = space_names.get((int(row.project_id), str(item["spaceId"])))
@@ -171,8 +333,22 @@ async def load_spaces_payload(session: AsyncSession) -> dict[str, Any]:
             continue
         seen.add(key)
         payload = _safe_dict(row.data)
+        if "spaceId" not in payload and getattr(row, "space_id_payload", None):
+            payload["spaceId"] = str(row.space_id_payload)
         if "spaceId" not in payload:
             payload["spaceId"] = str(row.space_id)
+        if "spaceName" not in payload and getattr(row, "space_name", None):
+            payload["spaceName"] = str(row.space_name)
+        if "type" not in payload and getattr(row, "space_type", None):
+            payload["type"] = str(row.space_type)
+        if "ownerId" not in payload and getattr(row, "owner_id", None):
+            payload["ownerId"] = str(row.owner_id)
+        if "tenantId" not in payload and getattr(row, "tenant_id", None):
+            payload["tenantId"] = str(row.tenant_id)
+        if "createdAt" not in payload and getattr(row, "created_at_source", None):
+            payload["createdAt"] = str(row.created_at_source)
+        if "updatedAt" not in payload and getattr(row, "updated_at_source", None):
+            payload["updatedAt"] = str(row.updated_at_source)
         spaces.append(payload)
     spaces.sort(key=lambda x: (str(x.get("spaceName") or x.get("name") or "").lower(), str(x.get("spaceId") or "")))
     return {"count": len(spaces), "spaces": spaces}
@@ -207,6 +383,38 @@ async def load_app_usage_payload(session: AsyncSession, app_id: str) -> dict[str
         raise KeyError("app usage not found")
     payload = _safe_dict(row.data)
     payload.setdefault("appId", app_id)
+    if getattr(row, "app_id_payload", None):
+        payload.setdefault("appId", str(row.app_id_payload))
+    if getattr(row, "app_name", None):
+        payload.setdefault("appName", str(row.app_name))
+    if getattr(row, "window_days", None) is not None:
+        payload.setdefault("windowDays", int(row.window_days))
+    if getattr(row, "generated_at_payload", None):
+        payload.setdefault("generatedAt", str(row.generated_at_payload))
+    elif getattr(row, "generated_at", None):
+        payload.setdefault("generatedAt", row.generated_at.isoformat())
+    if getattr(row, "artifact_file_name", None):
+        payload.setdefault("_artifactFileName", str(row.artifact_file_name))
+    if isinstance(getattr(row, "connections", None), list):
+        payload.setdefault("connections", list(row.connections))
+
+    usage_payload = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+    if not isinstance(payload.get("usage"), dict):
+        payload["usage"] = usage_payload
+    if getattr(row, "usage_reloads", None) is not None:
+        usage_payload.setdefault("reloads", int(row.usage_reloads))
+    if getattr(row, "usage_app_opens", None) is not None:
+        usage_payload.setdefault("appOpens", int(row.usage_app_opens))
+    if getattr(row, "usage_sheet_views", None) is not None:
+        usage_payload.setdefault("sheetViews", int(row.usage_sheet_views))
+    if getattr(row, "usage_unique_users", None) is not None:
+        usage_payload.setdefault("uniqueUsers", int(row.usage_unique_users))
+    if getattr(row, "usage_last_reload_at", None):
+        usage_payload.setdefault("lastReloadAt", str(row.usage_last_reload_at))
+    if getattr(row, "usage_last_viewed_at", None):
+        usage_payload.setdefault("lastViewedAt", str(row.usage_last_viewed_at))
+    if getattr(row, "usage_classification", None):
+        usage_payload.setdefault("classification", str(row.usage_classification))
     return payload
 
 
@@ -263,13 +471,13 @@ async def load_app_subgraph(session: AsyncSession, app_id: str, *, depth: int) -
         raise KeyError("app not found")
 
     app_payload = _safe_dict(app_row.data)
-    root_node_id = app_payload.get("rootNodeId")
+    root_node_id = getattr(app_row, "root_node_id", None) or app_payload.get("rootNodeId")
     snapshot = await load_graph_snapshot(session, project_id=int(app_row.project_id))
     if not root_node_id:
         root_node_id = _detect_app_root(
             snapshot,
             app_id=app_id,
-            app_name=str(app_payload.get("appName") or app_payload.get("name") or ""),
+            app_name=str(_app_name_from_row(app_row) or ""),
         )
     if not root_node_id:
         raise KeyError("app root node not found")

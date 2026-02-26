@@ -28,18 +28,18 @@
 - [x] Test user seeding: `admin@admin.de` / `admin123`
 - [x] Alembic migration for users table
 
-## 3. Qlik Credentials Management (TO DO)
+## 3. Qlik Credentials Management (PARTIAL)
 
-- [ ] Create `QlikCredentials` table in PostgreSQL
-  - Fields: id, user_id (FK), tenant_url, api_key_encrypted, created_at, updated_at
-- [ ] Encryption at rest: use db-specific encryption (pgcrypto or similar) or application-level (cryptography library)
+- [x] Store Qlik credentials in `customers` table (customer-scoped)
+  - Fields used: `customers.tenant_url`, `customers.api_key` (encrypted at rest in application layer)
+- [x] Encryption at rest implemented at application level (AES-256-GCM)
 - [ ] Admin UI page (`/admin/qlik-settings`) to input/update Qlik credentials
   - Form with Tenant URL and API Key fields
   - "Test connection" button to verify credentials before saving
   - Visual feedback (success/error)
 - [ ] Backend endpoint `POST /admin/qlik/settings` to securely store credentials
 - [ ] Backend endpoint `GET /admin/qlik/settings` to retrieve (without exposing key)
-- [ ] Middleware to decrypt credentials when needed for fetcher operations
+- [x] Fetch/job runtime loads and decrypts credentials from the project's customer when needed
 
 ## 4. Database Schema for Lineage Data (TO DO)
 

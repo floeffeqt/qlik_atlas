@@ -54,8 +54,24 @@ def _normalize_space(item: Dict[str, Any]) -> Dict[str, Any]:
     space_id = item.get("id") or item.get("spaceId")
     name = item.get("name") or item.get("spaceName")
     space_type = item.get("type") or item.get("spaceType")
-    tenant_id = item.get("tenantId") or item.get("tenant_id")
-    owner_id = item.get("ownerId") or item.get("owner_id")
+    tenant_obj = item.get("tenant") if isinstance(item.get("tenant"), dict) else {}
+    owner_obj = item.get("owner") if isinstance(item.get("owner"), dict) else {}
+    tenant_id = (
+        item.get("tenantId")
+        or item.get("tenantID")
+        or item.get("tenant_id")
+        or tenant_obj.get("id")
+        or tenant_obj.get("tenantId")
+        or tenant_obj.get("tenantID")
+    )
+    owner_id = (
+        item.get("ownerId")
+        or item.get("ownerID")
+        or item.get("owner_id")
+        or owner_obj.get("id")
+        or owner_obj.get("ownerId")
+        or owner_obj.get("ownerID")
+    )
     created_at = item.get("createdAt") or item.get("created_at")
     updated_at = item.get("updatedAt") or item.get("updated_at")
     return {

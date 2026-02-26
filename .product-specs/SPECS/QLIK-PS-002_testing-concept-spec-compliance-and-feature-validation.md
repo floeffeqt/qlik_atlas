@@ -129,6 +129,7 @@ Without a project-specific testing concept, agents may test inconsistently acros
   - impact/notes
   - blocked/not-run items
 - The agent MUST NOT use productive data or productive secrets in testing/debugging.
+- The agent MUST ask for explicit user approval before executing any command/request that would read or inspect productive data (including local DB/API smoke tests against productive payloads), unless the user already explicitly requested/approved that read.
 - The agent MUST request sanitized/synthetic/mock/staging-non-prod alternatives if needed.
 
 ### Minimum Testing Expectations by Change Type (qlik_atlas)
@@ -227,6 +228,7 @@ Without a project-specific testing concept, agents may test inconsistently acros
 - Production data allowed in agent session: no
 - Production secrets allowed in agent session: no
 - Allowed testing data: synthetic, sanitized, mock, staging-non-prod
+- If productive data reads are proposed for diagnosis/verification, explicit user approval is required first and the read scope must be minimized and explained.
 
 ## Assumptions (Decision-Relevant)
 
