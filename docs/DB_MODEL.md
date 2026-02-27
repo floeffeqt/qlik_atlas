@@ -8,7 +8,7 @@ tags:
   - schema
   - erd
   - postgres
-updated: 2026-02-26
+updated: 2026-02-27
 owners: []
 source_of_truth: no
 related_specs:
@@ -46,7 +46,7 @@ related_docs:
 | `user_customer_access` | `(user_id, customer_id)` | `user_id -> users.id`, `customer_id -> customers.id` | Kundenzugriff fuer Nicht-Admins |
 | `qlik_apps` | `(project_id, app_id)` | `project_id -> projects.id` | Qlik-App-Metadaten (JSONB + materialisierte Spalten) |
 | `qlik_spaces` | `(project_id, space_id)` | `project_id -> projects.id` | Qlik-Space-Metadaten (JSONB + materialisierte Spalten) |
-| `qlik_data_connections` | `(project_id, connection_id)` | `project_id -> projects.id` | Qlik Data Connections |
+| `qlik_data_connections` | `(project_id, connection_id)` | `project_id -> projects.id` | Qlik Data Connections (JSONB + materialisierte Spalten) |
 | `qlik_app_usage` | `(project_id, app_id)` | `project_id -> projects.id` | App-Usage-Aggregate (JSONB + materialisierte Spalten) |
 | `qlik_app_scripts` | `(project_id, app_id)` | `project_id -> projects.id` | App-Skripte |
 | `lineage_nodes` | `(project_id, node_id)` | `project_id -> projects.id` | Graph-Nodes |
@@ -78,6 +78,12 @@ related_docs:
 - `appName`, `windowDays`, `generatedAt`, `_artifactFileName`
 - Flattened Usage-Felder wie `usageReloads`, `usageAppOpens`, `usageSheetViews`, `usageUniqueUsers`, `usageLastReloadAt`, `usageLastViewedAt`, `usageClassification`
 - `connections` als `JSONB`
+- `data` bleibt weiterhin erhalten
+
+### `qlik_data_connections`
+
+- Payload-Spalten fuer Runtime-Reads/Filter:
+- `id`, `qID`, `qri`, `tags`, `user`, `links`, `qName`, `qType`, `space`, `qLogOn`, `tenant`, `created`, `updated`, `version`, `privileges`, `datasourceID`, `qArchitecture`, `qCredentialsID`, `qEngineObjectID`, `qConnectStatement`, `qSeparateCredentials`
 - `data` bleibt weiterhin erhalten
 
 ## Physical FK Relationships (Enforced by DB)
@@ -142,4 +148,3 @@ erDiagram
 - `pgAdmin` (Service im `docker-compose.yml`)
 - `information_schema.columns`
 - `psql \d+ <table>`
-

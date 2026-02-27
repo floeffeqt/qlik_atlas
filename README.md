@@ -13,7 +13,7 @@ Containerized Qlik lineage application with FastAPI backend, PostgreSQL, nginx f
 
 ## Quick Start (Docker)
 
-(Start einer neuen Session: Bitte zuerst AGENTS.md lesen, dann die zentrale private Bridge nutzen, Gateway anwenden und danach docs/INDEX.md + relevante Specs/Dokumente scannen, bevor du loslegst.
+(Ich möchte an meinem qlik atlas projekt weiterarbeiten. Bitte zuerst AGENTS.md lesen, dann die zentrale private Bridge nutzen, Gateway anwenden und danach docs/INDEX.md + relevante Specs/Dokumente scannen und immer anwenden, bevor du loslegst.
 )
 
 ### 1. Configure environment

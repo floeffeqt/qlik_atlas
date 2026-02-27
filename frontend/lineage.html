@@ -147,6 +147,11 @@
       font-size: 0.75rem;
       color: var(--text-muted);
     }
+    .stat-pill.warning {
+      border-color: rgba(245, 158, 11, 0.65);
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.1);
+    }
     .toolbar-sep { width: 1px; height: 20px; background: var(--border); }
 
     /* ── GRAPH AREA ── */
@@ -266,6 +271,13 @@
     .legend-title { color: var(--text-muted); font-weight: 600; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.7rem; }
     .legend-item { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; color: var(--text-muted); }
     .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legend-dot.out-of-area {
+      width: 11px;
+      height: 11px;
+      background: transparent;
+      border: 2px dashed #f59e0b;
+    }
+    .legend-desc { color: var(--text-muted); font-size: 0.76rem; }
 
     /* ── ZOOM CONTROLS ── */
     #zoomControls {
@@ -312,23 +324,6 @@
     #toast.show { opacity: 1; transform: translateY(0); }
 
     /* ── ADMIN FAB ── */
-    .admin-fab {
-      position: fixed;
-      bottom: 1.5rem;
-      left: 1.5rem;
-      padding: 0.6rem 1.2rem;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      color: #fff;
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 600;
-      border-radius: var(--radius-sm);
-      z-index: 90;
-      box-shadow: 0 4px 16px rgba(102,126,234,0.3);
-      transition: opacity 0.2s, transform 0.1s;
-      display: none;
-    }
-    .admin-fab:hover { opacity: 0.9; transform: translateY(-1px); }
   </style>
 </head>
 <body>
@@ -375,6 +370,16 @@
   <select id="areaFilter">
     <option value="">Alle</option>
   </select>
+  <span class="toolbar-label">Ausserhalb:</span>
+  <select id="outsideAreaMode">
+    <option value="show">anzeigen</option>
+    <option value="hide">ausblenden</option>
+  </select>
+  <span class="toolbar-label">Ansicht:</span>
+  <select id="viewMode">
+    <option value="force">Force Graph</option>
+    <option value="tidy">Tidy Tree</option>
+  </select>
   <input id="searchInput" class="toolbar-input" type="text" placeholder="Suche nach Name, ID, App, Bereich..." />
   <div class="toolbar-sep"></div>
   <button class="btn-toolbar primary" id="loadBtn">↻ Graph laden</button>
@@ -383,6 +388,7 @@
   <div class="toolbar-sep"></div>
   <span class="stat-pill" id="nodeCount">0 Nodes</span>
   <span class="stat-pill" id="edgeCount">0 Edges</span>
+  <span class="stat-pill warning" id="outAreaCount" style="display:none;">0 App(s) ausserhalb Bereich</span>
 </div>
 
 <div class="graph-wrap">
@@ -420,13 +426,14 @@
   <!-- Legend -->
   <div id="legend">
     <div class="legend-title">Node types</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div>App</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#14b8a6"></div>Database</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Table</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>Dataset</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>QVD</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>File</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>Other</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div>App <span class="legend-desc">- Qlik Anwendung</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#14b8a6"></div>Database <span class="legend-desc">- Datenbankquelle</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Table <span class="legend-desc">- Tabelle/Entitaet</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>Dataset <span class="legend-desc">- aufbereiteter Datensatz</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>QVD <span class="legend-desc">- Qlik Data File</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>File <span class="legend-desc">- externe Datei</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>Other <span class="legend-desc">- sonstiger Knoten</span></div>
+    <div class="legend-item"><div class="legend-dot out-of-area"></div>App ausserhalb Bereichsfilter</div>
   </div>
 
   <!-- Zoom controls -->
@@ -436,7 +443,6 @@
   </div>
 </div>
 
-<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
 <div id="toast"></div>
 
 <!-- D3 v7 from CDN -->
@@ -445,13 +451,10 @@
   var token = localStorage.getItem('auth_access_token');
   if (!token) { window.location.href = '/login.html'; }
 
-  // User & admin FAB
+  // User email from token
   try {
     var jwtPayload = JSON.parse(atob(token.split('.')[1]));
     document.getElementById('userEmail').textContent = jwtPayload.email || 'User #' + (jwtPayload.sub || '-');
-    if (jwtPayload.role === 'admin') {
-      document.getElementById('adminFab').style.display = 'inline-block';
-    }
   } catch (e) {}
 
   document.getElementById('logoutBtn').addEventListener('click', function() {
@@ -506,6 +509,23 @@
   function nodeAreaValue(node) {
     return String(nodeSpaceName(node) || nodeSpaceId(node) || '').trim();
   }
+  function isOutOfAreaApp(node, activeAreaFilterValue) {
+    if (!activeAreaFilterValue) return false;
+    if (normalizedNodeType(node && node.type) !== 'app') return false;
+    return nodeAreaFilterValue(node) !== activeAreaFilterValue;
+  }
+  function baseNodeStrokeColor(node) {
+    return node && node.__outOfAreaApp ? '#f59e0b' : '#fff';
+  }
+  function baseNodeStrokeOpacity(node) {
+    return node && node.__outOfAreaApp ? 0.95 : 0.16;
+  }
+  function baseNodeStrokeWidth(node) {
+    return node && node.__outOfAreaApp ? 2.6 : 1.5;
+  }
+  function baseNodeStrokeDasharray(node) {
+    return node && node.__outOfAreaApp ? '4 2' : null;
+  }
   function collectReachableNodeIds(seedIds, edges) {
     var seeds = Array.from(seedIds || []);
     if (!seeds.length) return new Set();
@@ -534,6 +554,70 @@
     }
     return visited;
   }
+  function collectIntermediateNodesBetweenOutsideApps(outsideAppIds, edges) {
+    var outsideList = Array.from(outsideAppIds || []).map(function(id) { return String(id); });
+    if (outsideList.length < 2) return new Set();
+
+    var adjacency = Object.create(null);
+    (edges || []).forEach(function(e) {
+      var s = edgeNodeId(e.source);
+      var t = edgeNodeId(e.target);
+      if (!s || !t) return;
+      s = String(s);
+      t = String(t);
+      if (!adjacency[s]) adjacency[s] = [];
+      if (!adjacency[t]) adjacency[t] = [];
+      adjacency[s].push(t);
+      adjacency[t].push(s);
+    });
+
+    var outsideSet = new Set(outsideList);
+    var intermediate = new Set();
+
+    for (var i = 0; i < outsideList.length; i++) {
+      var source = outsideList[i];
+      if (!adjacency[source]) continue;
+
+      var queue = [source];
+      var seen = Object.create(null);
+      var prev = Object.create(null);
+      seen[source] = true;
+      prev[source] = null;
+
+      while (queue.length) {
+        var cur = queue.shift();
+        var nexts = adjacency[cur] || [];
+        for (var n = 0; n < nexts.length; n++) {
+          var nextId = String(nexts[n]);
+          if (seen[nextId]) continue;
+          seen[nextId] = true;
+          prev[nextId] = cur;
+          queue.push(nextId);
+        }
+      }
+
+      for (var j = i + 1; j < outsideList.length; j++) {
+        var target = outsideList[j];
+        if (!seen[target]) continue;
+
+        var path = [];
+        var cursor = target;
+        while (cursor !== null && typeof cursor !== 'undefined') {
+          path.push(cursor);
+          if (cursor === source) break;
+          cursor = prev[cursor];
+        }
+        if (!path.length || path[path.length - 1] !== source) continue;
+
+        for (var k = 1; k < path.length - 1; k++) {
+          var mid = String(path[k]);
+          if (!outsideSet.has(mid)) intermediate.add(mid);
+        }
+      }
+    }
+
+    return intermediate;
+  }
   function nodeSearchHaystack(node) {
     var parts = [node.id, node.label, node.type, node.group, node.layer, node.subtype, nodeAppId(node), nodeAppName(node), nodeSpaceId(node), nodeSpaceName(node)];
     if (node.meta && typeof node.meta === 'object') {
@@ -561,6 +645,7 @@
   var autoFitPending = false;
   var isProgrammaticZoom = false;
   var filterDebounceTimer = null;
+  var tidyExpandedByScope = Object.create(null);
   var layoutPositionsByScope = (function() {
     try {
       var raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
@@ -606,6 +691,34 @@
     delete layoutPositionsByScope[currentGraphScopeKey()];
     persistLayoutPositions();
   }
+  function scopedTidyExpanded() {
+    var key = currentGraphScopeKey();
+    if (!tidyExpandedByScope[key] || typeof tidyExpandedByScope[key] !== 'object') {
+      tidyExpandedByScope[key] = Object.create(null);
+    }
+    return tidyExpandedByScope[key];
+  }
+  function isTidyExpanded(nodeId) {
+    var expanded = scopedTidyExpanded();
+    return !!expanded[String(nodeId)];
+  }
+  function toggleTidyExpanded(nodeId) {
+    var key = String(nodeId);
+    if (!key) return;
+    var expanded = scopedTidyExpanded();
+    if (expanded[key]) delete expanded[key];
+    else expanded[key] = true;
+  }
+  function setTidyExpanded(nodeId, shouldExpand) {
+    var key = String(nodeId || '');
+    if (!key) return;
+    var expanded = scopedTidyExpanded();
+    if (shouldExpand) expanded[key] = true;
+    else delete expanded[key];
+  }
+  function clearTidyExpandedForCurrentScope() {
+    delete tidyExpandedByScope[currentGraphScopeKey()];
+  }
   function setSelectOptions(selectEl, values, placeholder) {
     var current = selectEl.value || '';
     var html = '<option value="">' + escHtml(placeholder || 'Alle') + '</option>';
@@ -626,20 +739,12 @@
     var areaSeen = Object.create(null);
     var appValues = [];
     var areaValues = [];
+
     rawNodes.forEach(function(n) {
-      var appId = nodeAppId(n);
-      var appName = nodeAppName(n);
-      var appFilterVal = nodeAppFilterValue(n);
+      if (normalizedNodeType(n.type) !== 'app') return;
       var spaceId = nodeSpaceId(n);
       var spaceName = nodeSpaceName(n);
       var areaFilterVal = nodeAreaFilterValue(n);
-      if (appFilterVal && !appSeen[appFilterVal]) {
-        appSeen[appFilterVal] = true;
-        appValues.push({
-          value: appFilterVal,
-          label: appName ? (appId && appId !== appName ? (appName + ' (' + appId + ')') : appName) : appId
-        });
-      }
       if (areaFilterVal && !areaSeen[areaFilterVal]) {
         areaSeen[areaFilterVal] = true;
         areaValues.push({
@@ -648,14 +753,34 @@
         });
       }
     });
-    appValues.sort(function(a, b) {
-      return String(a.label || a.value).localeCompare(String(b.label || b.value));
-    });
+
     areaValues.sort(function(a, b) {
       return String(a.label || a.value).localeCompare(String(b.label || b.value));
     });
-    setSelectOptions(document.getElementById('appFilter'), appValues, 'Alle');
     setSelectOptions(document.getElementById('areaFilter'), areaValues, 'Alle');
+
+    var selectedAreaFilter = String(document.getElementById('areaFilter').value || '').trim().toLowerCase();
+
+    rawNodes.forEach(function(n) {
+      if (normalizedNodeType(n.type) !== 'app') return;
+      var appId = nodeAppId(n);
+      var appName = nodeAppName(n);
+      var appFilterVal = nodeAppFilterValue(n);
+      var areaFilterVal = nodeAreaFilterValue(n);
+      if (selectedAreaFilter && areaFilterVal !== selectedAreaFilter) return;
+      if (appFilterVal && !appSeen[appFilterVal]) {
+        appSeen[appFilterVal] = true;
+        appValues.push({
+          value: appFilterVal,
+          label: appName ? (appId && appId !== appName ? (appName + ' (' + appId + ')') : appName) : appId
+        });
+      }
+    });
+
+    appValues.sort(function(a, b) {
+      return String(a.label || a.value).localeCompare(String(b.label || b.value));
+    });
+    setSelectOptions(document.getElementById('appFilter'), appValues, 'Alle');
   }
   function maybeRenderLastData() {
     if (lastData) renderGraph(lastData);
@@ -712,12 +837,395 @@
     applyZoomTransform(d3.zoomIdentity.translate(tx, ty).scale(scale), 450);
   }
 
+  function buildTidyTree(simNodes, simLinks) {
+    var nodeById = Object.create(null);
+    (simNodes || []).forEach(function(n) {
+      nodeById[String(n.id)] = n;
+    });
+
+    var rootApps = (simNodes || []).filter(function(n) {
+      return normalizedNodeType(n.type) === 'app';
+    }).sort(function(a, b) {
+      var al = String(a.label || a.id || '');
+      var bl = String(b.label || b.id || '');
+      return al.localeCompare(bl);
+    });
+
+    var root = { id: '__root__', label: '__root__', node: null, children: [] };
+    if (!rootApps.length) {
+      return { root: root, crossEdges: [] };
+    }
+
+    var incomingByTarget = Object.create(null);
+    var outgoingBySource = Object.create(null);
+    (simLinks || []).forEach(function(e) {
+      var sid = String(edgeNodeId(e.source) || '');
+      var tid = String(edgeNodeId(e.target) || '');
+      if (!sid || !tid) return;
+      if (!nodeById[sid] || !nodeById[tid]) return;
+      if (!incomingByTarget[tid]) incomingByTarget[tid] = [];
+      if (!outgoingBySource[sid]) outgoingBySource[sid] = [];
+      incomingByTarget[tid].push(sid);
+      outgoingBySource[sid].push(tid);
+    });
+    Object.keys(incomingByTarget).forEach(function(id) {
+      incomingByTarget[id] = Array.from(new Set(incomingByTarget[id]));
+    });
+    Object.keys(outgoingBySource).forEach(function(id) {
+      outgoingBySource[id] = Array.from(new Set(outgoingBySource[id]));
+    });
+
+    function nodeSortKey(nodeId) {
+      var n = nodeById[String(nodeId)] || {};
+      return String(n.label || n.id || nodeId || '');
+    }
+
+    function sourceNeighbors(nodeId) {
+      var id = String(nodeId || '');
+      var incoming = incomingByTarget[id] || [];
+      var outgoing = outgoingBySource[id] || [];
+      var preferred = incoming;
+      var fallback = outgoing;
+      var chosen = preferred.length ? preferred : fallback;
+      return chosen.slice().sort(function(a, b) {
+        return nodeSortKey(a).localeCompare(nodeSortKey(b));
+      });
+    }
+
+    var allCrossEdges = [];
+    var allCrossEdgeSeen = Object.create(null);
+    rootApps.forEach(function(appNode) {
+      var rootId = String(appNode.id);
+      var instancesByNodeId = Object.create(null);
+      var parentByNodeId = Object.create(null);
+      var rootCrossEdges = [];
+      var rootCrossEdgeSeen = Object.create(null);
+
+      function keyFor(nodeId) {
+        return rootId + '::' + String(nodeId);
+      }
+
+      function getInstance(nodeId) {
+        var id = String(nodeId || '');
+        if (!id || !nodeById[id]) return null;
+        if (!instancesByNodeId[id]) {
+          var instanceKey = keyFor(id);
+          instancesByNodeId[id] = {
+            id: instanceKey,
+            nodeId: id,
+            rootNodeId: rootId,
+            node: nodeById[id],
+            hasChildren: false,
+            expanded: isTidyExpanded(instanceKey),
+            childNodeIds: [],
+            children: []
+          };
+        } else {
+          instancesByNodeId[id].expanded = isTidyExpanded(instancesByNodeId[id].id);
+        }
+        return instancesByNodeId[id];
+      }
+
+      function registerCrossEdge(fromNodeId, toNodeId) {
+        var fromKey = keyFor(fromNodeId);
+        var toKey = keyFor(toNodeId);
+        var edgeKey = fromKey < toKey ? (fromKey + '::' + toKey) : (toKey + '::' + fromKey);
+        if (rootCrossEdgeSeen[edgeKey]) return;
+        rootCrossEdgeSeen[edgeKey] = true;
+        rootCrossEdges.push({ source: fromKey, target: toKey });
+      }
+
+      function buildFrom(nodeId, pathVisitedIds) {
+        var id = String(nodeId || '');
+        var instance = getInstance(id);
+        if (!instance) return null;
+
+        var childIds = sourceNeighbors(id).filter(function(nextId) {
+          return !pathVisitedIds.has(String(nextId));
+        });
+        instance.hasChildren = childIds.length > 0;
+        instance.childNodeIds = childIds.slice();
+
+        if (!instance.expanded || !childIds.length) return instance;
+
+        childIds.forEach(function(childIdRaw) {
+          var childId = String(childIdRaw);
+          var childInstance = getInstance(childId);
+          if (!childInstance) return;
+
+          if (!parentByNodeId[childId]) {
+            parentByNodeId[childId] = id;
+            if (!instance.children.some(function(c) { return c.id === childInstance.id; })) {
+              instance.children.push(childInstance);
+            }
+            var nextVisited = new Set(pathVisitedIds);
+            nextVisited.add(childId);
+            buildFrom(childId, nextVisited);
+            return;
+          }
+
+          if (parentByNodeId[childId] === id) {
+            var revisitVisited = new Set(pathVisitedIds);
+            revisitVisited.add(childId);
+            buildFrom(childId, revisitVisited);
+            return;
+          }
+
+          registerCrossEdge(id, childId);
+        });
+
+        return instance;
+      }
+
+      var rootInstance = getInstance(rootId);
+      if (!rootInstance) return;
+      parentByNodeId[rootId] = '__root__';
+      buildFrom(rootId, new Set([rootId]));
+      root.children.push(rootInstance);
+
+      rootCrossEdges.forEach(function(e) {
+        var edgeKey = e.source < e.target ? (e.source + '::' + e.target) : (e.target + '::' + e.source);
+        if (allCrossEdgeSeen[edgeKey]) return;
+        allCrossEdgeSeen[edgeKey] = true;
+        allCrossEdges.push(e);
+      });
+    });
+
+    return { root: root, crossEdges: allCrossEdges };
+  }
+
+  function renderTidyTree(simNodes, simLinks, areaFilterValue, outsideAreaMode, hiddenOutOfAreaAppCount, hiddenBetweenOutsideCount) {
+    if (simulation) {
+      simulation.stop();
+      simulation = null;
+    }
+
+    edgesLayer.selectAll('*').remove();
+    nodesLayer.selectAll('*').remove();
+
+    var tidy = buildTidyTree(simNodes, simLinks);
+    var rootData = tidy.root || { children: [] };
+    if (!rootData.children || !rootData.children.length) {
+      document.getElementById('nodeCount').textContent = '0 nodes';
+      document.getElementById('edgeCount').textContent = '0 edges';
+      document.getElementById('outAreaCount').style.display = 'none';
+      document.getElementById('emptyState').classList.add('show');
+      return;
+    }
+
+    var hierarchy = d3.hierarchy(rootData, function(d) { return d.children; });
+    d3.tree().nodeSize([62, 220])(hierarchy);
+
+    var descendants = hierarchy.descendants().filter(function(d) {
+      return d.data && d.data.id !== '__root__';
+    });
+    var treeLinksRaw = hierarchy.links().filter(function(l) {
+      return l.source && l.source.data && l.source.data.id !== '__root__';
+    });
+
+    var positionedById = Object.create(null);
+    var positionedNodes = descendants.map(function(d) {
+      var baseNode = Object.assign({}, d.data.node || {});
+      baseNode.id = String(d.data.nodeId || '');
+      baseNode.x = d.y;
+      baseNode.y = d.x;
+      baseNode.__outOfAreaApp = isOutOfAreaApp(baseNode, areaFilterValue);
+      baseNode.__tidyKey = String(d.data.id || '');
+      baseNode.__tidyDepth = Number(d.depth || 0);
+      baseNode.__tidyRootNodeId = String(d.data.rootNodeId || '');
+      baseNode.__tidyHasChildren = !!d.data.hasChildren;
+      baseNode.__tidyExpanded = !!d.data.expanded;
+      baseNode.__tidyChildNodeIds = Array.isArray(d.data.childNodeIds) ? d.data.childNodeIds.slice() : [];
+      positionedById[baseNode.__tidyKey] = baseNode;
+      return baseNode;
+    });
+
+    var treeLinks = treeLinksRaw.map(function(l) {
+      return {
+        sourceKey: String(l.source.data.id),
+        targetKey: String(l.target.data.id),
+        source: { id: String(l.source.data.id), x: l.source.y, y: l.source.x },
+        target: { id: String(l.target.data.id), x: l.target.y, y: l.target.x }
+      };
+    });
+
+    var crossLinks = (tidy.crossEdges || []).map(function(e) {
+      var s = positionedById[String(e.source)];
+      var t = positionedById[String(e.target)];
+      if (!s || !t) return null;
+      return {
+        source: { id: s.id, x: s.x, y: s.y },
+        target: { id: t.id, x: t.x, y: t.y }
+      };
+    }).filter(function(v) { return !!v; });
+
+    var linkGen = d3.linkHorizontal()
+      .x(function(d) { return d.x; })
+      .y(function(d) { return d.y; });
+
+    var treeLink = edgesLayer.selectAll('path.tree-link')
+      .data(treeLinks)
+      .enter().append('path')
+        .attr('class', 'tree-link')
+        .attr('fill', 'none')
+        .attr('stroke', 'rgba(255,255,255,0.24)')
+        .attr('stroke-width', 1.5)
+        .attr('d', function(d) { return linkGen(d); });
+
+    var crossLink = edgesLayer.selectAll('path.cross-link')
+      .data(crossLinks)
+      .enter().append('path')
+        .attr('class', 'cross-link')
+        .attr('fill', 'none')
+        .attr('stroke', 'rgba(245,158,11,0.45)')
+        .attr('stroke-width', 1.2)
+        .attr('stroke-dasharray', '3 3')
+        .attr('d', function(d) { return linkGen(d); });
+
+    var nodeGroup = nodesLayer.selectAll('g')
+      .data(positionedNodes)
+      .enter().append('g')
+        .attr('class', function(d) { return d.__outOfAreaApp ? 'node node-out-of-area-app' : 'node'; })
+        .style('cursor', 'pointer')
+        .attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; })
+        .on('click', function(event, d) {
+          if (d.__tidyHasChildren) {
+            var nextExpanded = !isTidyExpanded(d.__tidyKey);
+            setTidyExpanded(d.__tidyKey, nextExpanded);
+            if (nextExpanded) {
+              var sharedChildSet = new Set((d.__tidyChildNodeIds || []).map(function(cid) { return String(cid); }));
+              positionedNodes.forEach(function(peer) {
+                if (!peer || peer.__tidyKey === d.__tidyKey) return;
+                if (!peer.__tidyHasChildren) return;
+                if (peer.__tidyDepth !== d.__tidyDepth) return;
+                if (peer.__tidyRootNodeId !== d.__tidyRootNodeId) return;
+                var peerChildIds = peer.__tidyChildNodeIds || [];
+                var sharesNextNode = peerChildIds.some(function(cid) { return sharedChildSet.has(String(cid)); });
+                if (sharesNextNode) setTidyExpanded(peer.__tidyKey, true);
+              });
+            }
+            if (lastData) renderGraph(lastData);
+          } else {
+            showDetail(d);
+          }
+          event.stopPropagation();
+        });
+
+    nodeGroup.append('circle')
+      .attr('class', 'node-circle')
+      .attr('r', 14)
+      .attr('fill', function(d) { return nodeColor(d.type); })
+      .attr('fill-opacity', 0.9)
+      .attr('stroke', function(d) { return baseNodeStrokeColor(d); })
+      .attr('stroke-opacity', function(d) { return baseNodeStrokeOpacity(d); })
+      .attr('stroke-width', function(d) { return baseNodeStrokeWidth(d); })
+      .attr('stroke-dasharray', function(d) { return baseNodeStrokeDasharray(d); });
+
+    nodeGroup.filter(function(d) { return d.__outOfAreaApp; })
+      .append('circle')
+      .attr('r', 18)
+      .attr('fill', 'none')
+      .attr('stroke', '#f59e0b')
+      .attr('stroke-opacity', 0.7)
+      .attr('stroke-width', 1.4)
+      .attr('stroke-dasharray', '3 2');
+
+    var toggleGroup = nodeGroup.filter(function(d) { return d.__tidyHasChildren; })
+      .append('g')
+      .attr('class', 'tidy-toggle-indicator')
+      .attr('transform', 'translate(12,-12)');
+
+    toggleGroup.append('circle')
+      .attr('r', 6.3)
+      .attr('fill', 'rgba(15,20,50,0.95)')
+      .attr('stroke', '#cbd5e1')
+      .attr('stroke-opacity', 0.75)
+      .attr('stroke-width', 1);
+
+    toggleGroup.append('text')
+      .text(function(d) { return d.__tidyExpanded ? '-' : '+'; })
+      .attr('text-anchor', 'middle')
+      .attr('dy', 3.3)
+      .attr('font-size', '10px')
+      .attr('font-weight', 700)
+      .attr('fill', '#e2e8f0')
+      .style('pointer-events', 'none');
+
+    nodeGroup.append('text')
+      .text(function(d) {
+        var label = d.label || d.id || '';
+        return label.length > 30 ? label.slice(0, 28) + '...' : label;
+      })
+      .attr('text-anchor', 'start')
+      .attr('dx', 20)
+      .attr('dy', 4)
+      .attr('font-size', '10px')
+      .attr('fill', 'rgba(255,255,255,0.72)')
+      .style('pointer-events', 'none');
+
+    function linkTouchesNode(linkDatum, nodeId) {
+      return String(linkDatum.sourceKey) === String(nodeId) || String(linkDatum.targetKey) === String(nodeId);
+    }
+
+    nodeGroup
+      .on('mouseenter', function(event, d) {
+        d3.select(this).select('.node-circle')
+          .attr('stroke', '#fff').attr('stroke-opacity', 0.95).attr('stroke-width', 2.2);
+
+        treeLink
+          .attr('stroke', function(l) { return linkTouchesNode(l, d.__tidyKey) ? 'rgba(102,126,234,0.72)' : 'rgba(255,255,255,0.10)'; })
+          .attr('stroke-width', function(l) { return linkTouchesNode(l, d.__tidyKey) ? 2.2 : 1.1; });
+
+        crossLink
+          .attr('stroke', function(l) { return linkTouchesNode(l, d.__tidyKey) ? 'rgba(245,158,11,0.85)' : 'rgba(245,158,11,0.18)'; })
+          .attr('stroke-width', function(l) { return linkTouchesNode(l, d.__tidyKey) ? 1.8 : 1.0; });
+      })
+      .on('mouseleave', function(event, d) {
+        d3.select(this).select('.node-circle')
+          .attr('stroke', function() { return baseNodeStrokeColor(d); })
+          .attr('stroke-opacity', function() { return baseNodeStrokeOpacity(d); })
+          .attr('stroke-width', function() { return baseNodeStrokeWidth(d); })
+          .attr('stroke-dasharray', function() { return baseNodeStrokeDasharray(d); });
+
+        treeLink
+          .attr('stroke', 'rgba(255,255,255,0.24)')
+          .attr('stroke-width', 1.5);
+
+        crossLink
+          .attr('stroke', 'rgba(245,158,11,0.45)')
+          .attr('stroke-width', 1.2);
+      });
+
+    var outOfAreaAppCount = areaFilterValue
+      ? positionedNodes.filter(function(n) { return n.__outOfAreaApp; }).length
+      : 0;
+    var outAreaCountEl = document.getElementById('outAreaCount');
+    if (areaFilterValue && outsideAreaMode === 'hide' && (hiddenOutOfAreaAppCount > 0 || hiddenBetweenOutsideCount > 0)) {
+      outAreaCountEl.textContent = hiddenOutOfAreaAppCount + ' App(s) ausserhalb + ' + hiddenBetweenOutsideCount + ' Zwischenknoten ausgeblendet';
+      outAreaCountEl.style.display = 'inline-block';
+    } else if (areaFilterValue && outOfAreaAppCount > 0) {
+      outAreaCountEl.textContent = outOfAreaAppCount + ' App(s) ausserhalb Bereich';
+      outAreaCountEl.style.display = 'inline-block';
+    } else {
+      outAreaCountEl.style.display = 'none';
+    }
+
+    document.getElementById('nodeCount').textContent = positionedNodes.length + ' nodes';
+    document.getElementById('edgeCount').textContent = (treeLinks.length + crossLinks.length) + ' edges';
+    document.getElementById('emptyState').classList.toggle('show', !positionedNodes.length);
+    fitView(positionedNodes);
+    svg.on('click', function() { closeDetail(); });
+  }
+
   function renderGraph(data) {
     var rawNodes = (data && data.nodes) || [];
     var rawEdges = (data && data.edges) || [];
+    var viewMode = document.getElementById('viewMode').value || 'force';
+    var outsideAreaMode = document.getElementById('outsideAreaMode').value || 'show';
     var typeFilter = document.getElementById('typeFilter').value;
     var appFilter = document.getElementById('appFilter').value;
     var areaFilter = document.getElementById('areaFilter').value;
+    var areaFilterValue = String(areaFilter || '').trim().toLowerCase();
     var searchTerm = (document.getElementById('searchInput').value || '').trim().toLowerCase();
 
     var baseVisibleNodeIds = null;
@@ -735,26 +1243,83 @@
 
     var filteredNodes = rawNodes.filter(function(n) {
       if (baseVisibleNodeIds && !baseVisibleNodeIds.has(String(n.id))) return false;
-      if (typeFilter && normalizedNodeType(n.type) !== typeFilter) return false;
+      if (typeFilter && normalizedNodeType(n.type) !== typeFilter) {
+        if (!(viewMode === 'tidy' && normalizedNodeType(n.type) === 'app')) return false;
+      }
       if (searchTerm && nodeSearchHaystack(n).indexOf(searchTerm) === -1) return false;
       return true;
     });
 
-    var nodeIds = new Set(filteredNodes.map(function(n) { return n.id; }));
+    var nodeIds = new Set(filteredNodes.map(function(n) { return String(n.id); }));
     var filteredEdges = rawEdges.filter(function(e) {
       return nodeIds.has(e.source) && nodeIds.has(e.target);
     });
+
+    var hiddenOutOfAreaAppCount = 0;
+    var hiddenBetweenOutsideCount = 0;
+    if (areaFilterValue && outsideAreaMode === 'hide') {
+      var outsideAppNodeIds = new Set(
+        filteredNodes
+          .filter(function(n) { return isOutOfAreaApp(n, areaFilterValue); })
+          .map(function(n) { return String(n.id); })
+      );
+      hiddenOutOfAreaAppCount = outsideAppNodeIds.size;
+      var betweenOutsideNodeIds = collectIntermediateNodesBetweenOutsideApps(outsideAppNodeIds, filteredEdges);
+      hiddenBetweenOutsideCount = betweenOutsideNodeIds.size;
+
+      if (hiddenOutOfAreaAppCount > 0 || hiddenBetweenOutsideCount > 0) {
+        var excludedNodeIds = new Set();
+        outsideAppNodeIds.forEach(function(id) { excludedNodeIds.add(id); });
+        betweenOutsideNodeIds.forEach(function(id) { excludedNodeIds.add(String(id)); });
+
+        filteredNodes = filteredNodes.filter(function(n) { return !excludedNodeIds.has(String(n.id)); });
+        nodeIds = new Set(filteredNodes.map(function(n) { return String(n.id); }));
+        filteredEdges = filteredEdges.filter(function(e) {
+          return nodeIds.has(String(e.source)) && nodeIds.has(String(e.target));
+        });
+      }
+    }
+
+    var outOfAreaAppCount = areaFilterValue
+      ? filteredNodes.filter(function(n) { return isOutOfAreaApp(n, areaFilterValue); }).length
+      : 0;
+    var outAreaCountEl = document.getElementById('outAreaCount');
+    if (areaFilterValue && outsideAreaMode === 'hide' && (hiddenOutOfAreaAppCount > 0 || hiddenBetweenOutsideCount > 0)) {
+      outAreaCountEl.textContent = hiddenOutOfAreaAppCount + ' App(s) ausserhalb + ' + hiddenBetweenOutsideCount + ' Zwischenknoten ausgeblendet';
+      outAreaCountEl.style.display = 'inline-block';
+    } else if (areaFilterValue && outOfAreaAppCount > 0) {
+      outAreaCountEl.textContent = outOfAreaAppCount + ' App(s) ausserhalb Bereich';
+      outAreaCountEl.style.display = 'inline-block';
+    } else {
+      outAreaCountEl.style.display = 'none';
+    }
 
     document.getElementById('nodeCount').textContent = filteredNodes.length + ' nodes';
     document.getElementById('edgeCount').textContent = filteredEdges.length + ' edges';
     document.getElementById('emptyState').classList.toggle('show', !filteredNodes.length);
 
-    var simNodes = filteredNodes.map(function(n) { return Object.assign({}, n); });
+    var simNodes = filteredNodes.map(function(n) {
+      var copy = Object.assign({}, n);
+      copy.__outOfAreaApp = isOutOfAreaApp(copy, areaFilterValue);
+      return copy;
+    });
     var nodeMap = {};
     simNodes.forEach(function(n) { nodeMap[n.id] = n; });
     var simLinks = filteredEdges.map(function(e) {
       return { source: e.source, target: e.target, relation: e.relation, id: e.id };
     }).filter(function(e) { return nodeMap[e.source] && nodeMap[e.target]; });
+
+    if (viewMode === 'tidy') {
+      renderTidyTree(
+        simNodes,
+        simLinks,
+        areaFilterValue,
+        outsideAreaMode,
+        hiddenOutOfAreaAppCount,
+        hiddenBetweenOutsideCount
+      );
+      return;
+    }
 
     if (simulation) simulation.stop();
     applyPinnedPositions(simNodes);
@@ -806,7 +1371,7 @@
     var nodeGroup = nodesLayer.selectAll('g')
       .data(simNodes)
       .enter().append('g')
-        .attr('class', 'node')
+        .attr('class', function(d) { return d.__outOfAreaApp ? 'node node-out-of-area-app' : 'node'; })
         .style('cursor', 'pointer')
         .call(d3.drag()
           .on('start', function(event, d) {
@@ -830,12 +1395,23 @@
         .on('click', function(event, d) { showDetail(d); event.stopPropagation(); });
 
     nodeGroup.append('circle')
+      .attr('class', 'node-circle')
       .attr('r', 14)
       .attr('fill', function(d) { return nodeColor(d.type); })
       .attr('fill-opacity', 0.9)
-      .attr('stroke', '#fff')
-      .attr('stroke-opacity', 0.16)
-      .attr('stroke-width', 1.5);
+      .attr('stroke', function(d) { return baseNodeStrokeColor(d); })
+      .attr('stroke-opacity', function(d) { return baseNodeStrokeOpacity(d); })
+      .attr('stroke-width', function(d) { return baseNodeStrokeWidth(d); })
+      .attr('stroke-dasharray', function(d) { return baseNodeStrokeDasharray(d); });
+
+    nodeGroup.filter(function(d) { return d.__outOfAreaApp; })
+      .append('circle')
+      .attr('r', 18)
+      .attr('fill', 'none')
+      .attr('stroke', '#f59e0b')
+      .attr('stroke-opacity', 0.7)
+      .attr('stroke-width', 1.4)
+      .attr('stroke-dasharray', '3 2');
 
     nodeGroup.append('text')
       .text(function(d) {
@@ -850,7 +1426,7 @@
 
     nodeGroup
       .on('mouseenter', function(event, d) {
-        d3.select(this).select('circle')
+        d3.select(this).select('.node-circle')
           .attr('stroke', '#fff').attr('stroke-opacity', 0.8).attr('stroke-width', 2);
         link.attr('stroke', function(e) {
           var sid = edgeNodeId(e.source);
@@ -862,9 +1438,12 @@
           return (sid === d.id || tid === d.id) ? 2.5 : 1;
         });
       })
-      .on('mouseleave', function() {
-        d3.select(this).select('circle')
-          .attr('stroke', '#fff').attr('stroke-opacity', 0.16).attr('stroke-width', 1.5);
+      .on('mouseleave', function(event, d) {
+        d3.select(this).select('.node-circle')
+          .attr('stroke', function() { return baseNodeStrokeColor(d); })
+          .attr('stroke-opacity', function() { return baseNodeStrokeOpacity(d); })
+          .attr('stroke-width', function() { return baseNodeStrokeWidth(d); })
+          .attr('stroke-dasharray', function() { return baseNodeStrokeDasharray(d); });
         link.attr('stroke', 'rgba(255,255,255,0.18)').attr('stroke-width', 1.5);
       });
 
@@ -892,9 +1471,17 @@
     document.getElementById('detailLabel').textContent = d.label || d.id || '-';
     var rows = '';
     if (d.id) rows += detailRow('ID', d.id);
+    if (d.__outOfAreaApp) rows += detailRow('Hinweis', 'App liegt ausserhalb des Bereichsfilters');
     if (d.group) rows += detailRow('App', d.group);
     if (d.layer) rows += detailRow('Layer', d.layer);
     if (d.subtype) rows += detailRow('Subtype', d.subtype);
+    if (d.meta && d.meta.qriPrefix) rows += detailRow('QRI Prefix', d.meta.qriPrefix);
+    if (d.meta && Array.isArray(d.meta.qriMatchAppNames) && d.meta.qriMatchAppNames.length) {
+      rows += detailRow('QRI Match Apps', d.meta.qriMatchAppNames.join(', '));
+    }
+    if (d.meta && Array.isArray(d.meta.sourceSystems) && d.meta.sourceSystems.length) {
+      rows += detailRow('Source Systems', d.meta.sourceSystems.join(', '));
+    }
     if (d.meta && typeof d.meta === 'object') {
       Object.entries(d.meta).slice(0, 5).forEach(function(kv) {
         rows += detailRow(kv[0], JSON.stringify(kv[1]));
@@ -934,6 +1521,7 @@
     var loading = document.getElementById('loadingOverlay');
     loading.style.display = 'flex';
     closeDetail();
+    clearTidyExpandedForCurrentScope();
 
     var projectId = document.getElementById('projectSelect').value;
     var url = projectId ? ('/api/graph/project/' + projectId) : '/api/graph/db';
@@ -976,7 +1564,17 @@
   });
   document.getElementById('typeFilter').addEventListener('change', maybeRenderLastData);
   document.getElementById('appFilter').addEventListener('change', maybeRenderLastData);
-  document.getElementById('areaFilter').addEventListener('change', maybeRenderLastData);
+  document.getElementById('areaFilter').addEventListener('change', function() {
+    if (lastData) populateLineageFilters(lastData);
+    maybeRenderLastData();
+  });
+  document.getElementById('outsideAreaMode').addEventListener('change', maybeRenderLastData);
+  document.getElementById('viewMode').addEventListener('change', function() {
+    if (document.getElementById('viewMode').value === 'tidy') {
+      clearTidyExpandedForCurrentScope();
+    }
+    maybeRenderLastData();
+  });
   document.getElementById('searchInput').addEventListener('input', debounceRender);
 
   document.getElementById('zoomIn').addEventListener('click', function() {

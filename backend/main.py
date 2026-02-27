@@ -723,6 +723,22 @@ def _space_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _list_or_none(value: Any) -> list[Any] | None:
+    return value if isinstance(value, list) else None
+
+
+def _dict_or_none(value: Any) -> dict[str, Any] | None:
+    return value if isinstance(value, dict) else None
+
+
+def _json_or_none(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (dict, list, str, int, float, bool)):
+        return value
+    return None
+
+
 def _str_or_none(value: Any) -> str | None:
     if value is None:
         return None
@@ -822,6 +838,56 @@ def _usage_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
         "generated_at_payload": generated_at_text,
         "artifact_file_name": _str_or_none(item.get("_artifactFileName")),
         "generated_at": _datetime_or_none(generated_at_text) or datetime.now(timezone.utc),
+    }
+
+
+def _data_connection_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "id_payload": None,
+            "q_id": None,
+            "qri": None,
+            "tags": None,
+            "user_name": None,
+            "links": None,
+            "q_name": None,
+            "q_type": None,
+            "space_payload": None,
+            "q_log_on": None,
+            "tenant": None,
+            "created_source": None,
+            "updated_source": None,
+            "version": None,
+            "privileges": None,
+            "datasource_id": None,
+            "q_architecture": None,
+            "q_credentials_id": None,
+            "q_engine_object_id": None,
+            "q_connect_statement": None,
+            "q_separate_credentials": None,
+        }
+    return {
+        "id_payload": _str_or_none(item.get("id")),
+        "q_id": _str_or_none(item.get("qID")),
+        "qri": _str_or_none(item.get("qri")),
+        "tags": _list_or_none(item.get("tags")),
+        "user_name": _str_or_none(item.get("user")),
+        "links": _dict_or_none(item.get("links")),
+        "q_name": _str_or_none(item.get("qName") or item.get("name")),
+        "q_type": _str_or_none(item.get("qType") or item.get("type")),
+        "space_payload": _str_or_none(item.get("space")),
+        "q_log_on": _bool_or_none(item.get("qLogOn")),
+        "tenant": _str_or_none(item.get("tenant")),
+        "created_source": _str_or_none(item.get("created")),
+        "updated_source": _str_or_none(item.get("updated")),
+        "version": _str_or_none(item.get("version")),
+        "privileges": _list_or_none(item.get("privileges")),
+        "datasource_id": _str_or_none(item.get("datasourceID")),
+        "q_architecture": _json_or_none(item.get("qArchitecture")),
+        "q_credentials_id": _str_or_none(item.get("qCredentialsID")),
+        "q_engine_object_id": _str_or_none(item.get("qEngineObjectID")),
+        "q_connect_statement": _str_or_none(item.get("qConnectStatement")),
+        "q_separate_credentials": _bool_or_none(item.get("qSeparateCredentials")),
     }
 
 
@@ -969,14 +1035,16 @@ async def _run_db_store_step(
                     connection_id = item.get("id") or item.get("qID") or item.get("qEngineObjectID")
                     if not connection_id:
                         continue
+                    connection_cols = _data_connection_payload_columns(item)
                     stmt = pg_insert(QlikDataConnection).values(
                         project_id=project_id,
                         connection_id=str(connection_id),
-                        space_id=item.get("space"),
+                        space_id=connection_cols["space_payload"],
+                        **connection_cols,
                         data=item,
                     ).on_conflict_do_update(
                         index_elements=["project_id", "connection_id"],
-                        set_={"data": item, "space_id": item.get("space")},
+                        set_={**connection_cols, "data": item, "space_id": connection_cols["space_payload"]},
                     )
                     await session.execute(stmt)
                     stored["dataConnections"] += 1
