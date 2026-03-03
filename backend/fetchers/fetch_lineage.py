@@ -166,9 +166,11 @@ async def fetch_lineage_for_apps(
         )
         tasks.append(task)
 
-    await asyncio.gather(*tasks)
-    await client.close()
-    return results
+    try:
+        await asyncio.gather(*tasks)
+        return results
+    finally:
+        await client.close()
 
 
 def _extract_app_edges(data: Any) -> List[Dict[str, str]]:
@@ -273,6 +275,8 @@ async def fetch_app_edges_for_apps(
     for idx, app in enumerate(apps, start=1):
         tasks.append(_fetch_edges_for_app(idx, total, app))
 
-    await asyncio.gather(*tasks)
-    await client.close()
-    return results
+    try:
+        await asyncio.gather(*tasks)
+        return results
+    finally:
+        await client.close()

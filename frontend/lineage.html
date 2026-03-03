@@ -59,7 +59,9 @@
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 1rem;
+      overflow: hidden;
     }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
     .nav-link {
       color: var(--text-muted);
@@ -330,13 +332,14 @@
 
 <nav>
   <a class="nav-brand" href="/">
-    <div class="brand-icon">⬡</div>
+    <div class="brand-icon"><img src="/assets/logo.png" alt="Lineage Explorer Logo" /></div>
     Lineage Explorer
   </a>
   <div class="nav-links">
     <a class="nav-link" href="/">Dashboard</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
     <a class="nav-link active" href="/lineage.html">Lineage</a>
+    <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
   </div>
   <div class="nav-spacer"></div>
   <div class="nav-user">
@@ -617,6 +620,22 @@
     }
 
     return intermediate;
+  }
+  function graphNodeDisplayLabel(node) {
+    var raw = String((node && (node.label || node.id)) || '').trim();
+    if (!raw) return '';
+    if (/^qri:/i.test(raw)) return raw;
+
+    var hasPathSeparator = raw.indexOf('/') !== -1 || raw.indexOf('\\') !== -1;
+    if (!hasPathSeparator) return raw;
+
+    var normalized = raw.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/+$/, '');
+    if (!normalized) return raw;
+    var fileName = normalized.split('/').pop() || '';
+    if (!fileName) return raw;
+    if (/^[a-z]:$/i.test(fileName)) return raw;
+    if (!/[.][^./\\]+$/.test(fileName)) return raw;
+    return fileName;
   }
   function nodeSearchHaystack(node) {
     var parts = [node.id, node.label, node.type, node.group, node.layer, node.subtype, nodeAppId(node), nodeAppName(node), nodeSpaceId(node), nodeSpaceName(node)];
@@ -1153,7 +1172,7 @@
 
     nodeGroup.append('text')
       .text(function(d) {
-        var label = d.label || d.id || '';
+        var label = graphNodeDisplayLabel(d);
         return label.length > 30 ? label.slice(0, 28) + '...' : label;
       })
       .attr('text-anchor', 'start')
@@ -1415,7 +1434,7 @@
 
     nodeGroup.append('text')
       .text(function(d) {
-        var label = d.label || d.id || '';
+        var label = graphNodeDisplayLabel(d);
         return label.length > 16 ? label.slice(0, 14) + '...' : label;
       })
       .attr('text-anchor', 'middle')

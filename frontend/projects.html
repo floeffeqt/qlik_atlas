@@ -23,7 +23,8 @@
 
     nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
     .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
-    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; overflow: hidden; }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
     .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
     .nav-link:hover { color: var(--text); background: var(--surface-hover); }
@@ -93,6 +94,12 @@
     .btn-modal-save { padding: 0.6rem 1.3rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
     .btn-modal-save:hover { opacity: 0.9; }
     .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .fetch-step-list { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.2rem; }
+    .fetch-step-item { display: flex; align-items: center; gap: 0.6rem; color: rgba(255,255,255,0.88); font-size: 0.86rem; }
+    .fetch-step-item input[type="checkbox"] { width: 15px; height: 15px; accent-color: #4ade80; cursor: pointer; }
+    .fetch-step-actions { display: flex; gap: 0.45rem; margin-top: 0.7rem; }
+    .btn-step { padding: 0.35rem 0.6rem; font-size: 0.76rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; }
+    .btn-step:hover { background: var(--surface-hover); color: var(--text); }
 
     .alert { border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
     .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
@@ -231,6 +238,12 @@
     .recent-jobs-wrap {
       position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 390;
     }
+    .recent-jobs-wrap.with-log-open {
+      top: 4.5rem; bottom: auto; z-index: 410;
+    }
+    .recent-jobs-wrap.with-log-open .recent-jobs-list {
+      top: calc(100% + 0.4rem); bottom: auto;
+    }
     .recent-jobs-wrap.hidden { display: none; }
     .recent-jobs-toggle {
       display: flex; align-items: center; gap: 0.5rem;
@@ -302,12 +315,13 @@
 <body>
 
 <nav>
-  <a class="nav-brand" href="/"><div class="brand-icon">⬡</div>Lineage Explorer</a>
-  <div class="nav-links">
-    <a class="nav-link" href="/">Dashboard</a>
-    <a class="nav-link active" href="/projects.html">Projekte</a>
-    <a class="nav-link" href="/lineage.html">Lineage</a>
-  </div>
+  <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Lineage Explorer Logo" /></div>Lineage Explorer</a>
+    <div class="nav-links">
+      <a class="nav-link" href="/">Dashboard</a>
+      <a class="nav-link active" href="/projects.html">Projekte</a>
+      <a class="nav-link" href="/lineage.html">Lineage</a>
+      <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
+    </div>
   <div class="nav-spacer"></div>
   <div class="nav-user">
     <span class="nav-user-email" id="userEmail">—</span>
@@ -374,7 +388,27 @@
   </div>
 </div>
 
-<!-- ── LOG POPUP ── -->
+<!-- Fetch Step Selection -->
+<div class="modal-backdrop" id="fetchModal">
+  <div class="modal confirm-modal">
+    <div class="modal-title">Fetch-Job starten</div>
+    <div class="confirm-msg" id="fetchModalProject"></div>
+    <div class="form-group">
+      <label>Steps (standard: alle ausgewahlt)</label>
+      <div class="fetch-step-list" id="fetchStepList"></div>
+      <div class="fetch-step-actions">
+        <button type="button" class="btn-step" id="fetchSelectAll">Alle wahlen</button>
+        <button type="button" class="btn-step" id="fetchSelectNone">Alle abwahlen</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" id="fetchModalCancel">Abbrechen</button>
+      <button class="btn-modal-save" id="fetchModalStart">Job starten</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log Popup -->
 <div class="log-popup hidden" id="logPopup">
   <div class="log-header">
     <span class="log-status-dot done" id="logDot">OK</span>
@@ -507,7 +541,7 @@
     wrap.innerHTML = '<div class="projects-grid">' + cards + '</div>';
 
     wrap.querySelectorAll('[data-fetch-id]').forEach(function(btn) {
-      btn.addEventListener('click', function() { startFetch(parseInt(this.dataset.fetchId, 10)); });
+      btn.addEventListener('click', function() { openFetchModal(parseInt(this.dataset.fetchId, 10)); });
     });
     wrap.querySelectorAll('[data-edit-id]').forEach(function(btn) {
       btn.addEventListener('click', function() { openEdit(parseInt(this.dataset.editId, 10)); });
@@ -528,6 +562,23 @@
   var lastLogCount = 0;
   var recentJobs = [];      // [{jobId, projectName, status, projectId}]
   var recentJobsOpen = false;
+
+  function isLogPopupOpen() {
+    return !document.getElementById('logPopup').classList.contains('hidden');
+  }
+
+  function updateRecentJobsVisibility() {
+    var wrap = document.getElementById('recentJobsWrap');
+    var hasRecentJobs = recentJobs.length > 0;
+    var popupOpen = isLogPopupOpen();
+    if (hasRecentJobs) wrap.classList.remove('hidden');
+    else wrap.classList.add('hidden');
+    wrap.classList.toggle('with-log-open', popupOpen && hasRecentJobs);
+    if (!hasRecentJobs) {
+      recentJobsOpen = false;
+      document.getElementById('recentJobsList').classList.add('hidden');
+    }
+  }
 
   function setLogDot(status) {
     var dot = document.getElementById('logDot');
@@ -570,16 +621,15 @@
     setLogDot(status || 'queued');
     document.getElementById('logPopup').classList.remove('hidden', 'minimized');
     document.getElementById('logMinimize').textContent = '[-]';
-    document.getElementById('recentJobsWrap').classList.add('hidden');
     recentJobsOpen = false;
+    document.getElementById('recentJobsList').classList.add('hidden');
+    updateRecentJobsVisibility();
   }
 
   function closeLogPopup() {
     logPolling = false;
     document.getElementById('logPopup').classList.add('hidden');
-    if (recentJobs.length > 0) {
-      document.getElementById('recentJobsWrap').classList.remove('hidden');
-    }
+    updateRecentJobsVisibility();
   }
 
   document.getElementById('logMinimize').addEventListener('click', function() {
@@ -634,6 +684,7 @@
     recentJobs = recentJobs.filter(function(j) { return j.jobId !== jobId; });
     recentJobs.unshift({jobId: jobId, projectName: projectName, projectId: projectId, status: status});
     if (recentJobs.length > 6) recentJobs = recentJobs.slice(0, 6);
+    updateRecentJobsVisibility();
   }
 
   function statusDotColor(status) {
@@ -671,6 +722,7 @@
   });
 
   async function reopenLog(jobId, projectName, projectId) {
+    logPolling = false;
     recentJobsOpen = false;
     document.getElementById('recentJobsList').classList.add('hidden');
     openLogPopup(jobId, projectName, 'queued');
@@ -691,7 +743,49 @@
 
   // ── FETCH JOB ─────────────────────────────────────────────────────
 
-  async function startFetch(projectId) {
+  var FETCH_STEP_OPTIONS = [
+    {id: 'spaces', label: 'Spaces'},
+    {id: 'apps', label: 'Apps'},
+    {id: 'data-connections', label: 'Data Connections'},
+    {id: 'reloads', label: 'Reloads'},
+    {id: 'audits', label: 'Audits'},
+    {id: 'licenses-consumption', label: 'Licenses Consumption'},
+    {id: 'licenses-status', label: 'Licenses Status'},
+    {id: 'lineage', label: 'Lineage'},
+    {id: 'app-edges', label: 'App Edges'},
+    {id: 'usage', label: 'Usage'}
+  ];
+  var fetchModalProjectId = null;
+
+  function renderFetchStepList(selectAll) {
+    var wrap = document.getElementById('fetchStepList');
+    wrap.innerHTML = FETCH_STEP_OPTIONS.map(function(step) {
+      var checked = selectAll ? ' checked' : '';
+      return '<label class="fetch-step-item">'
+        + '<input type="checkbox" data-fetch-step="' + step.id + '"' + checked + ' />'
+        + '<span>' + escHtml(step.label) + '</span>'
+        + '</label>';
+    }).join('');
+  }
+
+  function getSelectedFetchSteps() {
+    var selected = [];
+    document.querySelectorAll('[data-fetch-step]').forEach(function(el) {
+      if (el.checked) selected.push(el.getAttribute('data-fetch-step'));
+    });
+    return selected;
+  }
+
+  function openFetchModal(projectId) {
+    fetchModalProjectId = projectId;
+    var project = projects.find(function(p) { return p.id === projectId; });
+    var projectName = project ? project.name : ('Projekt ' + projectId);
+    document.getElementById('fetchModalProject').textContent = 'Projekt: ' + projectName;
+    renderFetchStepList(true);
+    openModal('fetchModal');
+  }
+
+  async function startFetch(projectId, steps) {
     var project = projects.find(function(p) { return p.id === projectId; });
     var projectName = project ? project.name : 'Projekt ' + projectId;
     var btn = document.getElementById('fetchBtn-' + projectId);
@@ -700,7 +794,7 @@
       var res = await apiFetch('/api/fetch/jobs', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({project_id: projectId, steps: null})
+        body: JSON.stringify({project_id: projectId, steps: steps})
       });
       if (!res.ok) {
         var err = await res.json().catch(function(){ return {}; });
@@ -722,6 +816,21 @@
 
   function openModal(id) { document.getElementById(id).classList.add('open'); }
   function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.getElementById('fetchModalCancel').addEventListener('click', function() { closeModal('fetchModal'); });
+  document.getElementById('fetchModal').addEventListener('click', function(e) { if (e.target === this) closeModal('fetchModal'); });
+  document.getElementById('fetchSelectAll').addEventListener('click', function() { renderFetchStepList(true); });
+  document.getElementById('fetchSelectNone').addEventListener('click', function() { renderFetchStepList(false); });
+  document.getElementById('fetchModalStart').addEventListener('click', async function() {
+    if (fetchModalProjectId == null) return;
+    var steps = getSelectedFetchSteps();
+    if (!steps.length) {
+      showToast('Bitte mindestens einen Step auswaehlen');
+      return;
+    }
+    closeModal('fetchModal');
+    await startFetch(fetchModalProjectId, steps);
+  });
 
   function resetForm() {
     document.getElementById('editingId').value = '';

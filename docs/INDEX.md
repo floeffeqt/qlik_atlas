@@ -8,7 +8,7 @@ tags:
   - project-context
   - status
   - requirements
-updated: 2026-02-25
+updated: 2026-03-02
 owners: []
 source_of_truth: yes
 related_specs:
@@ -16,6 +16,7 @@ related_specs:
 related_docs:
   - docs/CONTEXT.md
   - docs/DB_MODEL.md
+  - docs/TEMPLATES/BUGFIX_ENTRY.md
   - REQUIREMENTS.md
   - PROJECT_STATUS.md
   - FIXES_APPLIED.md
@@ -45,6 +46,8 @@ related_docs:
 
 - `CONTEXT.md` (projektbezogener Kontext und Doku-Nutzung)
 - `DB_MODEL.md` (aktuelle DB-Struktur: Tabellen, PK/FK, fachliche Joins, Mermaid-ERD)
+- `TEMPLATES/BUGFIX_ENTRY.md` (verbindliches Bugfix-Entry-Template inkl. Befuell-Logik)
+- `THEME_GENERATOR.md` (Theme Builder MVP: ZIP Download + Upload-Stub)
 - `RELEASE_NOTES/README.md` (Struktur fuer kuenftige Release Notes im `docs`-Bereich)
 - `RELEASE_NOTES/2026-02-25_db-only-runtime-reads-and-graphstore-removal.md` (DB-only Runtime-Reads + GraphStore-Entfernung)
 

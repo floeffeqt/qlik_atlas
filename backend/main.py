@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func as sa_func
+from sqlalchemy import select, func as sa_func, inspect as sa_inspect
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -20,6 +20,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from fetchers.fetch_apps import fetch_all_apps
 from fetchers.fetch_data_connections import fetch_all_data_connections
+from fetchers.fetch_reloads import fetch_all_reloads
+from fetchers.fetch_audits import fetch_all_audits
+from fetchers.fetch_licenses_consumption import fetch_all_licenses_consumption
+from fetchers.fetch_licenses_status import fetch_all_licenses_status
 from fetchers.fetch_lineage import fetch_app_edges_for_apps, fetch_lineage_for_apps
 from fetchers.fetch_spaces import fetch_all_spaces
 from fetchers.fetch_usage import fetch_usage_async
@@ -43,13 +47,53 @@ from app.db_runtime_views import (
 )
 from app.projects.routes import router as projects_router
 from app.admin.routes import router as admin_router
+from app.themes.routes import router as themes_router
 from shared.qlik_client import QlikClient
 from shared.security_headers import apply_security_headers
 from shared.utils import ensure_dir, read_json, write_json
 
 
-FetchStep = Literal["spaces", "apps", "data-connections", "lineage", "app-edges", "usage"]
-FETCH_STEP_ORDER: list[FetchStep] = ["spaces", "apps", "data-connections", "lineage", "app-edges", "usage"]
+FetchStep = Literal[
+    "spaces",
+    "apps",
+    "data-connections",
+    "reloads",
+    "audits",
+    "licenses-consumption",
+    "licenses-status",
+    "lineage",
+    "app-edges",
+    "usage",
+]
+FETCH_STEP_ORDER: list[FetchStep] = [
+    "spaces",
+    "apps",
+    "data-connections",
+    "lineage",
+    "app-edges",
+    "usage",
+]
+FETCH_STEP_ALL_ORDER: list[FetchStep] = [
+    "spaces",
+    "apps",
+    "data-connections",
+    "reloads",
+    "audits",
+    "licenses-consumption",
+    "licenses-status",
+    "lineage",
+    "app-edges",
+    "usage",
+]
+INDEPENDENT_FETCH_STEPS: set[FetchStep] = {
+    "spaces",
+    "apps",
+    "data-connections",
+    "reloads",
+    "audits",
+    "licenses-consumption",
+    "licenses-status",
+}
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 OUTPUT_ROOT = PROJECT_ROOT / "output"
@@ -78,6 +122,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(projects_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(themes_router, prefix="/api")
 
 # CORS
 origins = settings.dev_cors_origins or []
@@ -168,13 +213,13 @@ def _assert_fetch_token(token: str | None) -> None:
 
 def _normalize_steps(steps: list[FetchStep] | None) -> list[FetchStep]:
     if not steps:
-        return list(FETCH_STEP_ORDER)
+        return list(FETCH_STEP_ALL_ORDER)
     selected = set(steps)
     if "app-edges" in selected:
         selected.add("lineage")
     if "lineage" in selected or "usage" in selected:
         selected.add("apps")
-    normalized = [step for step in FETCH_STEP_ORDER if step in selected]
+    normalized = [step for step in FETCH_STEP_ALL_ORDER if step in selected]
     if not normalized:
         raise HTTPException(status_code=400, detail="no valid fetch steps supplied")
     return normalized
@@ -242,21 +287,63 @@ def _extract_successful_lineage_app_ids() -> set[str]:
     return app_ids
 
 
-def _select_apps_for_app_edges(apps: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
+def _extract_successful_lineage_app_ids_from_payloads(payloads: list[dict[str, Any]] | None) -> set[str]:
+    app_ids: set[str] = set()
+    if not isinstance(payloads, list):
+        return app_ids
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        app_obj = payload.get("app")
+        endpoints = payload.get("endpoints")
+        if not isinstance(app_obj, dict) or not isinstance(endpoints, dict):
+            continue
+        source = endpoints.get("source")
+        overview = endpoints.get("overview")
+        if not isinstance(source, dict) or not isinstance(overview, dict):
+            continue
+        source_status = source.get("status")
+        overview_status = overview.get("status")
+        source_ok = isinstance(source_status, int) and 200 <= source_status < 300
+        overview_ok = isinstance(overview_status, int) and 200 <= overview_status < 300
+        if not (source_ok and overview_ok):
+            continue
+        app_id = app_obj.get("id")
+        if app_id:
+            app_ids.add(str(app_id))
+    return app_ids
+
+
+def _select_apps_for_app_edges(
+    apps: list[dict[str, Any]],
+    lineage_payloads: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], str]:
     eligible = [app for app in apps if bool(app.get("lineageSuccess"))]
     if eligible:
         return eligible, "lineage_step_runtime"
 
+    payload_successful_app_ids = _extract_successful_lineage_app_ids_from_payloads(lineage_payloads)
+    if payload_successful_app_ids:
+        filtered_by_payloads: list[dict[str, Any]] = []
+        for app in apps:
+            app_id = app.get("appId")
+            if app_id and str(app_id) in payload_successful_app_ids:
+                filtered_by_payloads.append(app)
+        if filtered_by_payloads:
+            return filtered_by_payloads, "lineage_payload_runtime"
+
     successful_app_ids = _extract_successful_lineage_app_ids()
     if not successful_app_ids:
-        return [], "no_successful_lineage_found"
+        return list(apps), "fallback_all_apps"
 
     filtered: list[dict[str, Any]] = []
     for app in apps:
         app_id = app.get("appId")
         if app_id and str(app_id) in successful_app_ids:
             filtered.append(app)
-    return filtered, "lineage_output_scan"
+    if filtered:
+        return filtered, "lineage_output_scan"
+    return list(apps), "fallback_all_apps"
 
 
 def _clear_app_edges_artifacts(directory: Path) -> int:
@@ -365,6 +452,46 @@ async def _run_data_connections_step() -> tuple[list[dict[str, Any]], dict[str, 
     return connections, {"count": len(connections), "storage": "db-first-memory", "localArtifactWritten": wrote_local}
 
 
+async def _run_reloads_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client()
+    limit = int(os.getenv("FETCH_RELOADS_LIMIT", "100"))
+    try:
+        reloads = await fetch_all_reloads(client, limit=limit)
+    finally:
+        await client.close()
+    return reloads, {"count": len(reloads), "storage": "db-first-memory", "localArtifactWritten": False}
+
+
+async def _run_audits_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client()
+    limit = int(os.getenv("FETCH_AUDITS_LIMIT", "100"))
+    window_days = int(os.getenv("FETCH_AUDITS_WINDOW_DAYS", "90"))
+    try:
+        audits = await fetch_all_audits(client, limit=limit, window_days=window_days)
+    finally:
+        await client.close()
+    return audits, {"count": len(audits), "storage": "db-first-memory", "localArtifactWritten": False}
+
+
+async def _run_licenses_consumption_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client()
+    limit = int(os.getenv("FETCH_LICENSES_CONSUMPTION_LIMIT", "100"))
+    try:
+        consumptions = await fetch_all_licenses_consumption(client, limit=limit)
+    finally:
+        await client.close()
+    return consumptions, {"count": len(consumptions), "storage": "db-first-memory", "localArtifactWritten": False}
+
+
+async def _run_licenses_status_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client()
+    try:
+        statuses = await fetch_all_licenses_status(client)
+    finally:
+        await client.close()
+    return statuses, {"count": len(statuses), "storage": "db-first-memory", "localArtifactWritten": False}
+
+
 async def _run_lineage_step(
     request: FetchJobRequest,
     apps: list[dict[str, Any]],
@@ -395,12 +522,13 @@ async def _run_lineage_step(
 async def _run_app_edges_step(
     request: FetchJobRequest,
     apps: list[dict[str, Any]],
+    lineage_payloads: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     write_local = _write_local_fetch_artifacts_enabled()
     if write_local:
         ensure_dir(APP_EDGES_DIR)
         _clear_app_edges_artifacts(APP_EDGES_DIR)
-    eligible_apps, filter_source = _select_apps_for_app_edges(apps)
+    eligible_apps, filter_source = _select_apps_for_app_edges(apps, lineage_payloads=lineage_payloads)
     if not eligible_apps:
         return [], {
             "apps": len(apps),
@@ -494,12 +622,21 @@ async def _execute_fetch_job(
     apps_cache: list[dict[str, Any]] | None = None
     spaces_cache: list[dict[str, Any]] | None = None
     data_connections_cache: list[dict[str, Any]] | None = None
+    reloads_cache: list[dict[str, Any]] | None = None
+    audits_cache: list[dict[str, Any]] | None = None
+    licenses_consumption_cache: list[dict[str, Any]] | None = None
+    licenses_status_cache: list[dict[str, Any]] | None = None
+    lineage_payloads_cache: list[dict[str, Any]] = []
     usage_payloads: list[dict[str, Any]] = []
     app_edges_payloads: list[dict[str, Any]] = []
     step_labels: dict[str, str] = {
         "spaces": "Spaces laden",
         "apps": "Apps laden",
         "data-connections": "Datenverbindungen laden",
+        "reloads": "Reloads laden",
+        "audits": "Audits laden",
+        "licenses-consumption": "License Consumption laden",
+        "licenses-status": "License Status laden",
         "lineage": "Lineage berechnen",
         "app-edges": "App-Kanten berechnen",
         "usage": "Usage-Daten laden",
@@ -513,17 +650,37 @@ async def _execute_fetch_job(
         await _append_log(job_id, "✓ Credentials geladen")
 
         if _write_local_fetch_artifacts_enabled():
-            cleared = _clear_outputs_for_steps(steps)
-            if cleared.get("files") or cleared.get("dirs"):
-                await _append_log(job_id, "Alte Ausgabedateien bereinigt")
+            if request.clearOutputs:
+                cleared = _clear_outputs_for_steps(steps)
+                if cleared.get("files") or cleared.get("dirs"):
+                    await _append_log(job_id, "Alte Ausgabedateien bereinigt")
+                else:
+                    await _append_log(job_id, "Keine lokalen Ausgabedateien zum Bereinigen gefunden")
+            else:
+                cleared = {"files": [], "dirs": [], "skipped": True, "reason": "clearOutputs=false"}
+                await _append_log(job_id, "Bereinigung lokaler Ausgaben übersprungen (clearOutputs=false)")
         else:
             cleared = {"files": [], "dirs": [], "skipped": True, "reason": "local artifacts disabled (DB-first mode)"}
             await _append_log(job_id, "Lokale Fetch-Artefakte deaktiviert (DB-first Mode)")
         await _update_job(job_id, cleanup=cleared)
 
-        for i, step in enumerate(steps, 1):
+        step_positions: dict[FetchStep, int] = {step: i for i, step in enumerate(steps, 1)}
+
+        async def _run_single_step(step: FetchStep, *, parallel: bool = False) -> None:
+            nonlocal apps_cache
+            nonlocal spaces_cache
+            nonlocal data_connections_cache
+            nonlocal reloads_cache
+            nonlocal audits_cache
+            nonlocal licenses_consumption_cache
+            nonlocal licenses_status_cache
+            nonlocal lineage_payloads_cache
+            nonlocal app_edges_payloads
+            nonlocal usage_payloads
+
             label = step_labels.get(step, step)
-            await _append_log(job_id, f"Schritt {i}/{len(steps)}: {label}…")
+            prefix = "Parallel " if parallel else ""
+            await _append_log(job_id, f"{prefix}Schritt {step_positions[step]}/{len(steps)}: {label}...")
             await _update_job(job_id, currentStep=step)
 
             if step == "spaces":
@@ -535,13 +692,25 @@ async def _execute_fetch_job(
             elif step == "data-connections":
                 data_connections_cache, result = await _run_data_connections_step()
                 await _append_log(job_id, f"✓ {result.get('count', 0)} Datenverbindungen geladen")
+            elif step == "reloads":
+                reloads_cache, result = await _run_reloads_step()
+                await _append_log(job_id, f"Reloads geladen: {result.get('count', 0)}")
+            elif step == "audits":
+                audits_cache, result = await _run_audits_step()
+                await _append_log(job_id, f"Audits geladen: {result.get('count', 0)}")
+            elif step == "licenses-consumption":
+                licenses_consumption_cache, result = await _run_licenses_consumption_step()
+                await _append_log(job_id, f"License Consumption geladen: {result.get('count', 0)}")
+            elif step == "licenses-status":
+                licenses_status_cache, result = await _run_licenses_status_step()
+                await _append_log(job_id, f"License Status geladen: {result.get('count', 0)}")
             elif step == "lineage":
                 if apps_cache is None:
                     if _write_local_fetch_artifacts_enabled():
                         apps_cache = _load_apps_inventory()
                     else:
                         raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'lineage'")
-                _lineage_payloads, result = await _run_lineage_step(request, apps_cache)
+                lineage_payloads_cache, result = await _run_lineage_step(request, apps_cache)
                 await _append_log(job_id, f"✓ Lineage für {len(apps_cache)} Apps berechnet")
             elif step == "app-edges":
                 if apps_cache is None:
@@ -549,7 +718,11 @@ async def _execute_fetch_job(
                         apps_cache = _load_apps_inventory()
                     else:
                         raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'app-edges'")
-                app_edges_payloads, result = await _run_app_edges_step(request, apps_cache)
+                app_edges_payloads, result = await _run_app_edges_step(
+                    request,
+                    apps_cache,
+                    lineage_payloads=lineage_payloads_cache,
+                )
                 edges = result.get("appEdges", {}).get("edges", 0)
                 await _append_log(job_id, f"✓ {edges} App-Kanten gefunden")
             elif step == "usage":
@@ -561,8 +734,33 @@ async def _execute_fetch_job(
                 usage_payloads, result = await _run_usage_step(request, apps_cache)
                 await _append_log(job_id, f"✓ Usage-Daten geladen")
             else:
-                continue
+                return
+
             await _complete_job_step(job_id, step, result)
+
+        independent_steps = [step for step in steps if step in INDEPENDENT_FETCH_STEPS]
+        if independent_steps:
+            try:
+                independent_limit = max(1, int(os.getenv("FETCH_INDEPENDENT_PARALLELISM", "3")))
+            except (TypeError, ValueError):
+                independent_limit = 3
+
+            await _append_log(
+                job_id,
+                f"Starte {len(independent_steps)} unabhaengige Schritte parallel (max concurrency={independent_limit})...",
+            )
+            semaphore = asyncio.Semaphore(independent_limit)
+
+            async def _run_parallel_step(step: FetchStep) -> None:
+                async with semaphore:
+                    await _run_single_step(step, parallel=True)
+
+            await asyncio.gather(*[_run_parallel_step(step) for step in independent_steps])
+
+        for step in steps:
+            if step in INDEPENDENT_FETCH_STEPS:
+                continue
+            await _run_single_step(step)
 
         await _append_log(job_id, "Speichere Daten in Datenbank…")
         db_result = await _run_db_store_step(
@@ -572,13 +770,20 @@ async def _execute_fetch_job(
             apps_data=apps_cache,
             spaces_data=spaces_cache,
             data_connections_data=data_connections_cache,
+            reloads_data=reloads_cache,
+            audits_data=audits_cache,
+            licenses_consumption_data=licenses_consumption_cache,
+            licenses_status_data=licenses_status_cache,
             usage_payloads=usage_payloads,
             app_edges_payloads=app_edges_payloads,
         )
         await _append_log(
             job_id,
             f"✓ Gespeichert: {db_result.get('apps', 0)} Apps · "
-            f"{db_result.get('nodes', 0)} Knoten · {db_result.get('edges', 0)} Kanten"
+            f"{db_result.get('nodes', 0)} Knoten · {db_result.get('edges', 0)} Kanten · "
+            f"{db_result.get('reloads', 0)} Reloads · {db_result.get('audits', 0)} Audits · "
+            f"{db_result.get('licenseConsumption', 0)} License-Consumption · "
+            f"{db_result.get('licenseStatus', 0)} License-Status"
         )
         await _append_log(job_id, "✓ Job erfolgreich abgeschlossen")
         await _update_job(job_id, status="completed", finishedAt=_utc_now_iso(), currentStep=None, dbStore=db_result)
@@ -786,11 +991,43 @@ def _datetime_or_none(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
+def _to_db_column_value_map(model: Any, values: dict[str, Any]) -> dict[str, Any]:
+    """Map ORM attribute keys to concrete DB column names for Core insert/upsert statements."""
+    if not isinstance(values, dict):
+        return {}
+    mapper = sa_inspect(model)
+    attr_to_column: dict[str, str] = {}
+    for attr in mapper.column_attrs:
+        if not attr.columns:
+            continue
+        attr_to_column[attr.key] = attr.columns[0].name
+    mapped: dict[str, Any] = {}
+    for key, value in values.items():
+        mapped[attr_to_column.get(key, key)] = value
+    return mapped
+
+
 def _app_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(item, dict):
         return {
             "name_value": None,
             "app_id_payload": None,
+            "item_id": None,
+            "owner_id": None,
+            "description": None,
+            "resource_type": None,
+            "resource_id": None,
+            "thumbnail": None,
+            "resource_attributes_id": None,
+            "resource_attributes_name": None,
+            "resource_attributes_description": None,
+            "resource_attributes_created_date": None,
+            "resource_attributes_modified_date": None,
+            "resource_attributes_modified_by_user_name": None,
+            "resource_attributes_publish_time": None,
+            "resource_attributes_last_reload_time": None,
+            "resource_attributes_trashed": None,
+            "resource_custom_attributes_json": None,
             "status": None,
             "app_name": None,
             "space_id_payload": None,
@@ -801,11 +1038,29 @@ def _app_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
             "root_node_id": None,
             "lineage_fetched": None,
             "lineage_success": None,
+            "source": None,
+            "tenant": None,
             "fetched_at": None,
         }
     return {
         "name_value": _str_or_none(item.get("name")),
         "app_id_payload": _str_or_none(item.get("appId") or item.get("id")),
+        "item_id": _str_or_none(item.get("id")),
+        "owner_id": _str_or_none(item.get("ownerId")),
+        "description": _str_or_none(item.get("description")),
+        "resource_type": _str_or_none(item.get("resourceType")),
+        "resource_id": _str_or_none(item.get("resourceId")),
+        "thumbnail": _str_or_none(item.get("thumbnail")),
+        "resource_attributes_id": _str_or_none(item.get("resourceAttributes_id")),
+        "resource_attributes_name": _str_or_none(item.get("resourceAttributes_name")),
+        "resource_attributes_description": _str_or_none(item.get("resourceAttributes_description")),
+        "resource_attributes_created_date": _str_or_none(item.get("resourceAttributes_createdDate")),
+        "resource_attributes_modified_date": _str_or_none(item.get("resourceAttributes_modifiedDate")),
+        "resource_attributes_modified_by_user_name": _str_or_none(item.get("resourceAttributes_modifiedByUserName")),
+        "resource_attributes_publish_time": _str_or_none(item.get("resourceAttributes_publishTime")),
+        "resource_attributes_last_reload_time": _str_or_none(item.get("resourceAttributes_lastReloadTime")),
+        "resource_attributes_trashed": _bool_or_none(item.get("resourceAttributes_trashed")),
+        "resource_custom_attributes_json": _json_or_none(item.get("resourceCustomAttributes_json")),
         "status": _int_or_none(item.get("status")),
         "app_name": _str_or_none(item.get("appName") or item.get("name")),
         "space_id_payload": _str_or_none(item.get("spaceId")),
@@ -816,6 +1071,8 @@ def _app_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
         "root_node_id": _str_or_none(item.get("rootNodeId")),
         "lineage_fetched": _bool_or_none(item.get("lineageFetched")),
         "lineage_success": _bool_or_none(item.get("lineageSuccess")),
+        "source": _str_or_none(item.get("source")),
+        "tenant": _str_or_none(item.get("tenant")),
         "fetched_at": _datetime_or_none(item.get("fetched_at")) or datetime.now(timezone.utc),
     }
 
@@ -891,6 +1148,212 @@ def _data_connection_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _reload_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "app_id": None,
+            "log": None,
+            "reload_type": None,
+            "status": None,
+            "user_id": None,
+            "weight": None,
+            "end_time": None,
+            "partial": None,
+            "tenant_id_payload": None,
+            "error_code": None,
+            "error_message": None,
+            "start_time": None,
+            "engine_time": None,
+            "creation_time": None,
+            "created_date": None,
+            "created_date_ts": None,
+            "modified_date": None,
+            "modified_by_user_name": None,
+            "owner_id": None,
+            "title": None,
+            "description": None,
+            "log_available": None,
+            "operational_id": None,
+            "operational_next_execution": None,
+            "operational_times_executed": None,
+            "operational_state": None,
+            "operational_hash": None,
+            "links_self_href": None,
+            "source": None,
+            "tenant": None,
+            "fetched_at": datetime.now(timezone.utc),
+        }
+    return {
+        "app_id": _str_or_none(item.get("appId")),
+        "log": _str_or_none(item.get("log")),
+        "reload_type": _str_or_none(item.get("type")),
+        "status": _str_or_none(item.get("status")),
+        "user_id": _str_or_none(item.get("userId")),
+        "weight": _int_or_none(item.get("weight")),
+        "end_time": _str_or_none(item.get("endTime")),
+        "partial": _bool_or_none(item.get("partial")),
+        "tenant_id_payload": _str_or_none(item.get("tenantId")),
+        "error_code": _str_or_none(item.get("errorCode")),
+        "error_message": _str_or_none(item.get("errorMessage")),
+        "start_time": _str_or_none(item.get("startTime")),
+        "engine_time": _str_or_none(item.get("engineTime")),
+        "creation_time": _str_or_none(item.get("creationTime")),
+        "created_date": _str_or_none(item.get("createdDate")),
+        "created_date_ts": _datetime_or_none(item.get("createdDate")),
+        "modified_date": _str_or_none(item.get("modifiedDate")),
+        "modified_by_user_name": _str_or_none(item.get("modifiedByUserName")),
+        "owner_id": _str_or_none(item.get("ownerId")),
+        "title": _str_or_none(item.get("title")),
+        "description": _str_or_none(item.get("description")),
+        "log_available": _bool_or_none(item.get("logAvailable")),
+        "operational_id": _str_or_none(item.get("operational_id")),
+        "operational_next_execution": _str_or_none(item.get("operational_nextExecution")),
+        "operational_times_executed": _int_or_none(item.get("operational_timesExecuted")),
+        "operational_state": _str_or_none(item.get("operational_state")),
+        "operational_hash": _str_or_none(item.get("operational_hash")),
+        "links_self_href": _str_or_none(item.get("links_self_href")),
+        "source": _str_or_none(item.get("source")),
+        "tenant": _str_or_none(item.get("tenant")),
+        "fetched_at": datetime.now(timezone.utc),
+    }
+
+
+def _audit_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "user_id": None,
+            "event_id": None,
+            "tenant_id_payload": None,
+            "event_time": None,
+            "event_type": None,
+            "links_self_href": None,
+            "extensions_actor_sub": None,
+            "time": None,
+            "time_ts": None,
+            "sub_type": None,
+            "space_id": None,
+            "space_type": None,
+            "category": None,
+            "audit_type": None,
+            "actor_id": None,
+            "actor_type": None,
+            "origin": None,
+            "context": None,
+            "ip_address": None,
+            "user_agent": None,
+            "properties_app_id": None,
+            "data_message": None,
+            "source": None,
+            "tenant": None,
+            "fetched_at": datetime.now(timezone.utc),
+        }
+    return {
+        "user_id": _str_or_none(item.get("userId")),
+        "event_id": _str_or_none(item.get("eventId")),
+        "tenant_id_payload": _str_or_none(item.get("tenantId")),
+        "event_time": _str_or_none(item.get("eventTime")),
+        "event_type": _str_or_none(item.get("eventType")),
+        "links_self_href": _str_or_none(item.get("links_self_href")),
+        "extensions_actor_sub": _str_or_none(item.get("extensions_actor_sub")),
+        "time": _str_or_none(item.get("time")),
+        "time_ts": _datetime_or_none(item.get("time")) or _datetime_or_none(item.get("eventTime")),
+        "sub_type": _str_or_none(item.get("subType")),
+        "space_id": _str_or_none(item.get("spaceId")),
+        "space_type": _str_or_none(item.get("spaceType")),
+        "category": _str_or_none(item.get("category")),
+        "audit_type": _str_or_none(item.get("type")),
+        "actor_id": _str_or_none(item.get("actorId")),
+        "actor_type": _str_or_none(item.get("actorType")),
+        "origin": _str_or_none(item.get("origin")),
+        "context": _str_or_none(item.get("context")),
+        "ip_address": _str_or_none(item.get("ipAddress")),
+        "user_agent": _str_or_none(item.get("userAgent")),
+        "properties_app_id": _str_or_none(item.get("properties_appId")),
+        "data_message": _str_or_none(item.get("data_message")),
+        "source": _str_or_none(item.get("source")),
+        "tenant": _str_or_none(item.get("tenant")),
+        "fetched_at": datetime.now(timezone.utc),
+    }
+
+
+def _license_consumption_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "app_id_payload": None,
+            "user_id": None,
+            "end_time": None,
+            "duration": None,
+            "session_id": None,
+            "allotment_id": None,
+            "minutes_used": None,
+            "capacity_used": None,
+            "license_usage": None,
+            "name": None,
+            "display_name": None,
+            "license_type": None,
+            "excess": None,
+            "allocated": None,
+            "available": None,
+            "used": None,
+            "quarantined": None,
+            "total": None,
+            "source": None,
+            "tenant": None,
+            "fetched_at": datetime.now(timezone.utc),
+        }
+    return {
+        "app_id_payload": _str_or_none(item.get("appId")),
+        "user_id": _str_or_none(item.get("userId")),
+        "end_time": _str_or_none(item.get("endTime")),
+        "duration": _str_or_none(item.get("duration")),
+        "session_id": _str_or_none(item.get("sessionId")),
+        "allotment_id": _str_or_none(item.get("allotmentId")),
+        "minutes_used": _int_or_none(item.get("minutesUsed")),
+        "capacity_used": _int_or_none(item.get("capacityUsed")),
+        "license_usage": _str_or_none(item.get("licenseUsage")),
+        "name": _str_or_none(item.get("name")),
+        "display_name": _str_or_none(item.get("displayName")),
+        "license_type": _str_or_none(item.get("type")),
+        "excess": _int_or_none(item.get("excess")),
+        "allocated": _int_or_none(item.get("allocated")),
+        "available": _int_or_none(item.get("available")),
+        "used": _int_or_none(item.get("used")),
+        "quarantined": _int_or_none(item.get("quarantined")),
+        "total": _int_or_none(item.get("total")),
+        "source": _str_or_none(item.get("source")),
+        "tenant": _str_or_none(item.get("tenant")),
+        "fetched_at": datetime.now(timezone.utc),
+    }
+
+
+def _license_status_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "license_type": None,
+            "trial": None,
+            "valid": None,
+            "origin": None,
+            "status": None,
+            "product": None,
+            "deactivated": None,
+            "source": None,
+            "tenant": None,
+            "fetched_at": datetime.now(timezone.utc),
+        }
+    return {
+        "license_type": _str_or_none(item.get("type")),
+        "trial": _bool_or_none(item.get("trial")),
+        "valid": _bool_or_none(item.get("valid")),
+        "origin": _str_or_none(item.get("origin")),
+        "status": _str_or_none(item.get("status")),
+        "product": _str_or_none(item.get("product")),
+        "deactivated": _bool_or_none(item.get("deactivated")),
+        "source": _str_or_none(item.get("source")),
+        "tenant": _str_or_none(item.get("tenant")),
+        "fetched_at": datetime.now(timezone.utc),
+    }
+
+
 async def _run_db_store_step(
     project_id: int,
     *,
@@ -899,6 +1362,10 @@ async def _run_db_store_step(
     apps_data: list[dict[str, Any]] | None = None,
     spaces_data: list[dict[str, Any]] | None = None,
     data_connections_data: list[dict[str, Any]] | None = None,
+    reloads_data: list[dict[str, Any]] | None = None,
+    audits_data: list[dict[str, Any]] | None = None,
+    licenses_consumption_data: list[dict[str, Any]] | None = None,
+    licenses_status_data: list[dict[str, Any]] | None = None,
     usage_payloads: list[dict[str, Any]] | None = None,
     app_edges_payloads: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -908,9 +1375,13 @@ async def _run_db_store_step(
         LineageEdge,
         LineageNode,
         QlikApp,
+        QlikAudit,
         QlikAppScript,
         QlikAppUsage,
         QlikDataConnection,
+        QlikLicenseConsumption,
+        QlikLicenseStatus,
+        QlikReload,
         QlikSpace,
     )
 
@@ -920,6 +1391,10 @@ async def _run_db_store_step(
         "edges": 0,
         "spaces": 0,
         "dataConnections": 0,
+        "reloads": 0,
+        "audits": 0,
+        "licenseConsumption": 0,
+        "licenseStatus": 0,
         "usage": 0,
         "scripts": 0,
         "skippedLineageFiles": 0,
@@ -972,16 +1447,17 @@ async def _run_db_store_step(
                     "spaceId": merged_data.get("spaceId"),
                 }
                 app_cols = _app_payload_columns(merged_data)
+                app_cols_db = _to_db_column_value_map(QlikApp, app_cols)
 
                 stmt = pg_insert(QlikApp).values(
                     project_id=project_id,
                     app_id=app_id,
                     space_id=merged_data.get("spaceId"),
-                    **app_cols,
+                    **app_cols_db,
                     data=merged_data,
                 ).on_conflict_do_update(
                     index_elements=["project_id", "app_id"],
-                    set_={**app_cols, "data": merged_data, "space_id": merged_data.get("spaceId")},
+                    set_={**app_cols_db, "data": merged_data, "space_id": merged_data.get("spaceId")},
                 )
                 await session.execute(stmt)
                 stored["apps"] += 1
@@ -1006,14 +1482,15 @@ async def _run_db_store_step(
                     if isinstance(space_name, str) and space_name.strip():
                         space_name_by_id[str(space_id)] = space_name.strip()
                     space_cols = _space_payload_columns(item)
+                    space_cols_db = _to_db_column_value_map(QlikSpace, space_cols)
                     stmt = pg_insert(QlikSpace).values(
                         project_id=project_id,
                         space_id=str(space_id),
-                        **space_cols,
+                        **space_cols_db,
                         data=item,
                     ).on_conflict_do_update(
                         index_elements=["project_id", "space_id"],
-                        set_={**space_cols, "data": item},
+                        set_={**space_cols_db, "data": item},
                     )
                     await session.execute(stmt)
                     stored["spaces"] += 1
@@ -1036,18 +1513,107 @@ async def _run_db_store_step(
                     if not connection_id:
                         continue
                     connection_cols = _data_connection_payload_columns(item)
+                    connection_cols_db = _to_db_column_value_map(QlikDataConnection, connection_cols)
                     stmt = pg_insert(QlikDataConnection).values(
                         project_id=project_id,
                         connection_id=str(connection_id),
                         space_id=connection_cols["space_payload"],
-                        **connection_cols,
+                        **connection_cols_db,
                         data=item,
                     ).on_conflict_do_update(
                         index_elements=["project_id", "connection_id"],
-                        set_={**connection_cols, "data": item, "space_id": connection_cols["space_payload"]},
+                        set_={**connection_cols_db, "data": item, "space_id": connection_cols["space_payload"]},
                     )
                     await session.execute(stmt)
                     stored["dataConnections"] += 1
+
+            # --- reloads ---
+            reloads = reloads_data if isinstance(reloads_data, list) else []
+            for item in reloads:
+                if not isinstance(item, dict):
+                    continue
+                reload_id = item.get("id")
+                if not reload_id:
+                    continue
+                reload_cols = _reload_payload_columns(item)
+                reload_cols_db = _to_db_column_value_map(QlikReload, reload_cols)
+                stmt = pg_insert(QlikReload).values(
+                    project_id=project_id,
+                    reload_id=str(reload_id),
+                    **reload_cols_db,
+                    data=item,
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "reload_id"],
+                    set_={**reload_cols_db, "data": item},
+                )
+                await session.execute(stmt)
+                stored["reloads"] += 1
+
+            # --- audits ---
+            audits = audits_data if isinstance(audits_data, list) else []
+            for item in audits:
+                if not isinstance(item, dict):
+                    continue
+                audit_id = item.get("id")
+                if not audit_id:
+                    continue
+                audit_cols = _audit_payload_columns(item)
+                audit_cols_db = _to_db_column_value_map(QlikAudit, audit_cols)
+                stmt = pg_insert(QlikAudit).values(
+                    project_id=project_id,
+                    audit_id=str(audit_id),
+                    **audit_cols_db,
+                    data=item,
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "audit_id"],
+                    set_={**audit_cols_db, "data": item},
+                )
+                await session.execute(stmt)
+                stored["audits"] += 1
+
+            # --- license consumption ---
+            licenses_consumption = licenses_consumption_data if isinstance(licenses_consumption_data, list) else []
+            for item in licenses_consumption:
+                if not isinstance(item, dict):
+                    continue
+                consumption_id = item.get("id")
+                if not consumption_id:
+                    continue
+                consumption_cols = _license_consumption_payload_columns(item)
+                consumption_cols_db = _to_db_column_value_map(QlikLicenseConsumption, consumption_cols)
+                stmt = pg_insert(QlikLicenseConsumption).values(
+                    project_id=project_id,
+                    consumption_id=str(consumption_id),
+                    **consumption_cols_db,
+                    data=item,
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "consumption_id"],
+                    set_={**consumption_cols_db, "data": item},
+                )
+                await session.execute(stmt)
+                stored["licenseConsumption"] += 1
+
+            # --- license status ---
+            licenses_status = licenses_status_data if isinstance(licenses_status_data, list) else []
+            for item in licenses_status:
+                if not isinstance(item, dict):
+                    continue
+                status_id = item.get("id")
+                if not status_id:
+                    continue
+                status_cols = _license_status_payload_columns(item)
+                status_cols_db = _to_db_column_value_map(QlikLicenseStatus, status_cols)
+                stmt = pg_insert(QlikLicenseStatus).values(
+                    project_id=project_id,
+                    status_id=str(status_id),
+                    **status_cols_db,
+                    data=item,
+                ).on_conflict_do_update(
+                    index_elements=["project_id", "status_id"],
+                    set_={**status_cols_db, "data": item},
+                )
+                await session.execute(stmt)
+                stored["licenseStatus"] += 1
 
             # --- usage ---
             if usage_payloads is not None:
@@ -1061,14 +1627,15 @@ async def _run_db_store_step(
                 if not app_id:
                     continue
                 usage_cols = _usage_payload_columns(usage_payload if isinstance(usage_payload, dict) else {})
+                usage_cols_db = _to_db_column_value_map(QlikAppUsage, usage_cols)
                 stmt = pg_insert(QlikAppUsage).values(
                     project_id=project_id,
                     app_id=str(app_id),
-                    **usage_cols,
+                    **usage_cols_db,
                     data=usage_payload,
                 ).on_conflict_do_update(
                     index_elements=["project_id", "app_id"],
-                    set_={**usage_cols, "data": usage_payload},
+                    set_={**usage_cols_db, "data": usage_payload},
                 )
                 await session.execute(stmt)
                 stored["usage"] += 1
@@ -1161,7 +1728,18 @@ async def _run_db_store_step(
 
             await session.commit()
     except Exception as exc:
-        print(f"Warning: DB store step failed: {exc}")
+        exc_msg = str(exc)
+        missing_table_markers = (
+            "qlik_reloads",
+            "qlik_audits",
+            "qlik_license_consumption",
+            "qlik_license_status",
+        )
+        if "does not exist" in exc_msg and any(marker in exc_msg for marker in missing_table_markers):
+            raise RuntimeError(
+                "DB schema for new fetch modules is missing. Run 'alembic upgrade head' in backend."
+            ) from exc
+        raise RuntimeError(f"DB store step failed: {exc}") from exc
     return stored
 
 
@@ -1367,7 +1945,7 @@ async def start_fetch_job(
             "jobId": job_id,
             "status": "queued",
             "projectId": payload.project_id,
-            "requestedSteps": payload.steps if payload.steps else list(FETCH_STEP_ORDER),
+            "requestedSteps": payload.steps if payload.steps else list(FETCH_STEP_ALL_ORDER),
             "plannedSteps": planned_steps,
             "completedSteps": [],
             "currentStep": None,

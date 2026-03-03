@@ -59,7 +59,9 @@
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 1rem;
+      overflow: hidden;
     }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .nav-links {
       display: flex;
       gap: 0.25rem;
@@ -205,7 +207,7 @@
     .jobs-list { margin-top: 0.5rem; }
     .job-row {
       display: grid;
-      grid-template-columns: auto 1fr auto auto;
+      grid-template-columns: auto 1fr auto auto auto;
       gap: 0.75rem;
       align-items: center;
       padding: 0.7rem 0;
@@ -216,6 +218,82 @@
     .job-id { color: var(--text-dim); font-family: monospace; font-size: 0.75rem; }
     .job-steps { color: var(--text-muted); font-size: 0.78rem; }
     .job-time { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
+    .job-log-btn {
+      padding: 0.25rem 0.6rem;
+      background: rgba(102,126,234,0.15);
+      border: 1px solid rgba(102,126,234,0.35);
+      border-radius: var(--radius-sm);
+      color: #c7d2fe;
+      font-size: 0.75rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .job-log-btn:hover { background: rgba(102,126,234,0.3); color: #e0e7ff; }
+    .job-log-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .job-log-btn.open {
+      background: rgba(245,158,11,0.18);
+      border-color: rgba(245,158,11,0.45);
+      color: #fde68a;
+    }
+
+    .job-log-panel {
+      margin-top: 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: rgba(5, 8, 20, 0.55);
+    }
+    .job-log-panel.hidden { display: none; }
+    .job-log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.55rem 0.7rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+    }
+    .job-log-title {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .job-log-actions { display: flex; align-items: center; gap: 0.45rem; }
+    .job-log-status {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .job-log-close {
+      padding: 0.2rem 0.45rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .job-log-close:hover { background: var(--surface-hover); color: var(--text); }
+    .job-log-body {
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 0.65rem 0.75rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.74rem;
+      line-height: 1.45;
+      background: rgba(0, 0, 0, 0.3);
+    }
+    .job-log-line {
+      color: #bbf7d0;
+      margin-bottom: 0.2rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .job-log-line:last-child { margin-bottom: 0; }
 
     /* ── FETCH BUTTON ── */
     .btn-primary {
@@ -295,13 +373,14 @@
 
 <nav>
   <a class="nav-brand" href="/">
-    <div class="brand-icon">⬡</div>
+    <div class="brand-icon"><img src="/assets/logo.png" alt="Lineage Explorer Logo" /></div>
     Lineage Explorer
   </a>
   <div class="nav-links">
     <a class="nav-link active" href="/">Dashboard</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
+    <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
   </div>
   <div class="nav-spacer"></div>
   <div class="nav-user">
@@ -383,6 +462,16 @@
           No jobs yet
         </div>
       </div>
+      <div id="jobLogPanel" class="job-log-panel hidden">
+        <div class="job-log-header">
+          <div id="jobLogTitle" class="job-log-title">Job log</div>
+          <div class="job-log-actions">
+            <span id="jobLogStatus" class="job-log-status">IDLE</span>
+            <button id="jobLogCloseBtn" class="job-log-close" type="button">Close</button>
+          </div>
+        </div>
+        <div id="jobLogBody" class="job-log-body"></div>
+      </div>
     </div>
 
   </div>
@@ -428,6 +517,150 @@
     return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
   }
 
+  function escHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  var dashboardJobs = [];
+  var logOpenJobId = null;
+  var logPolling = false;
+  var logLastCount = 0;
+  var logPollTimer = null;
+
+  function setLogPanelVisibility(visible) {
+    document.getElementById('jobLogPanel').classList.toggle('hidden', !visible);
+  }
+
+  function setLogStatus(status) {
+    var text = status ? String(status).toUpperCase() : 'UNKNOWN';
+    document.getElementById('jobLogStatus').textContent = text;
+  }
+
+  function clearLogLines() {
+    document.getElementById('jobLogBody').innerHTML = '';
+  }
+
+  function appendLogLine(text) {
+    var body = document.getElementById('jobLogBody');
+    var line = document.createElement('div');
+    line.className = 'job-log-line';
+    line.textContent = text;
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function stopLogPolling() {
+    logPolling = false;
+    if (logPollTimer) {
+      clearTimeout(logPollTimer);
+      logPollTimer = null;
+    }
+  }
+
+  function renderJobs(jobs) {
+    var el = document.getElementById('jobsList');
+    if (!jobs.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>No jobs yet</div>';
+      return;
+    }
+    el.innerHTML = jobs.slice(0, 10).map(function(j) {
+      var jobId = j.jobId || '';
+      var steps = (j.completedSteps || []).length + '/' + (j.plannedSteps || []).length + ' steps';
+      var panelHidden = document.getElementById('jobLogPanel').classList.contains('hidden');
+      var isOpen = !panelHidden && logOpenJobId === jobId;
+      var btnLabel = jobId ? (isOpen ? 'Close log' : 'Open log') : 'No log';
+      return '<div class="job-row">'
+        + statusBadge(j.status)
+        + '<span class="job-steps">' + escHtml(steps) + '</span>'
+        + '<span class="job-time">' + escHtml(fmtDate(j.createdAt)) + '</span>'
+        + '<span class="job-id">' + escHtml(jobId.slice(0,8)) + '</span>'
+        + '<button type="button" class="job-log-btn' + (isOpen ? ' open' : '') + '" data-log-job="' + escHtml(jobId) + '"' + (jobId ? '' : ' disabled') + '>' + btnLabel + '</button>'
+        + '</div>';
+    }).join('');
+    el.querySelectorAll('[data-log-job]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        toggleJobLog(this.getAttribute('data-log-job'));
+      });
+    });
+  }
+
+  async function fetchAndRenderLog(jobId, replaceAll) {
+    var res = await apiFetch('/api/fetch/jobs/' + jobId + '/logs');
+    if (!res.ok) throw new Error('Failed to load logs');
+    var data = await res.json();
+    var logs = data.logs || [];
+    if (replaceAll) {
+      clearLogLines();
+      for (var i = 0; i < logs.length; i++) appendLogLine(logs[i]);
+      logLastCount = logs.length;
+    } else {
+      for (var j = logLastCount; j < logs.length; j++) appendLogLine(logs[j]);
+      logLastCount = logs.length;
+    }
+    setLogStatus(data.status);
+    document.getElementById('jobLogTitle').textContent = 'Job log: ' + jobId.slice(0, 12);
+    return data.status;
+  }
+
+  async function pollJobLog(jobId) {
+    if (!logPolling || logOpenJobId !== jobId) return;
+    try {
+      var status = await fetchAndRenderLog(jobId, false);
+      if (status === 'running' || status === 'queued') {
+        logPollTimer = setTimeout(function() { pollJobLog(jobId); }, 2000);
+      } else {
+        stopLogPolling();
+      }
+    } catch (e) {
+      stopLogPolling();
+    }
+  }
+
+  async function openJobLog(jobId) {
+    stopLogPolling();
+    logOpenJobId = jobId;
+    logLastCount = 0;
+    setLogPanelVisibility(true);
+    setLogStatus('queued');
+    clearLogLines();
+    appendLogLine('Loading log...');
+    renderJobs(dashboardJobs);
+    try {
+      var status = await fetchAndRenderLog(jobId, true);
+      renderJobs(dashboardJobs);
+      if (status === 'running' || status === 'queued') {
+        logPolling = true;
+        pollJobLog(jobId);
+      }
+    } catch (e) {
+      clearLogLines();
+      appendLogLine('Failed to load log for job ' + jobId);
+      setLogStatus('failed');
+      renderJobs(dashboardJobs);
+    }
+  }
+
+  function closeJobLog() {
+    stopLogPolling();
+    setLogPanelVisibility(false);
+    renderJobs(dashboardJobs);
+  }
+
+  function toggleJobLog(jobId) {
+    if (!jobId) return;
+    var isVisible = !document.getElementById('jobLogPanel').classList.contains('hidden');
+    if (isVisible && logOpenJobId === jobId) {
+      closeJobLog();
+      return;
+    }
+    openJobLog(jobId);
+  }
+
   // ── Load dashboard stats (DB source of truth for graph + app counts) ──
   async function loadHealth() {
     try {
@@ -466,21 +699,21 @@
     try {
       var res = await apiFetch('/api/fetch/jobs');
       var d = await res.json();
-      var jobs = d.jobs || [];
-      var el = document.getElementById('jobsList');
-      if (!jobs.length) {
-        el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>No jobs yet</div>';
-        return;
+      dashboardJobs = d.jobs || [];
+      renderJobs(dashboardJobs);
+      if (logOpenJobId) {
+        var active = dashboardJobs.find(function(j) { return j.jobId === logOpenJobId; });
+        var panelVisible = !document.getElementById('jobLogPanel').classList.contains('hidden');
+        if (active && panelVisible && (active.status === 'running' || active.status === 'queued')) {
+          if (!logPolling) {
+            logPolling = true;
+            pollJobLog(logOpenJobId);
+          }
+        } else if (active && active.status !== 'running' && active.status !== 'queued') {
+          setLogStatus(active.status);
+          stopLogPolling();
+        }
       }
-      el.innerHTML = jobs.slice(0, 6).map(function(j) {
-        var steps = (j.completedSteps || []).length + '/' + (j.plannedSteps || []).length + ' steps';
-        return '<div class="job-row">'
-          + statusBadge(j.status)
-          + '<span class="job-steps">' + steps + '</span>'
-          + '<span class="job-time">' + fmtDate(j.createdAt) + '</span>'
-          + '<span class="job-id">' + (j.jobId || '').slice(0,8) + '</span>'
-          + '</div>';
-      }).join('');
     } catch(e) {}
   }
 
@@ -495,6 +728,7 @@
     loadJobs(); loadFetchStatus();
     showToast('Refreshed', 1500);
   });
+  document.getElementById('jobLogCloseBtn').addEventListener('click', closeJobLog);
 
   // ── User email & admin FAB from token ──
   try {

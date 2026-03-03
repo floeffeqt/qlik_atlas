@@ -10,6 +10,7 @@ Containerized Qlik lineage application with FastAPI backend, PostgreSQL, nginx f
 - Runtime reads for dashboard/graph/inventory/spaces/data-connections/usage/scripts are DB-backed
 - Fetch pipeline is DB-first (`Qlik API -> in-memory transform -> PostgreSQL`)
 - Local fetch artifacts are no longer the application source of truth (optional debug mode only)
+- Theme Generator MVP is available at `/theme-builder.html` (ZIP download + upload stub)
 
 ## Quick Start (Docker)
 
@@ -150,6 +151,11 @@ This applies to core runtime tables including:
 - `GET /api/app/{app_id}/usage`
 - `GET /api/app/{app_id}/script`
 
+### Theme generator
+
+- `POST /api/themes/build` (authenticated production ZIP download with `theme.json` + `.qext`)
+- `POST /api/themes/upload` (authenticated stub, returns `501`)
+
 ### Fetch jobs
 
 - `GET /api/fetch/status`
@@ -157,6 +163,12 @@ This applies to core runtime tables including:
 - `GET /api/fetch/jobs/{job_id}`
 - `GET /api/fetch/jobs/{job_id}/logs`
 - `POST /api/fetch/jobs`
+
+## Branding
+
+- Default logo asset: `frontend/assets/logo.png`
+- Runtime URL path in frontend: `/assets/logo.png`
+- CI can replace this file before image build to apply tenant/project branding.
 
 ## Development
 

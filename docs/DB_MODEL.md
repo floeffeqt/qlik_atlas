@@ -8,7 +8,7 @@ tags:
   - schema
   - erd
   - postgres
-updated: 2026-02-27
+updated: 2026-03-03
 owners: []
 source_of_truth: no
 related_specs:
@@ -49,6 +49,10 @@ related_docs:
 | `qlik_data_connections` | `(project_id, connection_id)` | `project_id -> projects.id` | Qlik Data Connections (JSONB + materialisierte Spalten) |
 | `qlik_app_usage` | `(project_id, app_id)` | `project_id -> projects.id` | App-Usage-Aggregate (JSONB + materialisierte Spalten) |
 | `qlik_app_scripts` | `(project_id, app_id)` | `project_id -> projects.id` | App-Skripte |
+| `qlik_reloads` | `(project_id, reload_id)` | `project_id -> projects.id` | Qlik Reload-Historie (JSONB + materialisierte Spalten) |
+| `qlik_audits` | `(project_id, audit_id)` | `project_id -> projects.id` | Qlik Audit-Events (JSONB + materialisierte Spalten) |
+| `qlik_license_consumption` | `(project_id, consumption_id)` | `project_id -> projects.id` | Qlik License-Consumption (JSONB + materialisierte Spalten) |
+| `qlik_license_status` | `(project_id, status_id)` | `project_id -> projects.id` | Qlik License-Status (JSONB + materialisierte Spalten) |
 | `lineage_nodes` | `(project_id, node_id)` | `project_id -> projects.id` | Graph-Nodes |
 | `lineage_edges` | `(project_id, edge_id)` | `project_id -> projects.id` | Graph-Edges |
 
@@ -64,6 +68,12 @@ related_docs:
 
 - Payload-Spalten fuer UI/Filter/Runtime-Reads:
 - `appName`, `spaceId`, `status`, `fileName`, `nodesCount`, `edgesCount`, `rootNodeId`, `lineageFetched`, `lineageSuccess`
+- Zusaetzliche Item-API-Spalten (aus `/api/v1/items`):
+- `id`, `ownerId`, `description`, `resourceType`, `resourceId`, `thumbnail`
+- `resourceAttributes_id`, `resourceAttributes_name`, `resourceAttributes_description`
+- `resourceAttributes_createdDate`, `resourceAttributes_modifiedDate`, `resourceAttributes_modifiedByUserName`
+- `resourceAttributes_publishTime`, `resourceAttributes_lastReloadTime`, `resourceAttributes_trashed`
+- `resourceCustomAttributes_json`, `source`, `tenant`
 - `data` bleibt weiterhin erhalten
 
 ### `qlik_spaces`
@@ -86,6 +96,36 @@ related_docs:
 - `id`, `qID`, `qri`, `tags`, `user`, `links`, `qName`, `qType`, `space`, `qLogOn`, `tenant`, `created`, `updated`, `version`, `privileges`, `datasourceID`, `qArchitecture`, `qCredentialsID`, `qEngineObjectID`, `qConnectStatement`, `qSeparateCredentials`
 - `data` bleibt weiterhin erhalten
 
+### `qlik_reloads`
+
+- Payload-Spalten fuer `/api/v1/reloads`:
+- `app_id`, `log`, `type`, `status`, `userId`, `weight`, `endTime`, `partial`, `tenantId`, `errorCode`, `errorMessage`, `startTime`, `engineTime`, `creationTime`
+- `createdDate`, `created_date_ts`, `modifiedDate`, `modifiedByUserName`, `ownerId`, `title`, `description`
+- `logAvailable`
+- `operational_id`, `operational_nextExecution`, `operational_timesExecuted`, `operational_state`, `operational_hash`
+- `links_self_href`, `source`, `tenant`
+- `data` bleibt weiterhin erhalten
+
+### `qlik_audits`
+
+- Payload-Spalten fuer `/api/v1/audits`:
+- `userId`, `eventId`, `tenantId`, `eventTime`, `eventType`, `links_self_href`, `extensions_actor_sub`
+- `time`, `time_ts`, `subType`, `spaceId`, `spaceType`, `category`, `type`, `actorId`, `actorType`
+- `origin`, `context`, `ipAddress`, `userAgent`, `properties_appId`, `data_message`, `source`, `tenant`
+- `data` bleibt weiterhin erhalten
+
+### `qlik_license_consumption`
+
+- Payload-Spalten fuer `/api/v1/licenses/consumption`:
+- `id`, `appId`, `userId`, `endTime`, `duration`, `sessionId`, `allotmentId`, `minutesUsed`, `capacityUsed`, `licenseUsage`, `source`, `tenant`
+- `data` bleibt weiterhin erhalten
+
+### `qlik_license_status`
+
+- Payload-Spalten fuer `/api/v1/licenses/status`:
+- `type`, `trial`, `valid`, `origin`, `status`, `product`, `deactivated`, `source`, `tenant`
+- `data` bleibt weiterhin erhalten
+
 ## Physical FK Relationships (Enforced by DB)
 
 - `projects.customer_id -> customers.id`
@@ -96,6 +136,10 @@ related_docs:
 - `qlik_data_connections.project_id -> projects.id`
 - `qlik_app_usage.project_id -> projects.id`
 - `qlik_app_scripts.project_id -> projects.id`
+- `qlik_reloads.project_id -> projects.id`
+- `qlik_audits.project_id -> projects.id`
+- `qlik_license_consumption.project_id -> projects.id`
+- `qlik_license_status.project_id -> projects.id`
 - `lineage_nodes.project_id -> projects.id`
 - `lineage_edges.project_id -> projects.id`
 
@@ -129,6 +173,10 @@ erDiagram
     PROJECTS ||--o{ QLIK_DATA_CONNECTIONS : contains
     PROJECTS ||--o{ QLIK_APP_USAGE : contains
     PROJECTS ||--o{ QLIK_APP_SCRIPTS : contains
+    PROJECTS ||--o{ QLIK_RELOADS : contains
+    PROJECTS ||--o{ QLIK_AUDITS : contains
+    PROJECTS ||--o{ QLIK_LICENSE_CONSUMPTION : contains
+    PROJECTS ||--o{ QLIK_LICENSE_STATUS : contains
     PROJECTS ||--o{ LINEAGE_NODES : contains
     PROJECTS ||--o{ LINEAGE_EDGES : contains
 

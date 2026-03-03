@@ -7,7 +7,7 @@ tags:
   - release-notes
   - index
   - changes
-updated: 2026-02-25
+updated: 2026-03-03
 owners: []
 source_of_truth: no
 related_specs: []
@@ -37,6 +37,10 @@ related_docs:
   - `2026-02-25_lineage-ui-search-layout-stability.md`
   - `2026-02-25_lineage-appname-space-filter-and-qlik-spaces-columns.md`
   - `2026-02-25_remove-legacy-qlik-credentials-table-plan-references.md`
+  - `2026-03-02_theme-generator-mvp.md`
+  - `2026-03-02_fetch-job-upsert-column-mapping-fix.md`
+  - `2026-03-03_license-consumption-schema-and-license-status-fetch.md`
+  - `2026-03-03_parallel-fetch-and-log-reopen.md`
 
 ## Open Questions / Risks
 
