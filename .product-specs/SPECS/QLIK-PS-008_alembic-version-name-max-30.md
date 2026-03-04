@@ -1,7 +1,7 @@
----
+﻿---
 id: QLIK-PS-008
 title: Alembic version names must be max 30 characters
-status: draft
+status: active
 type: compliance
 priority: p1
 product_area: backend-data-platform
@@ -78,4 +78,5 @@ Without a strict naming limit, new Alembic versions may use long identifiers tha
 
 - Valid file name: `0016_license_schema_status.py` (29 chars)
 - Invalid file name: `0016_license_consumption_schema_and_status.py` (> 30 chars)
+
 

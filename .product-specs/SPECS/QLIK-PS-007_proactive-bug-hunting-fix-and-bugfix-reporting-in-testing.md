@@ -1,7 +1,7 @@
----
+﻿---
 id: QLIK-PS-007
 title: Proactive bug hunting during testing with mandatory fix-or-report and bugfix documentation
-status: draft
+status: active
 type: compliance
 priority: p0
 product_area: testing-and-quality
@@ -233,3 +233,4 @@ If testing only checks requested functionality, latent defects in adjacent code 
 
 - Should project policy define a strict default timebox for bug-hunt checks per task size?
 - Should project policy define strict SLAs by severity for deferred `medium`/`low` bugs?
+

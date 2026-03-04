@@ -53,20 +53,48 @@ def _normalize_group_token(value: Any) -> str | None:
         "sqlservernativeclient": "sqlserver",
         "postgres": "postgresql",
         "postgresqlodbc": "postgresql",
+        "dgmssql": "sqlserver",
+        "dgsqlserver": "sqlserver",
+        "dgpostgres": "postgresql",
+        "dgpostgresql": "postgresql",
+        "dgmysql": "mysql",
+        "dgmariadb": "mariadb",
     }
     return alias_map.get(token, token)
 
 
-def _extract_group_from_qri_like_text(value: Any) -> str | None:
+_DB_SCHEME_ALLOWLIST = {
+    "mysql",
+    "mariadb",
+    "postgres",
+    "postgresql",
+    "sqlserver",
+    "mssql",
+    "oracle",
+    "snowflake",
+    "redshift",
+    "bigquery",
+    "db2",
+    "sqlite",
+    "teradata",
+    "hana",
+    "sap",
+}
+
+
+def _extract_group_from_qri_like_text(value: Any, *, allow_non_qri_db_scheme: bool = False) -> str | None:
     if value is None:
         return None
     raw = str(value)
     m = re.search(r"qri:db:([^:/]+)://", raw, re.IGNORECASE)
     if m:
         return _normalize_group_token(m.group(1))
-    m = re.search(r"([a-z][a-z0-9+._-]{1,30})://", raw, re.IGNORECASE)
-    if m:
-        return _normalize_group_token(m.group(1))
+    if allow_non_qri_db_scheme:
+        m = re.search(r"([a-z][a-z0-9+._-]{1,30})://", raw, re.IGNORECASE)
+        if m:
+            token = _normalize_group_token(m.group(1))
+            if token in _DB_SCHEME_ALLOWLIST:
+                return token
     return None
 
 
@@ -115,20 +143,54 @@ def _connection_group_candidates(payload: dict[str, Any], row: QlikDataConnectio
             raw_tokens.add(token)
 
     for key in (
+        "qri",
+        "qID",
+        "id",
+    ):
+        token = _extract_group_from_qri_like_text(payload.get(key))
+        if token:
+            raw_tokens.add(token)
+
+    token = _extract_group_from_qri_like_text(getattr(row, "qri", None))
+    if token:
+        raw_tokens.add(token)
+
+    for key in (
         "connectionString",
         "connectionstring",
         "qConnectionString",
         "qConnectStatement",
         "connection",
     ):
-        token = _extract_group_from_qri_like_text(payload.get(key))
+        value = payload.get(key)
+        token = _extract_group_from_qri_like_text(value, allow_non_qri_db_scheme=True)
         if token:
             raw_tokens.add(token)
+        text = str(value or "")
+        m = re.search(r"(?i)\bdriver\s*=\s*([^;\"\n]+)", text)
+        if m:
+            driver_token = _normalize_group_token(m.group(1))
+            if driver_token:
+                raw_tokens.add(driver_token)
+        m = re.search(r"(?i)\bsourceType\s*=\s*([^;\"\n]+)", text)
+        if m:
+            source_type_token = _normalize_group_token(m.group(1))
+            if source_type_token:
+                raw_tokens.add(source_type_token)
 
-    if getattr(row, "connection_id", None):
-        token = _extract_group_from_qri_like_text(str(row.connection_id))
-        if token:
-            raw_tokens.add(token)
+    row_connect_statement = getattr(row, "q_connect_statement", None)
+    if row_connect_statement:
+        text = str(row_connect_statement)
+        m = re.search(r"(?i)\bdriver\s*=\s*([^;\"\n]+)", text)
+        if m:
+            driver_token = _normalize_group_token(m.group(1))
+            if driver_token:
+                raw_tokens.add(driver_token)
+        m = re.search(r"(?i)\bsourceType\s*=\s*([^;\"\n]+)", text)
+        if m:
+            source_type_token = _normalize_group_token(m.group(1))
+            if source_type_token:
+                raw_tokens.add(source_type_token)
 
     candidates = [f"db:{t}" for t in sorted(raw_tokens) if t]
     return candidates
@@ -292,7 +354,9 @@ def _build_snapshot_from_rows(
     out_adj: dict[str, set[str]] = {}
     in_adj: dict[str, set[str]] = {}
     node_projects: dict[str, set[int]] = {}
-    source_nodes_by_project_and_group: dict[tuple[int, str], set[str]] = {}
+    source_db_nodes_by_project_and_group: dict[tuple[int, str], set[str]] = {}
+    source_table_nodes_by_project_and_group: dict[tuple[int, str], set[str]] = {}
+    source_nodes_by_project_and_qri_prefix: dict[tuple[int, str], set[str]] = {}
 
     app_info_by_project_and_app = app_info_by_project_and_app or {}
     connection_matches_by_project_and_connection = connection_matches_by_project_and_connection or {}
@@ -332,7 +396,18 @@ def _build_snapshot_from_rows(
         if _is_source_db_node(record):
             db_group = _node_db_group(record)
             if db_group:
-                source_nodes_by_project_and_group.setdefault((int(row.project_id), db_group), set()).add(record["id"])
+                key = (int(row.project_id), db_group)
+                node_type = str(record.get("type") or "").lower()
+                if node_type == "table":
+                    source_table_nodes_by_project_and_group.setdefault(key, set()).add(record["id"])
+                else:
+                    # Prefer explicit db nodes for connection matching if available.
+                    source_db_nodes_by_project_and_group.setdefault(key, set()).add(record["id"])
+            node_qri_prefix = _qri_prefix_before_hash(record.get("id"))
+            if node_qri_prefix and node_qri_prefix.startswith("qri:db:"):
+                source_nodes_by_project_and_qri_prefix.setdefault(
+                    (int(row.project_id), node_qri_prefix), set()
+                ).add(record["id"])
 
     for row in edge_rows:
         payload = _safe_dict(row.data)
@@ -398,6 +473,50 @@ def _build_snapshot_from_rows(
             if isinstance(value, str) and value.strip():
                 meta.setdefault(target_key, value.strip())
 
+        db_qri_target_ids: set[str] = set()
+        if connection_qri_prefix and connection_qri_prefix.startswith("qri:db:"):
+            db_qri_target_ids = set(
+                source_nodes_by_project_and_qri_prefix.get((project_key, connection_qri_prefix), set())
+            )
+            if db_qri_target_ids:
+                meta["qriDbMatchMode"] = "prefix-before-hash"
+                meta["qriDbMatchNodeIds"] = sorted(db_qri_target_ids)
+                meta["qriDbMatchCount"] = len(db_qri_target_ids)
+
+        group_target_ids: set[str] = set()
+        ambiguous_groups: list[dict[str, Any]] = []
+        if connection_groups and (qri_match_root_node_ids or db_qri_target_ids):
+            if db_qri_target_ids:
+                meta["groupMatchStatus"] = "skipped_due_to_qri_db_match"
+            else:
+                meta["groupMatchStatus"] = "skipped_due_to_qri_match"
+        elif connection_groups:
+            for db_group in connection_groups:
+                key = (project_key, db_group)
+                db_candidates = sorted(source_db_nodes_by_project_and_group.get(key, set()))
+                if db_candidates:
+                    if len(db_candidates) == 1:
+                        group_target_ids.add(db_candidates[0])
+                    else:
+                        ambiguous_groups.append({"group": db_group, "candidateCount": len(db_candidates), "nodeType": "db"})
+                    continue
+
+                table_candidates = sorted(source_table_nodes_by_project_and_group.get(key, set()))
+                if len(table_candidates) == 1:
+                    group_target_ids.add(table_candidates[0])
+                elif len(table_candidates) > 1:
+                    ambiguous_groups.append(
+                        {"group": db_group, "candidateCount": len(table_candidates), "nodeType": "table"}
+                    )
+
+            if ambiguous_groups:
+                meta["groupMatchStatus"] = "ambiguous"
+                meta["groupMatchAmbiguous"] = ambiguous_groups
+            elif group_target_ids:
+                meta["groupMatchStatus"] = "unique"
+            else:
+                meta["groupMatchStatus"] = "none"
+
         nodes[connection_node_id] = {
             "id": connection_node_id,
             "label": connection_label,
@@ -409,10 +528,31 @@ def _build_snapshot_from_rows(
         }
         node_projects.setdefault(connection_node_id, set()).add(project_key)
 
-        target_ids: set[str] = set()
-        for db_group in connection_groups:
-            target_ids.update(source_nodes_by_project_and_group.get((project_key, db_group), set()))
-        for target_node_id in sorted(target_ids):
+        for target_node_id in sorted(db_qri_target_ids):
+            if target_node_id == connection_node_id:
+                continue
+            if project_key not in node_projects.get(target_node_id, set()):
+                continue
+            raw = f"{connection_node_id}|{target_node_id}|DEPENDS|{project_key}|qri-db-prefix-before-hash"
+            edge_id = f"conn_qri_db_{hashlib.sha1(raw.encode('utf-8')).hexdigest()}"
+            if edge_id in edges:
+                continue
+            edges[edge_id] = {
+                "id": edge_id,
+                "source": connection_node_id,
+                "target": target_node_id,
+                "relation": "DEPENDS",
+                "context": {
+                    "projectId": project_key,
+                    "connectionId": connection_id,
+                    "matchMode": "qri-db-prefix-before-hash",
+                    "inferred": True,
+                },
+            }
+            out_adj.setdefault(connection_node_id, set()).add(edge_id)
+            in_adj.setdefault(target_node_id, set()).add(edge_id)
+
+        for target_node_id in sorted(group_target_ids):
             if target_node_id == connection_node_id:
                 continue
             if project_key not in node_projects.get(target_node_id, set()):
@@ -679,6 +819,8 @@ async def load_data_connections_payload(session: AsyncSession) -> dict[str, Any]
     data: list[dict[str, Any]] = []
     for row in rows:
         payload = _safe_dict(row.data)
+        payload.pop("qConnectStatement", None)
+        payload.pop("q_connect_statement", None)
         if "id" not in payload:
             payload["id"] = str(row.connection_id)
         if "qID" not in payload and getattr(row, "q_id", None):
@@ -717,8 +859,6 @@ async def load_data_connections_payload(session: AsyncSession) -> dict[str, Any]
             payload["qCredentialsID"] = str(row.q_credentials_id)
         if "qEngineObjectID" not in payload and getattr(row, "q_engine_object_id", None):
             payload["qEngineObjectID"] = str(row.q_engine_object_id)
-        if "qConnectStatement" not in payload and getattr(row, "q_connect_statement", None):
-            payload["qConnectStatement"] = str(row.q_connect_statement)
         if "qSeparateCredentials" not in payload and getattr(row, "q_separate_credentials", None) is not None:
             payload["qSeparateCredentials"] = bool(row.q_separate_credentials)
         data.append(payload)

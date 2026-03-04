@@ -1,7 +1,7 @@
----
+﻿---
 id: QLIK-PS-005
 title: Production runtime must not persist or depend on local productive artifact files
-status: draft
+status: active
 type: security
 priority: p0
 product_area: runtime-data-handling
@@ -185,3 +185,4 @@ If the productive runtime writes or depends on local artifact files containing p
 - Which remaining artifact-backed endpoints must be kept in production, if any?
 - Should production artifact blocking be implemented as hard runtime guards (`APP_ENV=prod`) or deployment-time configuration only?
 - Is a separate object storage solution needed for non-authoritative temporary operational files?
+

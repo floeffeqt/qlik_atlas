@@ -8,11 +8,15 @@ sys.path.insert(0, str(ROOT / "backend"))
 from main import (  # type: ignore
     FETCH_STEP_ALL_ORDER,
     _app_payload_columns,
+    _app_data_metadata_snapshot_columns,
     _audit_payload_columns,
+    _dedupe_app_data_metadata_field_rows,
+    _dedupe_rows_by_key,
     _license_consumption_payload_columns,
     _license_status_payload_columns,
     _normalize_steps,
     _reload_payload_columns,
+    _sanitize_data_connection_payload_for_storage,
     _select_apps_for_app_edges,
 )
 
@@ -173,6 +177,101 @@ def test_license_status_payload_columns_maps_example_response_fields():
     assert cols["product"] == "Qlik Sense Enterprise SaaS"
 
 
+def test_sanitize_data_connection_payload_for_storage_removes_q_connect_statement_only():
+    payload = {
+        "id": "conn-1",
+        "qName": "SQL MAIN",
+        "qConnectStatement": 'CUSTOM CONNECT TO "provider=QvOdbcConnectorPackage.exe;driver=mysql;host=db";',
+    }
+    sanitized = _sanitize_data_connection_payload_for_storage(payload)
+    assert "qConnectStatement" not in sanitized
+    assert sanitized["id"] == "conn-1"
+    assert sanitized["qName"] == "SQL MAIN"
+
+
+def test_sanitize_data_connection_payload_for_storage_keeps_original_input_unchanged():
+    payload = {
+        "id": "conn-1",
+        "qConnectStatement": "sensitive",
+    }
+    sanitized = _sanitize_data_connection_payload_for_storage(payload)
+    assert "qConnectStatement" in payload
+    assert "qConnectStatement" not in sanitized
+
+
+def test_app_data_metadata_snapshot_columns_maps_example_response_fields():
+    payload = {
+        "app_id": "app-1",
+        "fetched_at": "2026-03-03T10:00:00Z",
+        "static_byte_size": 1234,
+        "has_section_access": True,
+        "is_direct_query_mode": False,
+        "reload_meta_cpu_time_spent_ms": 500,
+        "reload_meta_peak_memory_bytes": 2000,
+        "reload_meta_full_reload_peak_memory_bytes": 2100,
+        "reload_meta_partial_reload_peak_memory_bytes": 1300,
+        "reload_meta_hardware_total_memory": 64000000000,
+        "reload_meta_hardware_logical_cores": 8,
+        "schema_hash": "abc123",
+        "source": "/api/v1/apps/app-1/data/metadata",
+        "tenant": "tenant.example.com",
+    }
+    cols = _app_data_metadata_snapshot_columns(payload)
+    assert cols["app_id"] == "app-1"
+    assert cols["static_byte_size"] == 1234
+    assert cols["has_section_access"] is True
+    assert cols["reload_meta_peak_memory_bytes"] == 2000
+    assert cols["reload_meta_hardware_logical_cores"] == 8
+    assert cols["source"] == "/api/v1/apps/app-1/data/metadata"
+
+
+def test_dedupe_app_data_metadata_field_rows_merges_duplicate_field_hash():
+    rows = [
+        {
+            "project_id": 1,
+            "snapshot_id": 10,
+            "field_hash": "h1",
+            "name": "FieldA",
+            "comment": None,
+            "tags": ["$numeric"],
+            "src_tables": ["T1"],
+            "extra_json": {"a": 1},
+        },
+        {
+            "project_id": 1,
+            "snapshot_id": 10,
+            "field_hash": "h1",
+            "name": None,
+            "comment": "from duplicate",
+            "tags": ["$date"],
+            "src_tables": ["T2"],
+            "extra_json": {"b": 2},
+        },
+    ]
+    deduped = _dedupe_app_data_metadata_field_rows(rows)
+    assert len(deduped) == 1
+    merged = deduped[0]
+    assert merged["field_hash"] == "h1"
+    assert merged["name"] == "FieldA"
+    assert merged["comment"] == "from duplicate"
+    assert merged["tags"] == ["$numeric", "$date"]
+    assert merged["src_tables"] == ["T1", "T2"]
+    assert merged["extra_json"] == {"a": 1, "b": 2}
+
+
+def test_dedupe_rows_by_key_keeps_latest_entry_per_unique_key():
+    rows = [
+        {"snapshot_id": 1, "name": "A", "value": 1},
+        {"snapshot_id": 1, "name": "A", "value": 2},
+        {"snapshot_id": 1, "name": "B", "value": 3},
+    ]
+    deduped = _dedupe_rows_by_key(rows, ("snapshot_id", "name"))
+    deduped_by_name = {r["name"]: r for r in deduped}
+    assert len(deduped) == 2
+    assert deduped_by_name["A"]["value"] == 2
+    assert deduped_by_name["B"]["value"] == 3
+
+
 def test_normalize_steps_defaults_to_all_steps():
     assert _normalize_steps(None) == list(FETCH_STEP_ALL_ORDER)
 
@@ -180,6 +279,11 @@ def test_normalize_steps_defaults_to_all_steps():
 def test_normalize_steps_adds_dependencies_for_app_edges():
     normalized = _normalize_steps(["app-edges"])
     assert normalized == ["apps", "lineage", "app-edges"]
+
+
+def test_normalize_steps_adds_dependency_for_app_data_metadata():
+    normalized = _normalize_steps(["app-data-metadata"])
+    assert normalized == ["apps", "app-data-metadata"]
 
 
 def test_select_apps_for_app_edges_prefers_runtime_lineage_success():

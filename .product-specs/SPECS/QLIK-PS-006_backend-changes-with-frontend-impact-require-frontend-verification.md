@@ -1,7 +1,7 @@
----
+﻿---
 id: QLIK-PS-006
 title: Backend changes with frontend impact require frontend verification and impact reporting
-status: draft
+status: active
 type: compliance
 priority: p0
 product_area: testing-and-quality
@@ -253,3 +253,4 @@ Backend changes can unintentionally break or alter frontend behavior (API contra
 - Which frontend pages/flows should be mandatory default verification targets for common backend change areas?
 - Should a standardized `frontend-impact` subsection be added to the central `TESTING_SUMMARY` template or only required by project specs?
 - Which backend directories/modules should be mapped to default frontend verification flows in project docs/specs?
+

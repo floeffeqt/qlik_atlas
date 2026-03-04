@@ -1,5 +1,41 @@
 # Build & Startup Issues - FIXED
 
+## [BUGFIX] 2026-03-04 Data-connections API leaked qConnectStatement to UI payloads
+
+- Severity: critical
+- Area: backend/api
+- Source: user-reported
+- Symptoms: `/api/data-connections` returned `qConnectStatement` values, exposing sensitive connection details/tokens in the UI/API response.
+- Root Cause: runtime response builder copied `qConnectStatement` from JSON payload/DB column into outbound response objects.
+- Fix: removed `qConnectStatement` from `load_data_connections_payload` responses; added ingestion-time sanitization so `qConnectStatement` is not persisted inside `qlik_data_connections.data` JSON while keeping dedicated column mapping for internal matching.
+- Changed Files: backend/app/db_runtime_views.py, backend/main.py, backend/tests/test_db_runtime_views.py, backend/tests/test_ingestion_payload_columns.py
+- Verification: added/updated unit tests to assert response exclusion and storage sanitization; Python compile check passed for changed files.
+- Residual Risk: existing rows in `qlik_data_connections.data` may still contain historical `qConnectStatement` values until next fetch/upsert or explicit cleanup migration.
+
+## [BUGFIX] 2026-03-04 Lineage database-source mapping created false multi-connections
+
+- Severity: high
+- Area: backend/lineage-runtime
+- Source: user-reported
+- Symptoms: `database` source nodes were connected to too many unrelated source targets, creating ambiguous and wrong lineage edges in the UI graph.
+- Root Cause: connection-to-source inference used broad `db:<type>` group matching and linked one connection to all matching DB/Table nodes in a project, even when the result was ambiguous or when a more precise QRI match existed.
+- Fix: hardened connection mapping rules in `db_runtime_views`: precise `qri:db` prefix matching now links connections to matching source nodes first; app-root QRI matches keep priority where available; broad group fallback is only used for unique candidates (prefer `db` node, fallback to single `table` node) and skips ambiguous matches.
+- Changed Files: backend/app/db_runtime_views.py, backend/tests/test_db_runtime_views.py
+- Verification: Python compile check passed for changed files; added/updated unit tests for priority and ambiguity handling in connection mapping.
+- Residual Risk: automated test execution is blocked in this session because `pytest` and runtime deps (e.g. `sqlalchemy`) are not installed in the local interpreter.
+
+## [BUGFIX] 2026-03-04 App metadata duplicate field_hash crash in snapshot insert
+
+- Severity: high
+- Area: backend/ingestion
+- Source: user-reported
+- Symptoms: Fetch-Job failed in DB store step with `duplicate key value violates unique constraint "app_data_metadata_fields_snapshot_id_field_hash_key"`.
+- Root Cause: `app_data_metadata_fields` rows were bulk inserted without deduplication, while the upstream metadata payload can contain duplicate `field_hash` values within one snapshot.
+- Fix: Added deterministic deduplication/merge logic for metadata fields by `field_hash` before insert; added key-based deduplication guards for other metadata child rows with unique constraints (`tables`, `table_profiles`, `field_profiles`, `field_most_frequent`, `field_frequency_distribution`).
+- Changed Files: backend/main.py, backend/tests/test_ingestion_payload_columns.py
+- Verification: Python compile check passed for changed files; added unit tests for dedupe/merge behavior (`_dedupe_app_data_metadata_field_rows`, `_dedupe_rows_by_key`).
+- Residual Risk: full runtime validation in this session blocked because `pytest` is not installed in the local interpreter.
+
 ## Issues Found & Fixed
 
 ### 1. ✅ Port Configuration

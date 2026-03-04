@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from shared.qlik_client import QlikApiError, QlikClient, resolve_logger
-from shared.utils import sanitize_name, url_encode_qri, write_json
+from shared.utils import url_encode_qri
 
 
 def _encode_app_qri(app_id: str) -> str:
@@ -99,13 +99,7 @@ async def fetch_and_save_lineage_for_app(
         },
     }
 
-    file_name = f"{sanitize_name(str(app_name))}__{app_id}__lineage.json"
-    out_path = None
-    if outdir is not None:
-        out_path = outdir / file_name
-        write_json(out_path, lineage)
     if collector is not None:
-        lineage["_artifactFileName"] = file_name
         collector.append(lineage)
 
     source_ok = _is_success(source_result)
@@ -115,11 +109,6 @@ async def fetch_and_save_lineage_for_app(
 
     if source_ok and overview_ok:
         results["success"] += 1
-        if success_outdir is not None:
-            success_path = success_outdir / file_name
-            write_json(success_path, lineage)
-            if logger:
-                logger.info("[%s/%s] %s (%s) -> success copy -> %s", idx, total, app_name, app_id, success_path)
     elif source_ok or overview_ok:
         results["partial"] += 1
         results["errors"][app_id] = {
@@ -142,7 +131,7 @@ async def fetch_and_save_lineage_for_app(
             app_id,
             source_result.get("status"),
             overview_result.get("status"),
-            out_path or "memory",
+            "memory",
         )
 
 
@@ -238,22 +227,11 @@ async def fetch_app_edges_for_apps(
             "raw": result.get("data") if isinstance(result, dict) and "data" in result else result,
         }
 
-        file_name = f"{sanitize_name(str(app_name))}__{app_id}__app_edges.json"
-        out_path = None
-        if outdir is not None:
-            out_path = outdir / file_name
-            write_json(out_path, payload)
         if collector is not None:
-            payload["_artifactFileName"] = file_name
             collector.append(payload)
 
         if isinstance(result, dict) and 200 <= int(result.get("status") or 0) < 300:
             results["success"] += 1
-            if success_outdir is not None:
-                success_path = success_outdir / file_name
-                write_json(success_path, payload)
-                if logger:
-                    logger.info("[%s/%s] %s (%s) -> success copy -> %s", idx, total, app_name, app_id, success_path)
         else:
             results["failed"] += 1
             results["errors"][app_id] = result
@@ -267,7 +245,7 @@ async def fetch_app_edges_for_apps(
                 app_id,
                 result.get("status"),
                 len(edges),
-                out_path or "memory",
+                "memory",
             )
 
     tasks = []

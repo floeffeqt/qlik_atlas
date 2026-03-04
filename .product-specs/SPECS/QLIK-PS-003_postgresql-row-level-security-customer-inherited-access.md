@@ -1,7 +1,7 @@
----
+﻿---
 id: QLIK-PS-003
 title: PostgreSQL Row-Level Security with customer-inherited access control
-status: draft
+status: active
 type: security
 priority: p0
 product_area: authorization-and-data-isolation
@@ -199,3 +199,4 @@ Without database-enforced row-level authorization, authenticated users may acces
 - Should customer creation/update/delete remain admin-only long-term (current decision: yes)?
 - Should non-admin users also be restricted from certain customer metadata fields in a later phase?
 - Is a separate audit trail needed for admin changes to user-customer assignments?
+

@@ -6,15 +6,18 @@
   <title>Lineage – Lineage Explorer</title>
   <style>
     :root {
-      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-      --surface: rgba(255,255,255,0.05);
-      --surface-hover: rgba(255,255,255,0.08);
-      --border: rgba(255,255,255,0.1);
-      --accent: #667eea;
-      --accent2: #764ba2;
+      --bg: radial-gradient(circle at 12% 18%, #1a2d52 0%, transparent 32%), radial-gradient(circle at 88% 22%, #1c4f66 0%, transparent 36%), linear-gradient(130deg, #070d1d 0%, #0b1730 55%, #0f2445 100%);
+      --surface: rgba(255,255,255,0.06);
+      --surface-hover: rgba(255,255,255,0.12);
+      --border: rgba(56,189,248,0.28);
+      --accent: #38bdf8;
+      --accent2: #22d3ee;
+      --accent3: #f472b6;
       --text: #fff;
-      --text-muted: rgba(255,255,255,0.5);
-      --text-dim: rgba(255,255,255,0.3);
+      --text-muted: rgba(230,241,255,0.6);
+      --text-dim: rgba(210,225,245,0.42);
+      --glow-cyan: 0 0 22px rgba(56,189,248,0.28);
+      --glow-pink: 0 0 28px rgba(244,114,182,0.22);
       --radius: 14px;
       --radius-sm: 8px;
     }
@@ -28,6 +31,94 @@
       color: var(--text);
       display: flex;
       flex-direction: column;
+      position: relative;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: -24vh -16vw;
+      background:
+        radial-gradient(circle at 20% 35%, rgba(56,189,248,0.16) 0%, rgba(56,189,248,0) 45%),
+        radial-gradient(circle at 78% 66%, rgba(244,114,182,0.14) 0%, rgba(244,114,182,0) 48%),
+        radial-gradient(circle at 62% 24%, rgba(34,211,238,0.12) 0%, rgba(34,211,238,0) 46%);
+      animation: driftMesh 24s ease-in-out infinite alternate;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 36px 36px;
+      opacity: 0.22;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body.theme-classic {
+      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --accent: #667eea;
+      --accent2: #764ba2;
+      --accent3: #14b8a6;
+      --text-muted: rgba(255,255,255,0.5);
+      --text-dim: rgba(255,255,255,0.3);
+      --glow-cyan: none;
+      --glow-pink: none;
+    }
+    body.theme-classic::before,
+    body.theme-classic::after {
+      opacity: 0.08;
+    }
+    body.theme-performance {
+      --bg: linear-gradient(135deg, #0d1324 0%, #101a32 50%, #132447 100%);
+      --surface: rgba(255,255,255,0.035);
+      --surface-hover: rgba(255,255,255,0.07);
+      --border: rgba(120,148,190,0.22);
+      --accent: #4f96ff;
+      --accent2: #5fd0ff;
+      --accent3: #7eb6ff;
+      --text-muted: rgba(226,238,255,0.56);
+      --text-dim: rgba(226,238,255,0.36);
+      --glow-cyan: none;
+      --glow-pink: none;
+    }
+    body.theme-performance::before,
+    body.theme-performance::after {
+      display: none;
+    }
+    body.theme-performance nav,
+    body.theme-performance .toolbar,
+    body.theme-performance #detailPanel,
+    body.theme-performance #legend,
+    body.theme-performance .zoom-btn,
+    body.theme-performance #toast {
+      backdrop-filter: none !important;
+      box-shadow: none !important;
+    }
+    body.theme-performance #graph-root .node-circle,
+    body.theme-performance #edges-layer line,
+    body.theme-performance #edges-layer path {
+      filter: none !important;
+    }
+    body.theme-performance .btn-toolbar,
+    body.theme-performance .btn-sm,
+    body.theme-performance .zoom-btn,
+    body.theme-performance .nav-link {
+      transition: none !important;
+    }
+    @keyframes driftMesh {
+      0% { transform: translate3d(0, 0, 0) scale(1); }
+      100% { transform: translate3d(-2%, 1.5%, 0) scale(1.06); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      body::before { animation: none; }
+      .btn-toolbar, .btn-sm, .zoom-btn, .nav-link, #toast { transition: none !important; }
+      #graph-root .node-circle, #edges-layer line, #edges-layer path { filter: none !important; }
     }
 
     /* ── NAV ── */
@@ -35,9 +126,10 @@
       flex-shrink: 0;
       position: relative;
       z-index: 100;
-      background: rgba(15,20,40,0.7);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
+      background: rgba(8,14,30,0.72);
+      backdrop-filter: blur(24px);
+      border-bottom: 1px solid rgba(56,189,248,0.3);
+      box-shadow: 0 10px 30px rgba(2,10,28,0.45), inset 0 -1px 0 rgba(255,255,255,0.04);
       padding: 0 1.5rem;
       height: 60px;
       display: flex;
@@ -55,11 +147,12 @@
     }
     .brand-icon {
       width: 32px; height: 32px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      background: linear-gradient(140deg, var(--accent) 0%, var(--accent2) 55%, var(--accent3) 100%);
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 1rem;
       overflow: hidden;
+      box-shadow: var(--glow-cyan), var(--glow-pink);
     }
     .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
@@ -69,24 +162,38 @@
       font-size: 0.875rem;
       padding: 0.4rem 0.75rem;
       border-radius: var(--radius-sm);
-      transition: color 0.15s, background 0.15s;
+      transition: color 0.15s, background 0.15s, box-shadow 0.15s;
     }
-    .nav-link:hover { color: var(--text); background: var(--surface-hover); }
-    .nav-link.active { color: var(--accent); background: var(--surface-hover); }
+    .nav-link:hover { color: var(--text); background: var(--surface-hover); box-shadow: inset 0 0 0 1px rgba(56,189,248,0.2); }
+    .nav-link.active { color: #9be7ff; background: rgba(56,189,248,0.16); box-shadow: inset 0 0 0 1px rgba(56,189,248,0.34), var(--glow-cyan); }
+    .nav-project-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.72rem;
+      border-radius: 999px;
+      border: 1px solid rgba(56,189,248,0.45);
+      background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(244,114,182,0.18));
+      color: #dbeafe;
+      font-size: 0.74rem;
+      white-space: nowrap;
+    }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-badge .v { color: #fff; font-weight: 600; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
     .nav-spacer { flex: 1; }
     .nav-user { display: flex; align-items: center; gap: 0.75rem; }
     .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
     .btn-sm {
       padding: 0.4rem 0.9rem;
       background: var(--surface);
-      border: 1px solid var(--border);
+      border: 1px solid rgba(56,189,248,0.34);
       border-radius: var(--radius-sm);
       color: var(--text-muted);
       font-size: 0.8rem;
       cursor: pointer;
       transition: all 0.15s;
     }
-    .btn-sm:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(255,255,255,0.2); }
+    .btn-sm:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(56,189,248,0.55); box-shadow: var(--glow-cyan); }
 
     /* ── TOOLBAR ── */
     .toolbar {
@@ -95,56 +202,60 @@
       align-items: center;
       gap: 0.75rem;
       padding: 0.6rem 1.5rem;
-      background: rgba(10,15,35,0.6);
-      border-bottom: 1px solid var(--border);
-      backdrop-filter: blur(10px);
+      background: rgba(7,13,28,0.66);
+      border-bottom: 1px solid rgba(56,189,248,0.24);
+      backdrop-filter: blur(16px);
+      box-shadow: inset 0 -1px 0 rgba(255,255,255,0.03);
     }
     .toolbar-label { font-size: 0.8rem; color: var(--text-muted); }
     select {
       padding: 0.35rem 0.75rem;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid var(--border);
+      background: rgba(17,30,55,0.8);
+      border: 1px solid rgba(56,189,248,0.24);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 0.8rem;
       cursor: pointer;
       outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    select:focus { border-color: var(--accent); }
+    select:focus { border-color: var(--accent); box-shadow: var(--glow-cyan); }
     select option { background: #1a1a2e; color: #fff; }
     .toolbar-input {
       min-width: 190px;
       padding: 0.35rem 0.75rem;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid var(--border);
+      background: rgba(17,30,55,0.8);
+      border: 1px solid rgba(56,189,248,0.24);
       border-radius: var(--radius-sm);
       color: var(--text);
       font-size: 0.8rem;
       outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .toolbar-input:focus { border-color: var(--accent); }
+    .toolbar-input:focus { border-color: var(--accent); box-shadow: var(--glow-cyan); }
     .toolbar-input::placeholder { color: var(--text-dim); }
     .btn-toolbar {
       padding: 0.35rem 0.9rem;
       background: var(--surface);
-      border: 1px solid var(--border);
+      border: 1px solid rgba(56,189,248,0.3);
       border-radius: var(--radius-sm);
       color: var(--text-muted);
       font-size: 0.8rem;
       cursor: pointer;
       transition: all 0.15s;
     }
-    .btn-toolbar:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-toolbar:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(56,189,248,0.55); box-shadow: var(--glow-cyan); }
     .btn-toolbar.primary {
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      background: linear-gradient(135deg, var(--accent), var(--accent2), var(--accent3));
       color: #fff;
       border-color: transparent;
+      box-shadow: var(--glow-cyan), var(--glow-pink);
     }
-    .btn-toolbar.primary:hover { opacity: 0.9; }
+    .btn-toolbar.primary:hover { opacity: 0.95; transform: translateY(-1px); }
     .stat-pill {
       padding: 0.2rem 0.6rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: rgba(17,30,55,0.72);
+      border: 1px solid rgba(56,189,248,0.25);
       border-radius: 100px;
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -166,8 +277,13 @@
       width: 100%;
       height: 100%;
       cursor: grab;
+      position: relative;
+      z-index: 1;
     }
     #graph-svg:active { cursor: grabbing; }
+    #graph-root .node-circle { filter: drop-shadow(0 0 8px rgba(56,189,248,0.26)); transition: filter 0.2s; }
+    #graph-root .node:hover .node-circle { filter: drop-shadow(0 0 14px rgba(56,189,248,0.55)) drop-shadow(0 0 26px rgba(244,114,182,0.35)); }
+    #edges-layer line, #edges-layer path { filter: drop-shadow(0 0 3px rgba(56,189,248,0.18)); }
 
     /* ── EMPTY STATE ── */
     #emptyState {
@@ -212,11 +328,12 @@
       top: 1rem;
       right: 1rem;
       width: 280px;
-      background: rgba(15,20,50,0.92);
-      border: 1px solid var(--border);
+      background: rgba(10,18,42,0.9);
+      border: 1px solid rgba(56,189,248,0.32);
       border-radius: var(--radius);
       padding: 1.25rem;
-      backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 12px 36px rgba(3,12,30,0.52), var(--glow-cyan);
       display: none;
       z-index: 50;
     }
@@ -257,17 +374,33 @@
     }
     .detail-key { color: var(--text-muted); min-width: 70px; flex-shrink: 0; }
     .detail-val { color: var(--text); word-break: break-all; }
+    .detail-extra {
+      margin-top: 0.5rem;
+      border-top: 1px solid rgba(56,189,248,0.22);
+      padding-top: 0.45rem;
+    }
+    .detail-extra summary {
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.45rem;
+    }
+    .detail-extra[open] summary { color: #cbe9ff; }
 
     /* ── LEGEND ── */
     #legend {
       position: absolute;
       bottom: 1rem;
       left: 1rem;
-      background: rgba(15,20,50,0.88);
-      border: 1px solid var(--border);
+      background: rgba(10,18,42,0.86);
+      border: 1px solid rgba(56,189,248,0.28);
       border-radius: var(--radius-sm);
       padding: 0.75rem 1rem;
-      backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 10px 30px rgba(3,12,30,0.45);
       font-size: 0.78rem;
     }
     .legend-title { color: var(--text-muted); font-weight: 600; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.7rem; }
@@ -292,30 +425,31 @@
     }
     .zoom-btn {
       width: 32px; height: 32px;
-      background: rgba(15,20,50,0.88);
-      border: 1px solid var(--border);
+      background: rgba(10,18,42,0.88);
+      border: 1px solid rgba(56,189,248,0.28);
       border-radius: var(--radius-sm);
       color: var(--text-muted);
       font-size: 1rem;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       transition: all 0.15s;
-      backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
     }
-    .zoom-btn:hover { background: var(--surface-hover); color: var(--text); }
+    .zoom-btn:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(56,189,248,0.55); box-shadow: var(--glow-cyan); }
 
     /* ── TOAST ── */
     #toast {
       position: fixed;
       bottom: 1.5rem;
       right: 4rem;
-      background: rgba(30,40,70,0.95);
-      border: 1px solid var(--border);
+      background: rgba(9,17,40,0.94);
+      border: 1px solid rgba(56,189,248,0.34);
       border-radius: var(--radius-sm);
       padding: 0.75rem 1rem;
       font-size: 0.875rem;
       color: var(--text);
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 12px 34px rgba(2,10,28,0.45), var(--glow-cyan);
       opacity: 0;
       transform: translateY(10px);
       transition: opacity 0.2s, transform 0.2s;
@@ -328,19 +462,21 @@
     /* ── ADMIN FAB ── */
   </style>
 </head>
-<body>
+<body class="theme-neon">
 
 <nav>
   <a class="nav-brand" href="/">
-    <div class="brand-icon"><img src="/assets/logo.png" alt="Lineage Explorer Logo" /></div>
-    Lineage Explorer
+    <div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>
+    Atlas
   </a>
   <div class="nav-links">
     <a class="nav-link" href="/">Dashboard</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link active" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
   </div>
+  <div class="nav-project-badge" id="navProjectBadge"><span class="k">Projektfokus</span><span class="v">wird geladen ...</span></div>
   <div class="nav-spacer"></div>
   <div class="nav-user">
     <span class="nav-user-email" id="userEmail">—</span>
@@ -349,9 +485,9 @@
 </nav>
 
 <div class="toolbar">
-  <span class="toolbar-label">Projekt:</span>
+  <span class="toolbar-label">Projekt (Pflicht):</span>
   <select id="projectSelect">
-    <option value="">— alle —</option>
+    <option value="">Projekt wird geladen ...</option>
   </select>
   <div class="toolbar-sep"></div>
   <span class="toolbar-label">Typ:</span>
@@ -382,6 +518,12 @@
   <select id="viewMode">
     <option value="force">Force Graph</option>
     <option value="tidy">Tidy Tree</option>
+  </select>
+  <span class="toolbar-label">Theme:</span>
+  <select id="themeSelect">
+    <option value="neon">Neon</option>
+    <option value="classic">Classic</option>
+    <option value="performance">Performance</option>
   </select>
   <input id="searchInput" class="toolbar-input" type="text" placeholder="Suche nach Name, ID, App, Bereich..." />
   <div class="toolbar-sep"></div>
@@ -429,13 +571,13 @@
   <!-- Legend -->
   <div id="legend">
     <div class="legend-title">Node types</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div>App <span class="legend-desc">- Qlik Anwendung</span></div>
-    <div class="legend-item"><div class="legend-dot" style="background:#14b8a6"></div>Database <span class="legend-desc">- Datenbankquelle</span></div>
-    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Table <span class="legend-desc">- Tabelle/Entitaet</span></div>
-    <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>Dataset <span class="legend-desc">- aufbereiteter Datensatz</span></div>
-    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>QVD <span class="legend-desc">- Qlik Data File</span></div>
-    <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>File <span class="legend-desc">- externe Datei</span></div>
-    <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>Other <span class="legend-desc">- sonstiger Knoten</span></div>
+    <div class="legend-item"><div class="legend-dot" data-node-type="app"></div>App <span class="legend-desc">- Qlik Anwendung</span></div>
+    <div class="legend-item"><div class="legend-dot" data-node-type="db"></div>Database <span class="legend-desc">- Datenbankquelle</span></div>
+    <div class="legend-item"><div class="legend-dot" data-node-type="table"></div>Table <span class="legend-desc">- Tabelle/Entitaet</span></div>
+    <div class="legend-item"><div class="legend-dot" data-node-type="dataset"></div>Dataset <span class="legend-desc">- aufbereiteter Datensatz</span></div>
+    <div class="legend-item"><div class="legend-dot" data-node-type="qvd"></div>QVD <span class="legend-desc">- Qlik Data File</span></div>
+    <div class="legend-item"><div class="legend-dot" data-node-type="file"></div>File <span class="legend-desc">- externe Datei</span></div>
+    <div class="legend-item"><div class="legend-dot" data-node-type="other"></div>Other <span class="legend-desc">- sonstiger Knoten</span></div>
     <div class="legend-item"><div class="legend-dot out-of-area"></div>App ausserhalb Bereichsfilter</div>
   </div>
 
@@ -465,6 +607,49 @@
     window.location.href = '/login.html';
   });
 
+  var lineageUrlParams = new URLSearchParams(window.location.search);
+  var deepLinkAppFilter = String(lineageUrlParams.get('app') || '').trim().toLowerCase();
+  var deepLinkAppId = String(lineageUrlParams.get('app_id') || '').trim().toLowerCase();
+  var deepLinkNodeIdRaw = String(lineageUrlParams.get('node_id') || '').trim();
+  var deepLinkNodeId = deepLinkNodeIdRaw.toLowerCase();
+  var deepLinkApplied = false;
+  var deepLinkHighlightPending = !!(deepLinkAppFilter || deepLinkAppId || deepLinkNodeIdRaw);
+  function updateNavProjectContext(projectId, projectName) {
+    var pid = String(projectId || '').trim();
+    var pName = String(projectName || '').trim();
+    var badge = document.getElementById('navProjectBadge');
+    if (badge) {
+      var valueEl = badge.querySelector('.v');
+      if (valueEl) valueEl.textContent = pName || (pid ? ('Projekt ' + pid) : 'kein Projekt aktiv');
+    }
+    document.querySelectorAll('a.nav-link').forEach(function(link) {
+      var baseHref = link.getAttribute('data-base-href');
+      if (!baseHref) {
+        baseHref = String(link.getAttribute('href') || '').split('?')[0];
+        link.setAttribute('data-base-href', baseHref);
+      }
+      var nextHref = baseHref;
+      if ((baseHref === '/analytics.html' || baseHref === '/lineage.html') && pid) {
+        nextHref = baseHref + '?project=' + encodeURIComponent(pid);
+      }
+      link.setAttribute('href', nextHref);
+    });
+  }
+  function syncProjectInUrl(projectId) {
+    var params = new URLSearchParams(window.location.search);
+    if (projectId) params.set('project', String(projectId));
+    else params.delete('project');
+    var query = params.toString();
+    history.replaceState(null, '', '/lineage.html' + (query ? ('?' + query) : ''));
+  }
+  function requireLineageProject() {
+    var projectId = String(document.getElementById('projectSelect').value || '').trim();
+    if (projectId) return projectId;
+    showToast('Lineage laeuft im Projektfokus. Bitte zuerst ein Projekt waehlen.', 3200);
+    document.getElementById('emptyState').classList.add('show');
+    return '';
+  }
+
   function showToast(msg, duration) {
     var t = document.getElementById('toast');
     t.textContent = msg;
@@ -472,17 +657,47 @@
     setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
   }
 
+  var THEME_STORAGE_KEY = 'lineage_theme_mode_v1';
+  function normalizeThemeMode(mode) {
+    var m = String(mode || '').trim().toLowerCase();
+    if (m === 'classic' || m === 'performance') return m;
+    return 'neon';
+  }
+  function applyThemeMode(mode, persist) {
+    var normalized = normalizeThemeMode(mode);
+    document.body.classList.remove('theme-neon', 'theme-classic', 'theme-performance');
+    document.body.classList.add('theme-' + normalized);
+    var sel = document.getElementById('themeSelect');
+    if (sel && sel.value !== normalized) sel.value = normalized;
+    if (persist) {
+      try { localStorage.setItem(THEME_STORAGE_KEY, normalized); } catch (e) {}
+    }
+  }
+  (function initThemeMode() {
+    var stored = null;
+    try { stored = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
+    applyThemeMode(stored || 'neon', false);
+  })();
+
   var nodeColors = {
-    app: '#667eea',
-    db: '#14b8a6',
-    table: '#f59e0b',
-    dataset: '#8b5cf6',
-    qvd: '#ef4444',
-    file: '#06b6d4',
-    other: '#6b7280'
+    app: '#38bdf8',
+    db: '#34d399',
+    table: '#fbbf24',
+    dataset: '#a78bfa',
+    qvd: '#fb7185',
+    file: '#22d3ee',
+    other: '#94a3b8'
   };
 
   function nodeColor(type) { return nodeColors[type] || nodeColors.other; }
+  function syncLegendNodeColors() {
+    var dots = document.querySelectorAll('#legend .legend-dot[data-node-type]');
+    dots.forEach(function(dot) {
+      var t = String(dot.getAttribute('data-node-type') || 'other').trim().toLowerCase();
+      dot.style.background = nodeColor(t);
+    });
+  }
+  syncLegendNodeColors();
   function normalizedNodeType(type) {
     var t = String(type || '').toLowerCase();
     return nodeColors[t] ? t : 'other';
@@ -502,7 +717,7 @@
   function nodeAppFilterValue(node) {
     var appName = nodeAppName(node);
     var appId = nodeAppId(node);
-    return String(appName || appId || '').trim().toLowerCase();
+    return String(appId || appName || '').trim().toLowerCase();
   }
   function nodeAreaFilterValue(node) {
     var spaceName = nodeSpaceName(node);
@@ -528,6 +743,198 @@
   }
   function baseNodeStrokeDasharray(node) {
     return node && node.__outOfAreaApp ? '4 2' : null;
+  }
+  function buildFocusTransformForNode(node, scale) {
+    if (!node || !svg || !svg.node) return null;
+    var width = svg.node().clientWidth || 1;
+    var height = svg.node().clientHeight || 1;
+    var x = Number(node.x);
+    var y = Number(node.y);
+    if (!isFinite(x) || !isFinite(y)) return null;
+    var k = Number(scale);
+    if (!isFinite(k) || k <= 0) k = 1.4;
+    return d3.zoomIdentity.translate((width / 2) - (k * x), (height / 2) - (k * y)).scale(k);
+  }
+  function triggerDeepLinkNodeHighlight(nodeGroup, delayMs) {
+    if (!deepLinkHighlightPending) return;
+    if (!nodeGroup || typeof nodeGroup.filter !== 'function') return;
+    var appFilterVal = String((document.getElementById('appFilter').value || '')).trim().toLowerCase();
+    var nodeIdVal = String(deepLinkNodeId || '').trim().toLowerCase();
+    if (!appFilterVal && !nodeIdVal) return;
+
+    var run = function() {
+      if (!deepLinkHighlightPending) return;
+      var target = nodeIdVal
+        ? nodeGroup.filter(function(d) {
+            var datumId = String((d && (d.id || d.node_id)) || '').trim().toLowerCase();
+            return datumId === nodeIdVal;
+          })
+        : nodeGroup.filter(function(d) {
+            return normalizedNodeType(d && d.type) === 'app' && nodeAppFilterValue(d) === appFilterVal;
+          });
+      if (target.empty() && appFilterVal) {
+        target = nodeGroup.filter(function(d) {
+          return normalizedNodeType(d && d.type) === 'app' && nodeAppFilterValue(d) === appFilterVal;
+        });
+      }
+      if (target.empty()) return;
+
+      deepLinkHighlightPending = false;
+      showToast('Deep-Link Fokus: Node massiv hervorgehoben', 2800);
+
+      var firstDatum = null;
+      var focusedByDeepLinkNodeId = false;
+      var focusedByDeepLinkAppId = false;
+
+      target.each(function(d) {
+        if (!firstDatum) firstDatum = d;
+        var datumId = String((d && (d.id || d.node_id)) || '').trim().toLowerCase();
+        if (nodeIdVal && datumId === nodeIdVal) {
+          firstDatum = d;
+          focusedByDeepLinkNodeId = true;
+        } else if (!focusedByDeepLinkNodeId && deepLinkAppId && nodeAppId(d).trim().toLowerCase() === deepLinkAppId) {
+          firstDatum = d;
+          focusedByDeepLinkAppId = true;
+        } else if (!focusedByDeepLinkNodeId && !focusedByDeepLinkAppId && nodeAppFilterValue(d) === appFilterVal) {
+          firstDatum = d;
+        }
+        var group = d3.select(this);
+        var circle = group.select('.node-circle');
+        if (circle.empty()) return;
+
+        group.selectAll('.node-jump-halo, .node-jump-core, .node-jump-shock').interrupt().remove();
+        circle.interrupt();
+        var baseR = Number(circle.attr('r'));
+        if (!isFinite(baseR) || baseR <= 0) baseR = 14;
+        circle
+          .transition().duration(180)
+            .attr('stroke', '#ffffff')
+            .attr('stroke-opacity', 1.0)
+            .attr('stroke-width', 5.2)
+            .attr('fill-opacity', 1.0)
+            .attr('r', baseR * 1.28)
+          .transition().duration(260)
+            .attr('stroke', '#22d3ee')
+            .attr('stroke-opacity', 0.98)
+            .attr('stroke-width', 9.5)
+            .attr('r', baseR * 0.86)
+          .transition().duration(260)
+            .attr('stroke', '#f0abfc')
+            .attr('stroke-opacity', 1.0)
+            .attr('stroke-width', 12.5)
+            .attr('r', baseR * 1.36)
+          .transition().duration(260)
+            .attr('stroke', '#fef08a')
+            .attr('stroke-opacity', 0.98)
+            .attr('stroke-width', 10.2)
+            .attr('r', baseR * 0.92)
+          .transition().duration(340)
+            .attr('stroke', '#38bdf8')
+            .attr('stroke-opacity', 0.96)
+            .attr('stroke-width', 7.6)
+            .attr('r', baseR * 1.18)
+          .transition().duration(2100)
+            .attr('stroke', function() { return baseNodeStrokeColor(d); })
+            .attr('stroke-opacity', function() { return baseNodeStrokeOpacity(d); })
+            .attr('stroke-width', function() { return baseNodeStrokeWidth(d); })
+            .attr('stroke-dasharray', function() { return baseNodeStrokeDasharray(d); })
+            .attr('fill-opacity', 0.9)
+            .attr('r', baseR);
+
+        function halo(delayMsInner, durationMs, fromR, toR, color, width) {
+          group.append('circle')
+            .attr('class', 'node-jump-halo')
+            .attr('r', fromR)
+            .attr('fill', 'none')
+            .attr('stroke', color)
+            .attr('stroke-width', width)
+            .attr('stroke-opacity', 0.98)
+            .style('pointer-events', 'none')
+            .transition()
+            .delay(delayMsInner)
+            .duration(durationMs)
+            .attr('r', toR)
+            .attr('stroke-opacity', 0)
+            .remove();
+        }
+
+        function coreGlow(delayMsInner, durationMs, fromR, toR, color, fromOpacity, toOpacity) {
+          group.append('circle')
+            .attr('class', 'node-jump-core')
+            .attr('r', fromR)
+            .attr('fill', color)
+            .attr('fill-opacity', fromOpacity)
+            .attr('stroke', 'none')
+            .style('pointer-events', 'none')
+            .transition()
+            .delay(delayMsInner)
+            .duration(durationMs)
+            .attr('r', toR)
+            .attr('fill-opacity', toOpacity)
+            .remove();
+        }
+
+        function shock(delayMsInner, durationMs, fromR, toR) {
+          group.append('circle')
+            .attr('class', 'node-jump-shock')
+            .attr('r', fromR)
+            .attr('fill', 'none')
+            .attr('stroke', 'rgba(255,255,255,0.96)')
+            .attr('stroke-width', 5.0)
+            .attr('stroke-dasharray', '6 4')
+            .attr('stroke-opacity', 0.95)
+            .style('pointer-events', 'none')
+            .transition()
+            .delay(delayMsInner)
+            .duration(durationMs)
+            .attr('r', toR)
+            .attr('stroke-opacity', 0)
+            .remove();
+        }
+
+        coreGlow(0, 520, 5, 24, 'rgba(56,189,248,0.9)', 0.52, 0.0);
+        coreGlow(220, 700, 7, 30, 'rgba(236,72,153,0.82)', 0.45, 0.0);
+        coreGlow(540, 900, 8, 36, 'rgba(253,224,71,0.72)', 0.36, 0.0);
+
+        halo(0, 1200, baseR, 48, 'rgba(34,211,238,0.98)', 3.2);
+        halo(140, 1400, baseR, 60, 'rgba(56,189,248,0.94)', 3.5);
+        halo(280, 1600, baseR, 74, 'rgba(244,114,182,0.90)', 3.3);
+        halo(420, 1800, baseR, 90, 'rgba(250,204,21,0.88)', 3.0);
+        halo(560, 2100, baseR, 108, 'rgba(167,139,250,0.84)', 2.7);
+        halo(700, 2400, baseR, 128, 'rgba(125,211,252,0.80)', 2.4);
+        halo(860, 2700, baseR, 146, 'rgba(255,255,255,0.66)', 2.2);
+        shock(60, 1500, baseR + 2, 94);
+        shock(360, 1850, baseR + 2, 122);
+        shock(740, 2200, baseR + 2, 146);
+      });
+
+      if (firstDatum && typeof applyZoomTransform === 'function' && svg && svg.node) {
+        try {
+          var prev = currentTransform || d3.zoomIdentity;
+          var focusScale = Math.min(4, Math.max((prev.k || 1) * 1.45, 1.45));
+          var focusTransform = buildFocusTransformForNode(firstDatum, focusScale);
+          if (focusTransform) {
+            var overshootScale = Math.min(4, focusScale * 1.16);
+            var overshootTransform = buildFocusTransformForNode(firstDatum, overshootScale);
+            if (overshootTransform) applyZoomTransform(overshootTransform, 620);
+            setTimeout(function() {
+              var settle = buildFocusTransformForNode(firstDatum, focusScale);
+              if (settle) applyZoomTransform(settle, 1200);
+            }, 640);
+            var followTicks = 0;
+            var followMax = 7;
+            var followTimer = setInterval(function() {
+              followTicks += 1;
+              var followTransform = buildFocusTransformForNode(firstDatum, focusScale);
+              if (followTransform) applyZoomTransform(followTransform, 260);
+              if (followTicks >= followMax) clearInterval(followTimer);
+            }, 520);
+          }
+        } catch (e) {}
+      }
+    };
+
+    setTimeout(run, Math.max(0, Number(delayMs) || 0));
   }
   function collectReachableNodeIds(seedIds, edges) {
     var seeds = Array.from(seedIds || []);
@@ -631,11 +1038,13 @@
 
     var normalized = raw.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/+$/, '');
     if (!normalized) return raw;
-    var fileName = normalized.split('/').pop() || '';
-    if (!fileName) return raw;
-    if (/^[a-z]:$/i.test(fileName)) return raw;
-    if (!/[.][^./\\]+$/.test(fileName)) return raw;
-    return fileName;
+    var parts = normalized.split('/').filter(function(part) { return String(part || '').length > 0; });
+    if (!parts.length) return raw;
+    var tail = String(parts[parts.length - 1] || '').trim();
+    if (!tail) return raw;
+    if (/^[a-z]:$/i.test(tail)) return raw;
+    if (/^file:$/i.test(tail)) return raw;
+    return tail;
   }
   function nodeSearchHaystack(node) {
     var parts = [node.id, node.label, node.type, node.group, node.layer, node.subtype, nodeAppId(node), nodeAppName(node), nodeSpaceId(node), nodeSpaceName(node)];
@@ -646,6 +1055,64 @@
   }
   function edgeNodeId(value) {
     return (value && typeof value === 'object') ? value.id : value;
+  }
+  function buildGraphMetrics(simNodes, simLinks) {
+    graphMetrics.byNodeId = Object.create(null);
+    graphMetrics.outgoingBySource = Object.create(null);
+    graphMetrics.blastCache = Object.create(null);
+
+    (simNodes || []).forEach(function(n) {
+      var id = String((n && n.id) || '');
+      if (!id) return;
+      graphMetrics.byNodeId[id] = { inDegree: 0, outDegree: 0, degree: 0 };
+    });
+
+    (simLinks || []).forEach(function(e) {
+      var sourceId = String(edgeNodeId(e && e.source) || '');
+      var targetId = String(edgeNodeId(e && e.target) || '');
+      if (!sourceId || !targetId) return;
+      if (!graphMetrics.byNodeId[sourceId] || !graphMetrics.byNodeId[targetId]) return;
+
+      graphMetrics.byNodeId[sourceId].outDegree += 1;
+      graphMetrics.byNodeId[targetId].inDegree += 1;
+      if (!graphMetrics.outgoingBySource[sourceId]) graphMetrics.outgoingBySource[sourceId] = [];
+      graphMetrics.outgoingBySource[sourceId].push(targetId);
+    });
+
+    Object.keys(graphMetrics.outgoingBySource).forEach(function(sourceId) {
+      graphMetrics.outgoingBySource[sourceId] = Array.from(new Set(graphMetrics.outgoingBySource[sourceId]));
+    });
+
+    Object.keys(graphMetrics.byNodeId).forEach(function(id) {
+      var m = graphMetrics.byNodeId[id];
+      m.degree = m.inDegree + m.outDegree;
+    });
+  }
+  function blastRadiusForNode(nodeId) {
+    var id = String(nodeId || '');
+    if (!id || !graphMetrics.byNodeId[id]) return 0;
+    if (typeof graphMetrics.blastCache[id] === 'number') return graphMetrics.blastCache[id];
+
+    var visited = Object.create(null);
+    visited[id] = true;
+    var queue = [id];
+    var head = 0;
+    var reachable = 0;
+    var visits = 0;
+    while (head < queue.length && visits < graphMetrics.maxBlastVisits) {
+      visits += 1;
+      var current = queue[head++];
+      var nextList = graphMetrics.outgoingBySource[current] || [];
+      for (var i = 0; i < nextList.length; i++) {
+        var nextId = String(nextList[i] || '');
+        if (!nextId || visited[nextId] || !graphMetrics.byNodeId[nextId]) continue;
+        visited[nextId] = true;
+        reachable += 1;
+        queue.push(nextId);
+      }
+    }
+    graphMetrics.blastCache[id] = reachable;
+    return reachable;
   }
   function escHtml(s) {
     return String(s)
@@ -662,8 +1129,15 @@
   var currentTransform = d3.zoomIdentity;
   var lastData = null;
   var autoFitPending = false;
+  var shouldAutoFitOnNextRender = true;
   var isProgrammaticZoom = false;
   var filterDebounceTimer = null;
+  var graphMetrics = {
+    byNodeId: Object.create(null),
+    outgoingBySource: Object.create(null),
+    blastCache: Object.create(null),
+    maxBlastVisits: 5000
+  };
   var tidyExpandedByScope = Object.create(null);
   var layoutPositionsByScope = (function() {
     try {
@@ -679,7 +1153,7 @@
     try { localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutPositionsByScope)); } catch (e) {}
   }
   function currentGraphScopeKey() {
-    var projectId = document.getElementById('projectSelect').value || 'all';
+    var projectId = document.getElementById('projectSelect').value || 'none';
     return 'project:' + String(projectId);
   }
   function scopedPinnedPositions() {
@@ -800,6 +1274,45 @@
       return String(a.label || a.value).localeCompare(String(b.label || b.value));
     });
     setSelectOptions(document.getElementById('appFilter'), appValues, 'Alle');
+  }
+  function applyDeepLinkFilters(data) {
+    if (deepLinkApplied) return;
+    if (!deepLinkAppFilter && !deepLinkAppId && !deepLinkNodeIdRaw) return;
+
+    var appSel = document.getElementById('appFilter');
+    if (!appSel) return;
+    var optionValues = Array.prototype.map.call(appSel.options || [], function(opt) {
+      return String(opt.value || '').toLowerCase();
+    });
+
+    var target = deepLinkAppFilter || deepLinkAppId;
+    if (target && optionValues.indexOf(target) === -1 && deepLinkAppId) {
+      var rawNodes = (data && data.nodes) || [];
+      for (var i = 0; i < rawNodes.length; i++) {
+        var node = rawNodes[i];
+        if (normalizedNodeType(node && node.type) !== 'app') continue;
+        if (nodeAppId(node).trim().toLowerCase() !== deepLinkAppId) continue;
+        var alt = nodeAppFilterValue(node);
+        if (alt && optionValues.indexOf(alt) >= 0) {
+          target = alt;
+          break;
+        }
+      }
+    }
+
+    if (target && optionValues.indexOf(String(target).toLowerCase()) >= 0) {
+      appSel.value = String(target).toLowerCase();
+      showToast('Deep-Link aktiv: App-Filter gesetzt', 1800);
+      deepLinkApplied = true;
+      deepLinkHighlightPending = true;
+      return;
+    }
+
+    if (deepLinkNodeIdRaw) {
+      deepLinkApplied = true;
+      deepLinkHighlightPending = true;
+      showToast('Deep-Link aktiv: Node-Fokus gesetzt', 1800);
+    }
   }
   function maybeRenderLastData() {
     if (lastData) renderGraph(lastData);
@@ -1013,7 +1526,7 @@
     return { root: root, crossEdges: allCrossEdges };
   }
 
-  function renderTidyTree(simNodes, simLinks, areaFilterValue, outsideAreaMode, hiddenOutOfAreaAppCount, hiddenBetweenOutsideCount) {
+  function renderTidyTree(simNodes, simLinks, areaFilterValue, outsideAreaMode, hiddenOutOfAreaAppCount, hiddenBetweenOutsideCount, shouldAutoFit) {
     if (simulation) {
       simulation.stop();
       simulation = null;
@@ -1215,6 +1728,8 @@
           .attr('stroke-width', 1.2);
       });
 
+    triggerDeepLinkNodeHighlight(nodeGroup, 260);
+
     var outOfAreaAppCount = areaFilterValue
       ? positionedNodes.filter(function(n) { return n.__outOfAreaApp; }).length
       : 0;
@@ -1232,7 +1747,9 @@
     document.getElementById('nodeCount').textContent = positionedNodes.length + ' nodes';
     document.getElementById('edgeCount').textContent = (treeLinks.length + crossLinks.length) + ' edges';
     document.getElementById('emptyState').classList.toggle('show', !positionedNodes.length);
-    fitView(positionedNodes);
+    if (shouldAutoFit) {
+      fitView(positionedNodes);
+    }
     svg.on('click', function() { closeDetail(); });
   }
 
@@ -1246,6 +1763,8 @@
     var areaFilter = document.getElementById('areaFilter').value;
     var areaFilterValue = String(areaFilter || '').trim().toLowerCase();
     var searchTerm = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+    var renderShouldAutoFit = !!shouldAutoFitOnNextRender;
+    shouldAutoFitOnNextRender = false;
 
     var baseVisibleNodeIds = null;
     if (appFilter || areaFilter) {
@@ -1327,6 +1846,7 @@
     var simLinks = filteredEdges.map(function(e) {
       return { source: e.source, target: e.target, relation: e.relation, id: e.id };
     }).filter(function(e) { return nodeMap[e.source] && nodeMap[e.target]; });
+    buildGraphMetrics(simNodes, simLinks);
 
     if (viewMode === 'tidy') {
       renderTidyTree(
@@ -1335,7 +1855,8 @@
         areaFilterValue,
         outsideAreaMode,
         hiddenOutOfAreaAppCount,
-        hiddenBetweenOutsideCount
+        hiddenBetweenOutsideCount,
+        renderShouldAutoFit
       );
       return;
     }
@@ -1363,7 +1884,7 @@
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide(22));
 
-    autoFitPending = true;
+    autoFitPending = renderShouldAutoFit;
 
     edgesLayer.selectAll('*').remove();
     var link = edgesLayer.selectAll('line')
@@ -1466,6 +1987,8 @@
         link.attr('stroke', 'rgba(255,255,255,0.18)').attr('stroke-width', 1.5);
       });
 
+    triggerDeepLinkNodeHighlight(nodeGroup, 420);
+
     svg.on('click', function() { closeDetail(); });
 
     simulation.on('tick', function() {
@@ -1487,24 +2010,53 @@
 
   function showDetail(d) {
     document.getElementById('detailType').textContent = (d.type || 'unknown').toUpperCase();
-    document.getElementById('detailLabel').textContent = d.label || d.id || '-';
+    var displayName = graphNodeDisplayLabel(d) || d.label || d.id || '-';
+    document.getElementById('detailLabel').textContent = displayName;
+
+    var nodeId = String((d && d.id) || '');
+    var metrics = graphMetrics.byNodeId[nodeId] || { inDegree: 0, outDegree: 0, degree: 0 };
+    var blastRadius = blastRadiusForNode(nodeId);
+
     var rows = '';
-    if (d.id) rows += detailRow('ID', d.id);
-    if (d.__outOfAreaApp) rows += detailRow('Hinweis', 'App liegt ausserhalb des Bereichsfilters');
-    if (d.group) rows += detailRow('App', d.group);
-    if (d.layer) rows += detailRow('Layer', d.layer);
-    if (d.subtype) rows += detailRow('Subtype', d.subtype);
-    if (d.meta && d.meta.qriPrefix) rows += detailRow('QRI Prefix', d.meta.qriPrefix);
+    rows += detailRow('Display Name', displayName);
+    rows += detailRow('Raw Label', String((d && d.label) || '-'));
+    rows += detailRow('Raw Node ID', nodeId || '-');
+    rows += detailRow('Node Type', normalizedNodeType(d && d.type));
+    rows += detailRow('Subtype', (d && d.subtype) || '-');
+    rows += detailRow('App ID', nodeAppId(d) || '-');
+    rows += detailRow('App Name', nodeAppName(d) || '-');
+    rows += detailRow('Space ID', nodeSpaceId(d) || '-');
+    rows += detailRow('Space Name', nodeSpaceName(d) || '-');
+    rows += detailRow('In-Degree', metrics.inDegree);
+    rows += detailRow('Out-Degree', metrics.outDegree);
+    rows += detailRow('Total Degree', metrics.degree);
+    rows += detailRow('Blast Radius', blastRadius);
+
+    var extraRows = '';
+    if (d.__outOfAreaApp) extraRows += detailRow('Hinweis', 'App liegt ausserhalb des Bereichsfilters');
+    if (d.group) extraRows += detailRow('Group', d.group);
+    if (d.layer) extraRows += detailRow('Layer', d.layer);
+    if (d.meta && d.meta.qriPrefix) extraRows += detailRow('QRI Prefix', d.meta.qriPrefix);
     if (d.meta && Array.isArray(d.meta.qriMatchAppNames) && d.meta.qriMatchAppNames.length) {
-      rows += detailRow('QRI Match Apps', d.meta.qriMatchAppNames.join(', '));
+      extraRows += detailRow('QRI Match Apps', d.meta.qriMatchAppNames.join(', '));
     }
     if (d.meta && Array.isArray(d.meta.sourceSystems) && d.meta.sourceSystems.length) {
-      rows += detailRow('Source Systems', d.meta.sourceSystems.join(', '));
+      extraRows += detailRow('Source Systems', d.meta.sourceSystems.join(', '));
     }
     if (d.meta && typeof d.meta === 'object') {
-      Object.entries(d.meta).slice(0, 5).forEach(function(kv) {
-        rows += detailRow(kv[0], JSON.stringify(kv[1]));
+      var skipMetaKeys = {
+        appId: true, app_id: true, appName: true, app_name: true,
+        spaceId: true, space_id: true, spaceName: true, space_name: true,
+        area: true, qriPrefix: true, qriMatchAppNames: true, sourceSystems: true
+      };
+      Object.entries(d.meta).forEach(function(kv) {
+        var key = String(kv[0] || '');
+        if (!key || skipMetaKeys[key]) return;
+        extraRows += detailRow('meta.' + key, JSON.stringify(kv[1]));
       });
+    }
+    if (extraRows) {
+      rows += '<details class="detail-extra"><summary>Weitere Informationen</summary>' + extraRows + '</details>';
     }
     document.getElementById('detailRows').innerHTML = rows;
     document.getElementById('detailPanel').classList.add('show');
@@ -1526,14 +2078,32 @@
       if (!res.ok) return;
       var projects = await res.json();
       var sel = document.getElementById('projectSelect');
+      var list = Array.isArray(projects) ? projects : [];
       var urlProject = new URLSearchParams(window.location.search).get('project');
-      sel.innerHTML = '<option value="">- alle Projekte -</option>'
-        + projects.map(function(p) {
-            var custName = p.customer ? ' (' + p.customer.name + ')' : '';
-            return '<option value="' + p.id + '"' + (String(p.id) === urlProject ? ' selected' : '') + '>'
-              + escHtml(p.name + custName) + '</option>';
-          }).join('');
+      if (!list.length) {
+        sel.disabled = true;
+        sel.innerHTML = '<option value="">Keine Projekte verfuegbar</option>';
+        updateNavProjectContext('', '');
+        return [];
+      }
+      sel.disabled = false;
+      var selectedId = String(urlProject || sel.value || '').trim();
+      if (!selectedId || !list.find(function(p) { return String(p.id) === selectedId; })) {
+        selectedId = String(list[0].id);
+      }
+      sel.innerHTML = list.map(function(p) {
+        var custName = p.customer ? ' (' + p.customer.name + ')' : '';
+        var selected = String(p.id) === selectedId ? ' selected' : '';
+        return '<option value="' + p.id + '"' + selected + '>'
+          + escHtml(p.name + custName) + '</option>';
+      }).join('');
+      sel.value = selectedId;
+      var selectedProject = list.find(function(p) { return String(p.id) === selectedId; }) || null;
+      updateNavProjectContext(selectedId, selectedProject ? (selectedProject.name || ('Projekt ' + selectedId)) : '');
+      syncProjectInUrl(selectedId);
+      return list;
     } catch (e) {}
+    return [];
   }
 
   async function loadGraph() {
@@ -1541,9 +2111,14 @@
     loading.style.display = 'flex';
     closeDetail();
     clearTidyExpandedForCurrentScope();
+    shouldAutoFitOnNextRender = true;
 
-    var projectId = document.getElementById('projectSelect').value;
-    var url = projectId ? ('/api/graph/project/' + projectId) : '/api/graph/db';
+    var projectId = requireLineageProject();
+    if (!projectId) {
+      loading.style.display = 'none';
+      return;
+    }
+    var url = '/api/graph/project/' + encodeURIComponent(projectId);
 
     try {
       var res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
@@ -1554,7 +2129,9 @@
       }
       if (!res.ok) { throw new Error('HTTP ' + res.status); }
       lastData = await res.json();
+      syncProjectInUrl(projectId);
       populateLineageFilters(lastData);
+      applyDeepLinkFilters(lastData);
       renderGraph(lastData);
       showToast('Graph geladen - ' + (lastData.nodes || []).length + ' Nodes');
     } catch (e) {
@@ -1567,7 +2144,12 @@
 
   document.getElementById('loadBtn').addEventListener('click', loadGraph);
   document.getElementById('projectSelect').addEventListener('change', function() {
+    var projectId = String(this.value || '').trim();
+    var selectedName = this.options && this.selectedIndex >= 0 ? this.options[this.selectedIndex].textContent : '';
+    updateNavProjectContext(projectId, selectedName);
+    syncProjectInUrl(projectId);
     autoFitPending = false;
+    shouldAutoFitOnNextRender = true;
     loadGraph();
   });
   document.getElementById('resetViewBtn').addEventListener('click', function() {
@@ -1581,20 +2163,45 @@
       showToast('Gespeichertes Layout fuer diese Ansicht zurueckgesetzt');
     }
   });
-  document.getElementById('typeFilter').addEventListener('change', maybeRenderLastData);
-  document.getElementById('appFilter').addEventListener('change', maybeRenderLastData);
-  document.getElementById('areaFilter').addEventListener('change', function() {
-    if (lastData) populateLineageFilters(lastData);
+  document.getElementById('typeFilter').addEventListener('change', function() {
+    shouldAutoFitOnNextRender = false;
     maybeRenderLastData();
   });
-  document.getElementById('outsideAreaMode').addEventListener('change', maybeRenderLastData);
+  document.getElementById('appFilter').addEventListener('change', function() {
+    var selected = String(document.getElementById('appFilter').value || '').trim();
+    deepLinkHighlightPending = !!selected;
+    shouldAutoFitOnNextRender = false;
+    maybeRenderLastData();
+  });
+  document.getElementById('areaFilter').addEventListener('change', function() {
+    shouldAutoFitOnNextRender = false;
+    if (lastData) populateLineageFilters(lastData);
+    if (!document.getElementById('appFilter').value) deepLinkHighlightPending = false;
+    maybeRenderLastData();
+  });
+  document.getElementById('outsideAreaMode').addEventListener('change', function() {
+    shouldAutoFitOnNextRender = false;
+    maybeRenderLastData();
+  });
   document.getElementById('viewMode').addEventListener('change', function() {
+    shouldAutoFitOnNextRender = false;
     if (document.getElementById('viewMode').value === 'tidy') {
       clearTidyExpandedForCurrentScope();
     }
     maybeRenderLastData();
   });
   document.getElementById('searchInput').addEventListener('input', debounceRender);
+  document.getElementById('themeSelect').addEventListener('change', function() {
+    var mode = String(document.getElementById('themeSelect').value || 'neon');
+    applyThemeMode(mode, true);
+    if (mode === 'performance') {
+      showToast('Theme: Performance (reduzierte Effekte)', 1800);
+    } else if (mode === 'classic') {
+      showToast('Theme: Classic', 1400);
+    } else {
+      showToast('Theme: Neon', 1400);
+    }
+  });
 
   document.getElementById('zoomIn').addEventListener('click', function() {
     autoFitPending = false;
@@ -1605,7 +2212,9 @@
     svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.4);
   });
 
-  loadProjects().then(loadGraph);
+  loadProjects().then(function() {
+    loadGraph();
+  });
 </script>
 </body>
 </html>

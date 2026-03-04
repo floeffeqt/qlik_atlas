@@ -1,7 +1,7 @@
 ﻿---
 id: QLIK-PS-001
 title: Critical credentials stored in the database must be encrypted with AES-256-GCM
-status: draft
+status: active
 type: security
 priority: p0
 product_area: credentials-and-secrets
@@ -183,4 +183,5 @@ Without a binding project rule, critical credentials may be stored in plaintext 
 - What is the authoritative list of "critical credential" fields in `qlik_atlas`?
 - Which key source/provider will be used (env secret, OS secret store, KMS, HSM, other)?
 - Is a migration spec needed now for existing plaintext credentials already stored in the database?
+
 

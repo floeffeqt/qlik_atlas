@@ -40,7 +40,7 @@ related_docs:
 - DB Source of Truth (laufend umgesetzt):
   - Dashboard-/Lineage-Reads: PostgreSQL / RLS
   - Zielbild fuer weitere App-/Lineage-nahe Runtime-Reads: DB-only
-  - Lokale Artifacts (`backend/output/...`) sind nicht mehr als Runtime-Source-of-Truth vorgesehen
+  - Lokale Artifacts (`backend/output/...`) sind aus dem Runtime-/Fetch-Job-Pfad entfernt
 - Relevante Root-Dokumente:
   - `REQUIREMENTS.md` (Roadmap / Implementierungsanforderungen)
   - `PROJECT_STATUS.md` (aktueller Umsetzungsstatus)

@@ -53,6 +53,13 @@ related_docs:
 | `qlik_audits` | `(project_id, audit_id)` | `project_id -> projects.id` | Qlik Audit-Events (JSONB + materialisierte Spalten) |
 | `qlik_license_consumption` | `(project_id, consumption_id)` | `project_id -> projects.id` | Qlik License-Consumption (JSONB + materialisierte Spalten) |
 | `qlik_license_status` | `(project_id, status_id)` | `project_id -> projects.id` | Qlik License-Status (JSONB + materialisierte Spalten) |
+| `app_data_metadata_snapshot` | `snapshot_id` | `project_id -> projects.id` | Append-only Snapshots fuer `/api/v1/apps/{appId}/data/metadata` |
+| `app_data_metadata_fields` | `row_id` | `project_id -> projects.id`, `snapshot_id -> app_data_metadata_snapshot.snapshot_id` | Feld-Metadaten pro Snapshot |
+| `app_data_metadata_tables` | `row_id` | `project_id -> projects.id`, `snapshot_id -> app_data_metadata_snapshot.snapshot_id` | Tabellen-Metadaten pro Snapshot |
+| `table_profiles` | `table_profile_id` | `project_id -> projects.id`, `snapshot_id -> app_data_metadata_snapshot.snapshot_id` | Tabellen-Profiling pro Snapshot (nur bei profiling enabled) |
+| `field_profiles` | `field_profile_id` | `project_id -> projects.id`, `snapshot_id -> app_data_metadata_snapshot.snapshot_id`, `table_profile_id -> table_profiles.table_profile_id` | Field-Profiling pro Table-Profile |
+| `field_most_frequent` | `row_id` | `project_id -> projects.id`, `snapshot_id -> app_data_metadata_snapshot.snapshot_id`, `field_profile_id -> field_profiles.field_profile_id` | Most-frequent Werte pro Field-Profile |
+| `field_frequency_distribution` | `row_id` | `project_id -> projects.id`, `snapshot_id -> app_data_metadata_snapshot.snapshot_id`, `field_profile_id -> field_profiles.field_profile_id` | Frequency-Distribution Bins pro Field-Profile |
 | `lineage_nodes` | `(project_id, node_id)` | `project_id -> projects.id` | Graph-Nodes |
 | `lineage_edges` | `(project_id, edge_id)` | `project_id -> projects.id` | Graph-Edges |
 
@@ -140,6 +147,22 @@ related_docs:
 - `qlik_audits.project_id -> projects.id`
 - `qlik_license_consumption.project_id -> projects.id`
 - `qlik_license_status.project_id -> projects.id`
+- `app_data_metadata_snapshot.project_id -> projects.id`
+- `app_data_metadata_fields.project_id -> projects.id`
+- `app_data_metadata_fields.snapshot_id -> app_data_metadata_snapshot.snapshot_id`
+- `app_data_metadata_tables.project_id -> projects.id`
+- `app_data_metadata_tables.snapshot_id -> app_data_metadata_snapshot.snapshot_id`
+- `table_profiles.project_id -> projects.id`
+- `table_profiles.snapshot_id -> app_data_metadata_snapshot.snapshot_id`
+- `field_profiles.project_id -> projects.id`
+- `field_profiles.snapshot_id -> app_data_metadata_snapshot.snapshot_id`
+- `field_profiles.table_profile_id -> table_profiles.table_profile_id`
+- `field_most_frequent.project_id -> projects.id`
+- `field_most_frequent.snapshot_id -> app_data_metadata_snapshot.snapshot_id`
+- `field_most_frequent.field_profile_id -> field_profiles.field_profile_id`
+- `field_frequency_distribution.project_id -> projects.id`
+- `field_frequency_distribution.snapshot_id -> app_data_metadata_snapshot.snapshot_id`
+- `field_frequency_distribution.field_profile_id -> field_profiles.field_profile_id`
 - `lineage_nodes.project_id -> projects.id`
 - `lineage_edges.project_id -> projects.id`
 
@@ -196,3 +219,23 @@ erDiagram
 - `pgAdmin` (Service im `docker-compose.yml`)
 - `information_schema.columns`
 - `psql \d+ <table>`
+
+## Runtime Analytics API (DB-First, No Schema Change)
+
+- Neue Read-Endpunkte (rein DB-basiert, keine Lineage-Abhaengigkeit in v1-KPIs):
+- `GET /api/analytics/areas`
+- `GET /api/analytics/areas/{area_key}/apps`
+- `GET /api/analytics/apps/{app_id}/fields`
+- `GET /api/analytics/apps/{app_id}/trend`
+- `GET /api/analytics/insights/cost-value`
+- `GET /api/analytics/insights/bloat`
+- `GET /api/analytics/insights/data-model-pack`
+- `GET /api/analytics/insights/lineage-criticality`
+
+- Bereichsdefinition fuer Analytics v1:
+- `Qlik Space` ueber logischen Join `qlik_apps(project_id, space_id) -> qlik_spaces(project_id, space_id)`
+- Fallback ohne Space-Mapping: `unassigned`
+
+- Snapshot-Logik:
+- Default-Sicht basiert auf latest Snapshot pro App aus `app_data_metadata_snapshot`
+- Trend-Fenster basiert auf `fetched_at` und `days`-Parameter

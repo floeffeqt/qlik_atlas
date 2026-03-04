@@ -7,7 +7,7 @@ tags:
   - release-notes
   - index
   - changes
-updated: 2026-03-03
+updated: 2026-03-04
 owners: []
 source_of_truth: no
 related_specs: []
@@ -41,6 +41,10 @@ related_docs:
   - `2026-03-02_fetch-job-upsert-column-mapping-fix.md`
   - `2026-03-03_license-consumption-schema-and-license-status-fetch.md`
   - `2026-03-03_parallel-fetch-and-log-reopen.md`
+  - `2026-03-04_data-model-circle-pack.md`
+  - `2026-03-04_analytics-data-model-capacity-merge.md`
+  - `2026-03-04_remove-local-output-artifact-runtime-paths.md`
+  - `2026-03-04_analytics-governance-ops-live.md`
 
 ## Open Questions / Risks
 

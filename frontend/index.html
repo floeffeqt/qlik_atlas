@@ -373,12 +373,13 @@
 
 <nav>
   <a class="nav-brand" href="/">
-    <div class="brand-icon"><img src="/assets/logo.png" alt="Lineage Explorer Logo" /></div>
-    Lineage Explorer
+    <div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>
+    Atlas
   </a>
   <div class="nav-links">
     <a class="nav-link active" href="/">Dashboard</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
   </div>
@@ -545,11 +546,21 @@
     document.getElementById('jobLogBody').innerHTML = '';
   }
 
+  function formatLogLineToLocal(text) {
+    var m = /^\[([^\]]+)\]\s*(.*)$/.exec(String(text || ''));
+    if (!m) return text;
+    var parsed = new Date(m[1]);
+    if (isNaN(parsed.getTime())) return text;
+    var local = parsed.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    return '[' + local + '] ' + m[2];
+  }
+
   function appendLogLine(text) {
+    var displayText = formatLogLineToLocal(text);
     var body = document.getElementById('jobLogBody');
     var line = document.createElement('div');
     line.className = 'job-log-line';
-    line.textContent = text;
+    line.textContent = displayText;
     body.appendChild(line);
     body.scrollTop = body.scrollHeight;
   }

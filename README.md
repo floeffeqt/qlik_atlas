@@ -9,7 +9,7 @@ Containerized Qlik lineage application with FastAPI backend, PostgreSQL, nginx f
 - Customer credentials are stored encrypted in the database (AES-256-GCM)
 - Runtime reads for dashboard/graph/inventory/spaces/data-connections/usage/scripts are DB-backed
 - Fetch pipeline is DB-first (`Qlik API -> in-memory transform -> PostgreSQL`)
-- Local fetch artifacts are no longer the application source of truth (optional debug mode only)
+- Local fetch artifacts are removed from the runtime path (DB-first only)
 - Theme Generator MVP is available at `/theme-builder.html` (ZIP download + upload stub)
 
 ## Quick Start (Docker)
@@ -92,11 +92,7 @@ Default seeded admin user:
 ### Runtime source of truth
 
 - UI-facing runtime data is PostgreSQL (not local JSON files)
-- Local artifacts may still exist as optional debug outputs when explicitly enabled
-
-Debug/compat mode for local fetch artifacts (default is off):
-
-- `FETCH_WRITE_LOCAL_ARTIFACTS=true`
+- Runtime processing uses in-memory payloads and persists directly to PostgreSQL
 
 ## Authentication and Authorization
 
@@ -279,4 +275,4 @@ Project docs are split between root status docs and `docs/`:
 - Improve fetch-job progress visibility/details in the UI
 - Add/expand automated tests for DB-only runtime + fetch flows
 - Harden auth/session features (refresh token lifecycle, rate limiting)
-- Continue reducing optional local artifact fallback/debug paths
+- Keep DB-first runtime behavior stable across modules

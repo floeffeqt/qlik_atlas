@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
-import shutil
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func as sa_func, inspect as sa_inspect
 from contextlib import asynccontextmanager
@@ -24,12 +23,24 @@ from fetchers.fetch_reloads import fetch_all_reloads
 from fetchers.fetch_audits import fetch_all_audits
 from fetchers.fetch_licenses_consumption import fetch_all_licenses_consumption
 from fetchers.fetch_licenses_status import fetch_all_licenses_status
+from fetchers.fetch_app_data_metadata import fetch_app_data_metadata
 from fetchers.fetch_lineage import fetch_app_edges_for_apps, fetch_lineage_for_apps
 from fetchers.fetch_spaces import fetch_all_spaces
 from fetchers.fetch_usage import fetch_usage_async
-from fetchers.artifact_graph import build_snapshot_from_lineage_artifacts, build_snapshot_from_payloads
+from fetchers.artifact_graph import build_snapshot_from_payloads
 from shared.config import is_prod, settings
 from shared.models import GraphResponse, HealthResponse, InventoryResponse, OrphansReport
+from shared.analytics_models import (
+    AnalyticsAppFieldsResponse,
+    AnalyticsAppTrendResponse,
+    AnalyticsAreaAppsResponse,
+    AnalyticsAreasResponse,
+    BloatExplorerResponse,
+    CostValueMapResponse,
+    DataModelPackResponse,
+    GovernanceOperationsResponse,
+    LineageCriticalityResponse,
+)
 from app.auth.routes import router as auth_router
 from app.customers.routes import router as customers_router
 from app.auth.utils import get_current_user, get_current_user_id, require_admin
@@ -45,12 +56,26 @@ from app.db_runtime_views import (
     load_orphans_report,
     load_spaces_payload,
 )
+from app.analytics_runtime_views import (
+    DEFAULT_DAYS as ANALYTICS_DEFAULT_DAYS,
+    DEFAULT_FIELDS_LIMIT as ANALYTICS_DEFAULT_FIELDS_LIMIT,
+    DEFAULT_GOVERNANCE_LIMIT as ANALYTICS_DEFAULT_GOVERNANCE_LIMIT,
+    DataModelPackMetric,
+    load_analytics_app_fields,
+    load_analytics_app_trend,
+    load_analytics_area_apps,
+    load_analytics_areas,
+    load_bloat_explorer,
+    load_cost_value_map,
+    load_data_model_pack,
+    load_governance_operations,
+    load_lineage_criticality,
+)
 from app.projects.routes import router as projects_router
 from app.admin.routes import router as admin_router
 from app.themes.routes import router as themes_router
 from shared.qlik_client import QlikClient
 from shared.security_headers import apply_security_headers
-from shared.utils import ensure_dir, read_json, write_json
 
 
 FetchStep = Literal[
@@ -61,6 +86,7 @@ FetchStep = Literal[
     "audits",
     "licenses-consumption",
     "licenses-status",
+    "app-data-metadata",
     "lineage",
     "app-edges",
     "usage",
@@ -81,6 +107,7 @@ FETCH_STEP_ALL_ORDER: list[FetchStep] = [
     "audits",
     "licenses-consumption",
     "licenses-status",
+    "app-data-metadata",
     "lineage",
     "app-edges",
     "usage",
@@ -94,17 +121,6 @@ INDEPENDENT_FETCH_STEPS: set[FetchStep] = {
     "licenses-consumption",
     "licenses-status",
 }
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-OUTPUT_ROOT = PROJECT_ROOT / "output"
-APPS_INVENTORY_FILE = OUTPUT_ROOT / "apps_inventory.json"
-SPACES_FILE = OUTPUT_ROOT / "spaces.json"
-LINEAGE_OUT_DIR = OUTPUT_ROOT / "lineage"
-LINEAGE_SUCCESS_DIR = OUTPUT_ROOT / "lineage_success"
-APP_EDGES_DIR = LINEAGE_SUCCESS_DIR
-APP_USAGE_DIR = OUTPUT_ROOT / "appusage"
-TENANT_DATA_CONNECTIONS_FILE = LINEAGE_OUT_DIR / "tenant_data_connections.json"
-
 
 class FetchJobRequest(BaseModel):
     steps: list[FetchStep] | None = None
@@ -140,11 +156,6 @@ fetch_jobs_registry: dict[str, dict[str, Any]] = {}
 fetch_jobs_lock = asyncio.Lock()
 job_logs: dict[str, list[str]] = {}
 MAX_FINISHED_JOBS = 50
-
-
-def _write_local_fetch_artifacts_enabled() -> bool:
-    raw = os.getenv("FETCH_WRITE_LOCAL_ARTIFACTS", "false").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
 
 
 async def _session_with_rls_context(
@@ -192,7 +203,7 @@ def _prune_old_jobs() -> None:
 
 
 def _log_time() -> str:
-    return datetime.now(timezone.utc).strftime("%H:%M:%S")
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 async def _append_log(job_id: str, msg: str) -> None:
@@ -215,6 +226,8 @@ def _normalize_steps(steps: list[FetchStep] | None) -> list[FetchStep]:
     if not steps:
         return list(FETCH_STEP_ALL_ORDER)
     selected = set(steps)
+    if "app-data-metadata" in selected:
+        selected.add("apps")
     if "app-edges" in selected:
         selected.add("lineage")
     if "lineage" in selected or "usage" in selected:
@@ -239,52 +252,8 @@ def _build_qlik_client() -> QlikClient:
     )
 
 
-def _load_apps_inventory() -> list[dict[str, Any]]:
-    if not APPS_INVENTORY_FILE.exists():
-        raise RuntimeError("apps inventory missing; run apps step first")
-    payload = read_json(APPS_INVENTORY_FILE)
-    if isinstance(payload, dict) and isinstance(payload.get("apps"), list):
-        return [item for item in payload["apps"] if isinstance(item, dict)]
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
-    raise RuntimeError("apps inventory is invalid")
-
-
 def _is_http_ok(status: Any) -> bool:
     return isinstance(status, int) and 200 <= status < 300
-
-
-def _extract_successful_lineage_app_ids() -> set[str]:
-    app_ids: set[str] = set()
-    if not LINEAGE_OUT_DIR.exists():
-        return app_ids
-
-    for path in LINEAGE_OUT_DIR.glob("*__lineage.json"):
-        try:
-            payload = read_json(path)
-        except Exception:
-            continue
-        if not isinstance(payload, dict):
-            continue
-
-        endpoints = payload.get("endpoints")
-        if not isinstance(endpoints, dict):
-            continue
-        source = endpoints.get("source") or {}
-        overview = endpoints.get("overview") or {}
-        if not isinstance(source, dict) or not isinstance(overview, dict):
-            continue
-        if not (_is_http_ok(source.get("status")) and _is_http_ok(overview.get("status"))):
-            continue
-
-        app = payload.get("app") or {}
-        if not isinstance(app, dict):
-            continue
-        app_id = app.get("id")
-        if app_id:
-            app_ids.add(str(app_id))
-
-    return app_ids
 
 
 def _extract_successful_lineage_app_ids_from_payloads(payloads: list[dict[str, Any]] | None) -> set[str]:
@@ -332,77 +301,7 @@ def _select_apps_for_app_edges(
         if filtered_by_payloads:
             return filtered_by_payloads, "lineage_payload_runtime"
 
-    successful_app_ids = _extract_successful_lineage_app_ids()
-    if not successful_app_ids:
-        return list(apps), "fallback_all_apps"
-
-    filtered: list[dict[str, Any]] = []
-    for app in apps:
-        app_id = app.get("appId")
-        if app_id and str(app_id) in successful_app_ids:
-            filtered.append(app)
-    if filtered:
-        return filtered, "lineage_output_scan"
     return list(apps), "fallback_all_apps"
-
-
-def _clear_app_edges_artifacts(directory: Path) -> int:
-    if not directory.exists() or not directory.is_dir():
-        return 0
-    removed = 0
-    for path in directory.glob("*.json"):
-        try:
-            path.unlink()
-            removed += 1
-        except FileNotFoundError:
-            continue
-    return removed
-
-
-def _clear_lineage_artifacts(directory: Path) -> int:
-    if not directory.exists() or not directory.is_dir():
-        return 0
-    removed = 0
-    for path in directory.glob("*__lineage.json"):
-        try:
-            path.unlink()
-            removed += 1
-        except FileNotFoundError:
-            continue
-    return removed
-
-
-def _clear_outputs_for_steps(steps: list[FetchStep]) -> dict[str, Any]:
-    cleared: dict[str, Any] = {"files": [], "dirs": []}
-    selected = set(steps)
-
-    if "apps" in selected and APPS_INVENTORY_FILE.exists():
-        APPS_INVENTORY_FILE.unlink()
-        cleared["files"].append(str(APPS_INVENTORY_FILE))
-
-    if "spaces" in selected and SPACES_FILE.exists():
-        SPACES_FILE.unlink()
-        cleared["files"].append(str(SPACES_FILE))
-
-    if "data-connections" in selected and TENANT_DATA_CONNECTIONS_FILE.exists():
-        TENANT_DATA_CONNECTIONS_FILE.unlink()
-        cleared["files"].append(str(TENANT_DATA_CONNECTIONS_FILE))
-
-    if "lineage" in selected:
-        removed = _clear_lineage_artifacts(LINEAGE_OUT_DIR)
-        if removed:
-            cleared["files"].append(f"{LINEAGE_OUT_DIR}/*__lineage.json ({removed})")
-
-    if "app-edges" in selected:
-        removed = _clear_app_edges_artifacts(APP_EDGES_DIR)
-        if removed:
-            cleared["files"].append(f"{APP_EDGES_DIR}/*.json ({removed})")
-
-    if "usage" in selected and APP_USAGE_DIR.exists():
-        shutil.rmtree(APP_USAGE_DIR)
-        cleared["dirs"].append(str(APP_USAGE_DIR))
-
-    return cleared
 
 
 async def _run_apps_step(request: FetchJobRequest) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -412,12 +311,7 @@ async def _run_apps_step(request: FetchJobRequest) -> tuple[list[dict[str, Any]]
     finally:
         await client.close()
 
-    wrote_local = False
-    if _write_local_fetch_artifacts_enabled():
-        ensure_dir(APPS_INVENTORY_FILE.parent)
-        write_json(APPS_INVENTORY_FILE, {"count": len(apps), "apps": apps})
-        wrote_local = True
-    return apps, {"count": len(apps), "storage": "db-first-memory", "localArtifactWritten": wrote_local}
+    return apps, {"count": len(apps), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
 async def _run_spaces_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -428,12 +322,7 @@ async def _run_spaces_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     finally:
         await client.close()
 
-    wrote_local = False
-    if _write_local_fetch_artifacts_enabled():
-        ensure_dir(SPACES_FILE.parent)
-        write_json(SPACES_FILE, {"count": len(spaces), "spaces": spaces})
-        wrote_local = True
-    return spaces, {"count": len(spaces), "storage": "db-first-memory", "localArtifactWritten": wrote_local}
+    return spaces, {"count": len(spaces), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
 async def _run_data_connections_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -444,12 +333,7 @@ async def _run_data_connections_step() -> tuple[list[dict[str, Any]], dict[str, 
     finally:
         await client.close()
 
-    wrote_local = False
-    if _write_local_fetch_artifacts_enabled():
-        ensure_dir(TENANT_DATA_CONNECTIONS_FILE.parent)
-        write_json(TENANT_DATA_CONNECTIONS_FILE, {"count": len(connections), "data": connections})
-        wrote_local = True
-    return connections, {"count": len(connections), "storage": "db-first-memory", "localArtifactWritten": wrote_local}
+    return connections, {"count": len(connections), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
 async def _run_reloads_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -492,21 +376,80 @@ async def _run_licenses_status_step() -> tuple[list[dict[str, Any]], dict[str, A
     return statuses, {"count": len(statuses), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
+async def _run_app_data_metadata_step(
+    apps: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    profiling_enabled_raw = os.getenv("FETCH_APP_DATA_METADATA_PROFILING_ENABLED", "true").strip().lower()
+    profiling_enabled = profiling_enabled_raw in {"1", "true", "yes", "on"}
+    app_ids: list[str] = []
+    for app in apps:
+        if not isinstance(app, dict):
+            continue
+        app_id = app.get("appId")
+        if app_id:
+            app_ids.append(str(app_id))
+    app_ids = sorted(set(app_ids))
+    if not app_ids:
+        return [], {
+            "apps": 0,
+            "success": 0,
+            "failed": 0,
+            "profilingEnabled": profiling_enabled,
+            "storage": "db-first-memory",
+            "localArtifactWritten": False,
+        }
+
+    concurrency_raw = os.getenv("FETCH_APP_DATA_METADATA_CONCURRENCY", "5").strip()
+    try:
+        concurrency = max(1, int(concurrency_raw))
+    except ValueError:
+        concurrency = 5
+
+    client = _build_qlik_client()
+    try:
+        semaphore = asyncio.Semaphore(concurrency)
+        results: list[dict[str, Any]] = []
+        failed = 0
+
+        async def _fetch_one(app_id: str) -> dict[str, Any]:
+            async with semaphore:
+                return await fetch_app_data_metadata(
+                    app_id=app_id,
+                    client=client,
+                    profiling_enabled=profiling_enabled,
+                )
+
+        fetched = await asyncio.gather(*[_fetch_one(app_id) for app_id in app_ids], return_exceptions=True)
+        for item in fetched:
+            if isinstance(item, Exception):
+                failed += 1
+                continue
+            if isinstance(item, dict):
+                results.append(item)
+
+        return results, {
+            "apps": len(app_ids),
+            "success": len(results),
+            "failed": failed,
+            "profilingEnabled": profiling_enabled,
+            "storage": "db-first-memory",
+            "localArtifactWritten": False,
+        }
+    finally:
+        await client.close()
+
+
 async def _run_lineage_step(
     request: FetchJobRequest,
     apps: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    write_local = _write_local_fetch_artifacts_enabled()
-    if write_local:
-        ensure_dir(LINEAGE_OUT_DIR)
-
     lineage_concurrency = request.lineageConcurrency or int(os.getenv("QLIK_LINEAGE_CONCURRENCY", "5"))
     client = _build_qlik_client()
     lineage_payloads: list[dict[str, Any]] = []
     lineage_result = await fetch_lineage_for_apps(
         client=client,
         apps=apps,
-        outdir=LINEAGE_OUT_DIR if write_local else None,
+        outdir=None,
         success_outdir=None,
         concurrency=lineage_concurrency,
         collector=lineage_payloads,
@@ -515,7 +458,7 @@ async def _run_lineage_step(
         "apps": len(apps),
         "lineage": lineage_result,
         "storage": "db-first-memory",
-        "localArtifactWritten": write_local,
+        "localArtifactWritten": False,
     }
 
 
@@ -524,10 +467,6 @@ async def _run_app_edges_step(
     apps: list[dict[str, Any]],
     lineage_payloads: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    write_local = _write_local_fetch_artifacts_enabled()
-    if write_local:
-        ensure_dir(APP_EDGES_DIR)
-        _clear_app_edges_artifacts(APP_EDGES_DIR)
     eligible_apps, filter_source = _select_apps_for_app_edges(apps, lineage_payloads=lineage_payloads)
     if not eligible_apps:
         return [], {
@@ -545,7 +484,7 @@ async def _run_app_edges_step(
     edges_result = await fetch_app_edges_for_apps(
         client=client,
         apps=eligible_apps,
-        outdir=APP_EDGES_DIR if write_local else None,
+        outdir=None,
         success_outdir=None,
         concurrency=lineage_concurrency,
         up_depth=os.getenv("QLIK_APP_EDGES_UP_DEPTH", "-1"),
@@ -562,7 +501,7 @@ async def _run_app_edges_step(
             "edges": len(edges_result.get("edges", [])),
         },
         "storage": "db-first-memory",
-        "localArtifactWritten": write_local,
+        "localArtifactWritten": False,
     }
 
 
@@ -570,21 +509,18 @@ async def _run_usage_step(
     request: FetchJobRequest,
     apps: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    write_local = _write_local_fetch_artifacts_enabled()
-    if write_local:
-        ensure_dir(APP_USAGE_DIR)
     client = _build_qlik_client()
     usage_payloads: list[dict[str, Any]] = []
     await fetch_usage_async(
         apps=apps,
         client=client,
         window_days=request.usageWindowDays,
-        outdir=APP_USAGE_DIR if write_local else None,
+        outdir=None,
         concurrency=request.usageConcurrency,
         close_client=True,
         collector=usage_payloads,
     )
-    return usage_payloads, {"apps": len(apps), "storage": "db-first-memory", "localArtifactWritten": write_local}
+    return usage_payloads, {"apps": len(apps), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
 async def _update_job(job_id: str, **values: Any) -> None:
@@ -626,6 +562,7 @@ async def _execute_fetch_job(
     audits_cache: list[dict[str, Any]] | None = None
     licenses_consumption_cache: list[dict[str, Any]] | None = None
     licenses_status_cache: list[dict[str, Any]] | None = None
+    app_data_metadata_cache: list[dict[str, Any]] | None = None
     lineage_payloads_cache: list[dict[str, Any]] = []
     usage_payloads: list[dict[str, Any]] = []
     app_edges_payloads: list[dict[str, Any]] = []
@@ -637,6 +574,7 @@ async def _execute_fetch_job(
         "audits": "Audits laden",
         "licenses-consumption": "License Consumption laden",
         "licenses-status": "License Status laden",
+        "app-data-metadata": "App Data Metadata laden",
         "lineage": "Lineage berechnen",
         "app-edges": "App-Kanten berechnen",
         "usage": "Usage-Daten laden",
@@ -649,19 +587,13 @@ async def _execute_fetch_job(
         await _load_project_creds_to_env(project_id, actor_user_id=actor_user_id, actor_role=actor_role)
         await _append_log(job_id, "✓ Credentials geladen")
 
-        if _write_local_fetch_artifacts_enabled():
-            if request.clearOutputs:
-                cleared = _clear_outputs_for_steps(steps)
-                if cleared.get("files") or cleared.get("dirs"):
-                    await _append_log(job_id, "Alte Ausgabedateien bereinigt")
-                else:
-                    await _append_log(job_id, "Keine lokalen Ausgabedateien zum Bereinigen gefunden")
-            else:
-                cleared = {"files": [], "dirs": [], "skipped": True, "reason": "clearOutputs=false"}
-                await _append_log(job_id, "Bereinigung lokaler Ausgaben übersprungen (clearOutputs=false)")
-        else:
-            cleared = {"files": [], "dirs": [], "skipped": True, "reason": "local artifacts disabled (DB-first mode)"}
-            await _append_log(job_id, "Lokale Fetch-Artefakte deaktiviert (DB-first Mode)")
+        cleared = {
+            "files": [],
+            "dirs": [],
+            "skipped": True,
+            "reason": "local artifacts removed (DB-first-only runtime)",
+        }
+        await _append_log(job_id, "Lokale Fetch-Artefakte sind entfernt (DB-first-only Runtime).")
         await _update_job(job_id, cleanup=cleared)
 
         step_positions: dict[FetchStep, int] = {step: i for i, step in enumerate(steps, 1)}
@@ -674,6 +606,7 @@ async def _execute_fetch_job(
             nonlocal audits_cache
             nonlocal licenses_consumption_cache
             nonlocal licenses_status_cache
+            nonlocal app_data_metadata_cache
             nonlocal lineage_payloads_cache
             nonlocal app_edges_payloads
             nonlocal usage_payloads
@@ -704,20 +637,22 @@ async def _execute_fetch_job(
             elif step == "licenses-status":
                 licenses_status_cache, result = await _run_licenses_status_step()
                 await _append_log(job_id, f"License Status geladen: {result.get('count', 0)}")
+            elif step == "app-data-metadata":
+                if apps_cache is None:
+                    raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'app-data-metadata'")
+                app_data_metadata_cache, result = await _run_app_data_metadata_step(apps_cache)
+                await _append_log(
+                    job_id,
+                    f"App Data Metadata geladen: {result.get('success', 0)} erfolgreich, {result.get('failed', 0)} fehlgeschlagen",
+                )
             elif step == "lineage":
                 if apps_cache is None:
-                    if _write_local_fetch_artifacts_enabled():
-                        apps_cache = _load_apps_inventory()
-                    else:
-                        raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'lineage'")
+                    raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'lineage'")
                 lineage_payloads_cache, result = await _run_lineage_step(request, apps_cache)
                 await _append_log(job_id, f"✓ Lineage für {len(apps_cache)} Apps berechnet")
             elif step == "app-edges":
                 if apps_cache is None:
-                    if _write_local_fetch_artifacts_enabled():
-                        apps_cache = _load_apps_inventory()
-                    else:
-                        raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'app-edges'")
+                    raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'app-edges'")
                 app_edges_payloads, result = await _run_app_edges_step(
                     request,
                     apps_cache,
@@ -727,10 +662,7 @@ async def _execute_fetch_job(
                 await _append_log(job_id, f"✓ {edges} App-Kanten gefunden")
             elif step == "usage":
                 if apps_cache is None:
-                    if _write_local_fetch_artifacts_enabled():
-                        apps_cache = _load_apps_inventory()
-                    else:
-                        raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'usage'")
+                    raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'usage'")
                 usage_payloads, result = await _run_usage_step(request, apps_cache)
                 await _append_log(job_id, f"✓ Usage-Daten geladen")
             else:
@@ -774,6 +706,7 @@ async def _execute_fetch_job(
             audits_data=audits_cache,
             licenses_consumption_data=licenses_consumption_cache,
             licenses_status_data=licenses_status_cache,
+            app_data_metadata_data=app_data_metadata_cache,
             usage_payloads=usage_payloads,
             app_edges_payloads=app_edges_payloads,
         )
@@ -783,7 +716,8 @@ async def _execute_fetch_job(
             f"{db_result.get('nodes', 0)} Knoten · {db_result.get('edges', 0)} Kanten · "
             f"{db_result.get('reloads', 0)} Reloads · {db_result.get('audits', 0)} Audits · "
             f"{db_result.get('licenseConsumption', 0)} License-Consumption · "
-            f"{db_result.get('licenseStatus', 0)} License-Status"
+            f"{db_result.get('licenseStatus', 0)} License-Status · "
+            f"{db_result.get('appDataMetadataSnapshots', 0)} App-Data-Metadata-Snapshots"
         )
         await _append_log(job_id, "✓ Job erfolgreich abgeschlossen")
         await _update_job(job_id, status="completed", finishedAt=_utc_now_iso(), currentStep=None, dbStore=db_result)
@@ -816,94 +750,6 @@ async def _load_project_creds_to_env(project_id: int, *, actor_user_id: int, act
         os.environ["QLIK_TENANT_URL"] = customer.tenant_url
         os.environ["QLIK_API_KEY"] = customer.api_key
         print(f"Loaded credentials for project {project_id} from customer '{customer.name}'")
-
-
-def _iter_usage_artifacts(directory: Path) -> list[dict[str, Any]]:
-    if not directory.exists() or not directory.is_dir():
-        return []
-    payloads: list[dict[str, Any]] = []
-    for path in sorted(directory.glob("*.json")):
-        try:
-            payload = read_json(path)
-        except Exception:
-            continue
-        if isinstance(payload, dict):
-            payloads.append(payload)
-    return payloads
-
-
-def _infer_app_id_from_script_artifact(path: Path, payload: dict[str, Any] | None = None) -> str | None:
-    payload = payload or {}
-    candidate = payload.get("appId")
-    if isinstance(candidate, str) and candidate.strip():
-        return candidate.strip()
-    stem = path.stem
-    if "__" in stem:
-        last = stem.split("__")[-1].strip()
-        if last:
-            return last
-    return stem.strip() or None
-
-
-def _iter_script_artifacts(directory: Path) -> list[dict[str, Any]]:
-    if not directory.exists() or not directory.is_dir():
-        return []
-    artifacts: list[dict[str, Any]] = []
-    for path in sorted(directory.iterdir()):
-        if not path.is_file():
-            continue
-        suffix = path.suffix.lower()
-        if suffix not in {".json", ".qvs", ".txt"}:
-            continue
-        payload: dict[str, Any]
-        script_text: str | None = None
-        source = suffix.lstrip(".")
-
-        if suffix == ".json":
-            try:
-                raw = read_json(path)
-            except Exception:
-                continue
-            if not isinstance(raw, dict):
-                continue
-            payload = dict(raw)
-            candidate_script = (
-                payload.get("script")
-                or payload.get("loadScript")
-                or payload.get("load_script")
-                or payload.get("text")
-            )
-            if not isinstance(candidate_script, str):
-                continue
-            script_text = candidate_script
-            source = str(payload.get("source") or source)
-        else:
-            try:
-                script_text = path.read_text(encoding="utf-8")
-            except Exception:
-                continue
-            payload = {
-                "script": script_text,
-                "source": source,
-                "fileName": path.name,
-            }
-
-        app_id = _infer_app_id_from_script_artifact(path, payload)
-        if not app_id or script_text is None:
-            continue
-        payload.setdefault("appId", app_id)
-        payload.setdefault("fileName", path.name)
-        payload.setdefault("source", source)
-        artifacts.append(
-            {
-                "appId": app_id,
-                "script": script_text,
-                "source": str(payload.get("source") or source),
-                "fileName": str(payload.get("fileName") or path.name),
-                "data": payload,
-            }
-        )
-    return artifacts
 
 
 def _space_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
@@ -989,6 +835,96 @@ def _datetime_or_none(value: Any) -> datetime | None:
     except ValueError:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _merge_text_list(left: Any, right: Any) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in [left, right]:
+        if not isinstance(raw, list):
+            continue
+        for item in raw:
+            text = _str_or_none(item)
+            if text is None:
+                continue
+            if text in seen:
+                continue
+            seen.add(text)
+            out.append(text)
+    return out
+
+
+def _merge_json_like(left: Any, right: Any) -> Any:
+    if isinstance(left, dict) and isinstance(right, dict):
+        merged = dict(left)
+        merged.update(right)
+        return merged
+    if left is not None:
+        return left
+    return right
+
+
+def _dedupe_rows_by_key(
+    rows: list[dict[str, Any]],
+    key_columns: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    deduped: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        key_values: list[Any] = []
+        skip = False
+        for col in key_columns:
+            value = row.get(col)
+            if value is None:
+                skip = True
+                break
+            key_values.append(value)
+        if skip:
+            continue
+        deduped[tuple(key_values)] = dict(row)
+    return list(deduped.values())
+
+
+def _dedupe_app_data_metadata_field_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    scalar_columns = (
+        "name",
+        "comment",
+        "cardinal",
+        "byte_size",
+        "is_hidden",
+        "is_locked",
+        "is_system",
+        "is_numeric",
+        "is_semantic",
+        "total_count",
+        "distinct_only",
+        "always_one_selected",
+    )
+    deduped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        field_hash = _str_or_none(row.get("field_hash"))
+        if field_hash is None:
+            continue
+        candidate = dict(row)
+        candidate["field_hash"] = field_hash
+        candidate["tags"] = _merge_text_list(candidate.get("tags"), [])
+        candidate["src_tables"] = _merge_text_list(candidate.get("src_tables"), [])
+        existing = deduped.get(field_hash)
+        if existing is None:
+            deduped[field_hash] = candidate
+            continue
+
+        for col in scalar_columns:
+            if existing.get(col) is None and candidate.get(col) is not None:
+                existing[col] = candidate.get(col)
+        existing["tags"] = _merge_text_list(existing.get("tags"), candidate.get("tags"))
+        existing["src_tables"] = _merge_text_list(existing.get("src_tables"), candidate.get("src_tables"))
+        existing["extra_json"] = _merge_json_like(existing.get("extra_json"), candidate.get("extra_json"))
+
+    return list(deduped.values())
 
 
 def _to_db_column_value_map(model: Any, values: dict[str, Any]) -> dict[str, Any]:
@@ -1146,6 +1082,14 @@ def _data_connection_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
         "q_connect_statement": _str_or_none(item.get("qConnectStatement")),
         "q_separate_credentials": _bool_or_none(item.get("qSeparateCredentials")),
     }
+
+
+def _sanitize_data_connection_payload_for_storage(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {}
+    sanitized = dict(item)
+    sanitized.pop("qConnectStatement", None)
+    return sanitized
 
 
 def _reload_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
@@ -1354,6 +1298,238 @@ def _license_status_payload_columns(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _app_data_metadata_snapshot_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "app_id": None,
+            "fetched_at": datetime.now(timezone.utc),
+            "static_byte_size": None,
+            "has_section_access": None,
+            "is_direct_query_mode": None,
+            "reload_meta_cpu_time_spent_ms": None,
+            "reload_meta_peak_memory_bytes": None,
+            "reload_meta_full_reload_peak_memory_bytes": None,
+            "reload_meta_partial_reload_peak_memory_bytes": None,
+            "reload_meta_hardware_total_memory": None,
+            "reload_meta_hardware_logical_cores": None,
+            "schema_hash": hashlib.sha256(b"").hexdigest(),
+            "extra_json": None,
+            "source": None,
+            "tenant": None,
+        }
+    return {
+        "app_id": _str_or_none(item.get("app_id")),
+        "fetched_at": _datetime_or_none(item.get("fetched_at")) or datetime.now(timezone.utc),
+        "static_byte_size": _int_or_none(item.get("static_byte_size")),
+        "has_section_access": _bool_or_none(item.get("has_section_access")),
+        "is_direct_query_mode": _bool_or_none(item.get("is_direct_query_mode")),
+        "reload_meta_cpu_time_spent_ms": _int_or_none(item.get("reload_meta_cpu_time_spent_ms")),
+        "reload_meta_peak_memory_bytes": _int_or_none(item.get("reload_meta_peak_memory_bytes")),
+        "reload_meta_full_reload_peak_memory_bytes": _int_or_none(item.get("reload_meta_full_reload_peak_memory_bytes")),
+        "reload_meta_partial_reload_peak_memory_bytes": _int_or_none(item.get("reload_meta_partial_reload_peak_memory_bytes")),
+        "reload_meta_hardware_total_memory": _int_or_none(item.get("reload_meta_hardware_total_memory")),
+        "reload_meta_hardware_logical_cores": _int_or_none(item.get("reload_meta_hardware_logical_cores")),
+        "schema_hash": _str_or_none(item.get("schema_hash")) or hashlib.sha256(b"").hexdigest(),
+        "extra_json": _json_or_none(item.get("extra_json")),
+        "source": _str_or_none(item.get("source")),
+        "tenant": _str_or_none(item.get("tenant")),
+    }
+
+
+def _app_data_metadata_field_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "field_hash": None,
+            "name": None,
+            "comment": None,
+            "cardinal": None,
+            "byte_size": None,
+            "is_hidden": None,
+            "is_locked": None,
+            "is_system": None,
+            "is_numeric": None,
+            "is_semantic": None,
+            "total_count": None,
+            "distinct_only": None,
+            "always_one_selected": None,
+            "tags": [],
+            "src_tables": [],
+            "extra_json": None,
+        }
+    return {
+        "field_hash": _str_or_none(item.get("field_hash")),
+        "name": _str_or_none(item.get("name")),
+        "comment": _str_or_none(item.get("comment")),
+        "cardinal": _int_or_none(item.get("cardinal")),
+        "byte_size": _int_or_none(item.get("byte_size")),
+        "is_hidden": _bool_or_none(item.get("is_hidden")),
+        "is_locked": _bool_or_none(item.get("is_locked")),
+        "is_system": _bool_or_none(item.get("is_system")),
+        "is_numeric": _bool_or_none(item.get("is_numeric")),
+        "is_semantic": _bool_or_none(item.get("is_semantic")),
+        "total_count": _int_or_none(item.get("total_count")),
+        "distinct_only": _bool_or_none(item.get("distinct_only")),
+        "always_one_selected": _bool_or_none(item.get("always_one_selected")),
+        "tags": _list_or_none(item.get("tags")) or [],
+        "src_tables": _list_or_none(item.get("src_tables")) or [],
+        "extra_json": _json_or_none(item.get("extra_json")),
+    }
+
+
+def _app_data_metadata_table_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "name": None,
+            "comment": None,
+            "is_loose": None,
+            "byte_size": None,
+            "is_system": None,
+            "is_semantic": None,
+            "no_of_rows": None,
+            "no_of_fields": None,
+            "no_of_key_fields": None,
+            "extra_json": None,
+        }
+    return {
+        "name": _str_or_none(item.get("name")),
+        "comment": _str_or_none(item.get("comment")),
+        "is_loose": _bool_or_none(item.get("is_loose")),
+        "byte_size": _int_or_none(item.get("byte_size")),
+        "is_system": _bool_or_none(item.get("is_system")),
+        "is_semantic": _bool_or_none(item.get("is_semantic")),
+        "no_of_rows": _int_or_none(item.get("no_of_rows")),
+        "no_of_fields": _int_or_none(item.get("no_of_fields")),
+        "no_of_key_fields": _int_or_none(item.get("no_of_key_fields")),
+        "extra_json": _json_or_none(item.get("extra_json")),
+    }
+
+
+def _table_profile_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {"profile_index": 0, "no_of_rows": None, "extra_json": None}
+    return {
+        "profile_index": _int_or_none(item.get("profile_index")) or 0,
+        "no_of_rows": _int_or_none(item.get("no_of_rows")),
+        "extra_json": _json_or_none(item.get("extra_json")),
+    }
+
+
+def _field_profile_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "profile_index": 0,
+            "name": None,
+            "max_value": None,
+            "min_value": None,
+            "std_value": None,
+            "sum_value": None,
+            "sum2_value": None,
+            "median_value": None,
+            "average_value": None,
+            "kurtosis": None,
+            "skewness": None,
+            "field_tags": [],
+            "fractiles": [],
+            "neg_values": None,
+            "pos_values": None,
+            "last_sorted": None,
+            "null_values": None,
+            "text_values": None,
+            "zero_values": None,
+            "first_sorted": None,
+            "avg_string_len": None,
+            "data_evenness": None,
+            "empty_strings": None,
+            "max_string_len": None,
+            "min_string_len": None,
+            "sum_string_len": None,
+            "numeric_values": None,
+            "distinct_values": None,
+            "distinct_text_values": None,
+            "distinct_numeric_values": None,
+            "number_format_dec": None,
+            "number_format_fmt": None,
+            "number_format_thou": None,
+            "number_format_ndec": None,
+            "number_format_use_thou": None,
+            "extra_json": None,
+        }
+    return {
+        "profile_index": _int_or_none(item.get("profile_index")) or 0,
+        "name": _str_or_none(item.get("name")),
+        "max_value": item.get("max_value"),
+        "min_value": item.get("min_value"),
+        "std_value": item.get("std_value"),
+        "sum_value": item.get("sum_value"),
+        "sum2_value": item.get("sum2_value"),
+        "median_value": item.get("median_value"),
+        "average_value": item.get("average_value"),
+        "kurtosis": item.get("kurtosis"),
+        "skewness": item.get("skewness"),
+        "field_tags": _list_or_none(item.get("field_tags")) or [],
+        "fractiles": _json_or_none(item.get("fractiles")) or [],
+        "neg_values": _int_or_none(item.get("neg_values")),
+        "pos_values": _int_or_none(item.get("pos_values")),
+        "last_sorted": _str_or_none(item.get("last_sorted")),
+        "null_values": _int_or_none(item.get("null_values")),
+        "text_values": _int_or_none(item.get("text_values")),
+        "zero_values": _int_or_none(item.get("zero_values")),
+        "first_sorted": _str_or_none(item.get("first_sorted")),
+        "avg_string_len": item.get("avg_string_len"),
+        "data_evenness": item.get("data_evenness"),
+        "empty_strings": _int_or_none(item.get("empty_strings")),
+        "max_string_len": _int_or_none(item.get("max_string_len")),
+        "min_string_len": _int_or_none(item.get("min_string_len")),
+        "sum_string_len": _int_or_none(item.get("sum_string_len")),
+        "numeric_values": _int_or_none(item.get("numeric_values")),
+        "distinct_values": _int_or_none(item.get("distinct_values")),
+        "distinct_text_values": _int_or_none(item.get("distinct_text_values")),
+        "distinct_numeric_values": _int_or_none(item.get("distinct_numeric_values")),
+        "number_format_dec": _str_or_none(item.get("number_format_dec")),
+        "number_format_fmt": _str_or_none(item.get("number_format_fmt")),
+        "number_format_thou": _str_or_none(item.get("number_format_thou")),
+        "number_format_ndec": _int_or_none(item.get("number_format_ndec")),
+        "number_format_use_thou": _int_or_none(item.get("number_format_use_thou")),
+        "extra_json": _json_or_none(item.get("extra_json")),
+    }
+
+
+def _field_most_frequent_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "rank": 0,
+            "symbol_text": None,
+            "symbol_number": None,
+            "frequency": None,
+            "extra_json": None,
+        }
+    return {
+        "rank": _int_or_none(item.get("rank")) or 0,
+        "symbol_text": _str_or_none(item.get("symbol_text")),
+        "symbol_number": item.get("symbol_number"),
+        "frequency": _int_or_none(item.get("frequency")),
+        "extra_json": _json_or_none(item.get("extra_json")),
+    }
+
+
+def _field_frequency_distribution_columns(item: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {
+            "bin_index": 0,
+            "bin_edge": None,
+            "frequency": None,
+            "number_of_bins": None,
+            "extra_json": None,
+        }
+    return {
+        "bin_index": _int_or_none(item.get("bin_index")) or 0,
+        "bin_edge": item.get("bin_edge"),
+        "frequency": _int_or_none(item.get("frequency")),
+        "number_of_bins": _int_or_none(item.get("number_of_bins")),
+        "extra_json": _json_or_none(item.get("extra_json")),
+    }
+
+
 async def _run_db_store_step(
     project_id: int,
     *,
@@ -1366,17 +1542,24 @@ async def _run_db_store_step(
     audits_data: list[dict[str, Any]] | None = None,
     licenses_consumption_data: list[dict[str, Any]] | None = None,
     licenses_status_data: list[dict[str, Any]] | None = None,
+    app_data_metadata_data: list[dict[str, Any]] | None = None,
     usage_payloads: list[dict[str, Any]] | None = None,
     app_edges_payloads: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Persist fetch outputs into PostgreSQL (DB-first; artifact fallback when needed)."""
+    """Persist fetch outputs into PostgreSQL (DB-first only)."""
     from app.database import AsyncSessionLocal
     from app.models import (
         LineageEdge,
         LineageNode,
+        AppDataMetadataSnapshot,
+        AppDataMetadataField,
+        AppDataMetadataTable,
+        AppDataMetadataTableProfile,
+        AppDataMetadataFieldProfile,
+        AppDataMetadataFieldMostFrequent,
+        AppDataMetadataFieldFrequencyDistribution,
         QlikApp,
         QlikAudit,
-        QlikAppScript,
         QlikAppUsage,
         QlikDataConnection,
         QlikLicenseConsumption,
@@ -1395,6 +1578,13 @@ async def _run_db_store_step(
         "audits": 0,
         "licenseConsumption": 0,
         "licenseStatus": 0,
+        "appDataMetadataSnapshots": 0,
+        "appDataMetadataFields": 0,
+        "appDataMetadataTables": 0,
+        "tableProfiles": 0,
+        "fieldProfiles": 0,
+        "fieldMostFrequent": 0,
+        "fieldFrequencyDistribution": 0,
         "usage": 0,
         "scripts": 0,
         "skippedLineageFiles": 0,
@@ -1402,8 +1592,6 @@ async def _run_db_store_step(
 
     if app_edges_payloads is not None:
         snapshot, skipped_lineage_files = build_snapshot_from_payloads(app_edges_payloads)
-    elif _write_local_fetch_artifacts_enabled():
-        snapshot, skipped_lineage_files = build_snapshot_from_lineage_artifacts(APP_EDGES_DIR)
     else:
         snapshot, skipped_lineage_files = build_snapshot_from_payloads([])
     stored["skippedLineageFiles"] = len(skipped_lineage_files)
@@ -1412,9 +1600,6 @@ async def _run_db_store_step(
     app_lookup_for_nodes: dict[str, dict[str, Any]] = {}
     if apps_data is not None:
         apps_list = apps_data
-    elif _write_local_fetch_artifacts_enabled() and APPS_INVENTORY_FILE.exists():
-        payload = read_json(APPS_INVENTORY_FILE)
-        apps_list = payload.get("apps", payload) if isinstance(payload, dict) else payload
     else:
         apps_list = []
     if apps_list is not None:
@@ -1465,9 +1650,6 @@ async def _run_db_store_step(
             # --- spaces ---
             if spaces_data is not None:
                 spaces_list = spaces_data
-            elif _write_local_fetch_artifacts_enabled() and SPACES_FILE.exists():
-                spaces_payload = read_json(SPACES_FILE)
-                spaces_list = spaces_payload.get("spaces", []) if isinstance(spaces_payload, dict) else []
             else:
                 spaces_list = []
             if spaces_list:
@@ -1500,9 +1682,6 @@ async def _run_db_store_step(
             # --- data connections ---
             if data_connections_data is not None:
                 connections = data_connections_data
-            elif _write_local_fetch_artifacts_enabled() and TENANT_DATA_CONNECTIONS_FILE.exists():
-                connections_payload = read_json(TENANT_DATA_CONNECTIONS_FILE)
-                connections = connections_payload.get("data", []) if isinstance(connections_payload, dict) else []
             else:
                 connections = []
             if connections:
@@ -1513,16 +1692,21 @@ async def _run_db_store_step(
                     if not connection_id:
                         continue
                     connection_cols = _data_connection_payload_columns(item)
+                    item_sanitized = _sanitize_data_connection_payload_for_storage(item)
                     connection_cols_db = _to_db_column_value_map(QlikDataConnection, connection_cols)
                     stmt = pg_insert(QlikDataConnection).values(
                         project_id=project_id,
                         connection_id=str(connection_id),
                         space_id=connection_cols["space_payload"],
                         **connection_cols_db,
-                        data=item,
+                        data=item_sanitized,
                     ).on_conflict_do_update(
                         index_elements=["project_id", "connection_id"],
-                        set_={**connection_cols_db, "data": item, "space_id": connection_cols["space_payload"]},
+                        set_={
+                            **connection_cols_db,
+                            "data": item_sanitized,
+                            "space_id": connection_cols["space_payload"],
+                        },
                     )
                     await session.execute(stmt)
                     stored["dataConnections"] += 1
@@ -1615,11 +1799,214 @@ async def _run_db_store_step(
                 await session.execute(stmt)
                 stored["licenseStatus"] += 1
 
+            # --- app data metadata (append-only snapshots) ---
+            app_metadata_snapshots = app_data_metadata_data if isinstance(app_data_metadata_data, list) else []
+            for snapshot_payload in app_metadata_snapshots:
+                if not isinstance(snapshot_payload, dict):
+                    continue
+                snapshot_cols = _app_data_metadata_snapshot_columns(snapshot_payload)
+                app_id = snapshot_cols.get("app_id")
+                if not app_id:
+                    continue
+                snapshot_cols_db = _to_db_column_value_map(AppDataMetadataSnapshot, snapshot_cols)
+                snapshot_insert_stmt = (
+                    pg_insert(AppDataMetadataSnapshot)
+                    .values(project_id=project_id, **snapshot_cols_db)
+                    .returning(AppDataMetadataSnapshot.snapshot_id)
+                )
+                snapshot_result = await session.execute(snapshot_insert_stmt)
+                snapshot_id = snapshot_result.scalar_one()
+                stored["appDataMetadataSnapshots"] += 1
+
+                field_rows: list[dict[str, Any]] = []
+                for field_item in snapshot_payload.get("fields", []):
+                    if not isinstance(field_item, dict):
+                        continue
+                    field_cols = _app_data_metadata_field_columns(field_item)
+                    if not field_cols.get("field_hash"):
+                        continue
+                    field_cols_db = _to_db_column_value_map(AppDataMetadataField, field_cols)
+                    field_rows.append({"project_id": project_id, "snapshot_id": snapshot_id, **field_cols_db})
+                field_rows = _dedupe_app_data_metadata_field_rows(field_rows)
+                if field_rows:
+                    field_insert_stmt = (
+                        pg_insert(AppDataMetadataField)
+                        .values(field_rows)
+                        .on_conflict_do_nothing(index_elements=["snapshot_id", "field_hash"])
+                        .returning(AppDataMetadataField.row_id)
+                    )
+                    field_insert_result = await session.execute(field_insert_stmt)
+                    stored["appDataMetadataFields"] += len(field_insert_result.all())
+
+                table_rows: list[dict[str, Any]] = []
+                for table_item in snapshot_payload.get("tables", []):
+                    if not isinstance(table_item, dict):
+                        continue
+                    table_cols = _app_data_metadata_table_columns(table_item)
+                    if not table_cols.get("name"):
+                        continue
+                    table_cols_db = _to_db_column_value_map(AppDataMetadataTable, table_cols)
+                    table_rows.append({"project_id": project_id, "snapshot_id": snapshot_id, **table_cols_db})
+                table_rows = _dedupe_rows_by_key(table_rows, ("snapshot_id", "name"))
+                if table_rows:
+                    table_insert_stmt = (
+                        pg_insert(AppDataMetadataTable)
+                        .values(table_rows)
+                        .on_conflict_do_nothing(index_elements=["snapshot_id", "name"])
+                        .returning(AppDataMetadataTable.row_id)
+                    )
+                    table_insert_result = await session.execute(table_insert_stmt)
+                    stored["appDataMetadataTables"] += len(table_insert_result.all())
+
+                if bool(snapshot_payload.get("profiling_enabled")):
+                    table_profiles = snapshot_payload.get("table_profiles")
+                    if isinstance(table_profiles, list):
+                        table_profile_rows: list[dict[str, Any]] = []
+                        table_profile_sources: dict[int, dict[str, Any]] = {}
+                        for table_profile in table_profiles:
+                            if not isinstance(table_profile, dict):
+                                continue
+                            table_profile_cols = _table_profile_columns(table_profile)
+                            table_profile_index = int(table_profile_cols.get("profile_index") or 0)
+                            table_profile_cols_db = _to_db_column_value_map(AppDataMetadataTableProfile, table_profile_cols)
+                            table_profile_rows.append(
+                                {
+                                    "project_id": project_id,
+                                    "snapshot_id": snapshot_id,
+                                    **table_profile_cols_db,
+                                }
+                            )
+                            table_profile_sources[table_profile_index] = table_profile
+
+                        table_profile_id_by_index: dict[int, int] = {}
+                        if table_profile_rows:
+                            table_profile_rows = _dedupe_rows_by_key(table_profile_rows, ("snapshot_id", "profile_index"))
+                            table_profile_insert_stmt = (
+                                pg_insert(AppDataMetadataTableProfile)
+                                .values(table_profile_rows)
+                                .on_conflict_do_nothing(index_elements=["snapshot_id", "profile_index"])
+                                .returning(
+                                    AppDataMetadataTableProfile.table_profile_id,
+                                    AppDataMetadataTableProfile.profile_index,
+                                )
+                            )
+                            table_profile_result = await session.execute(table_profile_insert_stmt)
+                            for row in table_profile_result.all():
+                                table_profile_id_by_index[int(row.profile_index)] = int(row.table_profile_id)
+                            stored["tableProfiles"] += len(table_profile_id_by_index)
+
+                        field_profile_rows: list[dict[str, Any]] = []
+                        field_profile_sources: dict[tuple[int, int], dict[str, Any]] = {}
+                        for table_profile_index, source_profile in table_profile_sources.items():
+                            table_profile_id = table_profile_id_by_index.get(table_profile_index)
+                            if table_profile_id is None:
+                                continue
+                            field_profiles = source_profile.get("field_profiles")
+                            if not isinstance(field_profiles, list):
+                                continue
+                            for field_profile in field_profiles:
+                                if not isinstance(field_profile, dict):
+                                    continue
+                                field_profile_cols = _field_profile_columns(field_profile)
+                                field_profile_index = int(field_profile_cols.get("profile_index") or 0)
+                                field_profile_cols_db = _to_db_column_value_map(AppDataMetadataFieldProfile, field_profile_cols)
+                                field_profile_rows.append(
+                                    {
+                                        "project_id": project_id,
+                                        "snapshot_id": snapshot_id,
+                                        "table_profile_id": table_profile_id,
+                                        **field_profile_cols_db,
+                                    }
+                                )
+                                field_profile_sources[(table_profile_id, field_profile_index)] = field_profile
+
+                        field_profile_id_by_key: dict[tuple[int, int], int] = {}
+                        if field_profile_rows:
+                            field_profile_rows = _dedupe_rows_by_key(
+                                field_profile_rows,
+                                ("table_profile_id", "profile_index"),
+                            )
+                            field_profile_insert_stmt = (
+                                pg_insert(AppDataMetadataFieldProfile)
+                                .values(field_profile_rows)
+                                .on_conflict_do_nothing(index_elements=["table_profile_id", "profile_index"])
+                                .returning(
+                                    AppDataMetadataFieldProfile.field_profile_id,
+                                    AppDataMetadataFieldProfile.table_profile_id,
+                                    AppDataMetadataFieldProfile.profile_index,
+                                )
+                            )
+                            field_profile_result = await session.execute(field_profile_insert_stmt)
+                            for row in field_profile_result.all():
+                                key = (int(row.table_profile_id), int(row.profile_index))
+                                field_profile_id_by_key[key] = int(row.field_profile_id)
+                            stored["fieldProfiles"] += len(field_profile_id_by_key)
+
+                        most_frequent_rows: list[dict[str, Any]] = []
+                        frequency_distribution_rows: list[dict[str, Any]] = []
+                        for key, field_profile_id in field_profile_id_by_key.items():
+                            source_profile = field_profile_sources.get(key)
+                            if not isinstance(source_profile, dict):
+                                continue
+                            for mf_item in source_profile.get("most_frequent", []):
+                                if not isinstance(mf_item, dict):
+                                    continue
+                                mf_cols = _field_most_frequent_columns(mf_item)
+                                mf_cols_db = _to_db_column_value_map(AppDataMetadataFieldMostFrequent, mf_cols)
+                                most_frequent_rows.append(
+                                    {
+                                        "project_id": project_id,
+                                        "snapshot_id": snapshot_id,
+                                        "field_profile_id": field_profile_id,
+                                        **mf_cols_db,
+                                    }
+                                )
+                            for fd_item in source_profile.get("frequency_distribution", []):
+                                if not isinstance(fd_item, dict):
+                                    continue
+                                fd_cols = _field_frequency_distribution_columns(fd_item)
+                                fd_cols_db = _to_db_column_value_map(AppDataMetadataFieldFrequencyDistribution, fd_cols)
+                                frequency_distribution_rows.append(
+                                    {
+                                        "project_id": project_id,
+                                        "snapshot_id": snapshot_id,
+                                        "field_profile_id": field_profile_id,
+                                        **fd_cols_db,
+                                    }
+                                )
+
+                        if most_frequent_rows:
+                            most_frequent_rows = _dedupe_rows_by_key(
+                                most_frequent_rows,
+                                ("field_profile_id", "rank"),
+                            )
+                            most_frequent_insert_stmt = (
+                                pg_insert(AppDataMetadataFieldMostFrequent)
+                                .values(most_frequent_rows)
+                                .on_conflict_do_nothing(index_elements=["field_profile_id", "rank"])
+                                .returning(AppDataMetadataFieldMostFrequent.row_id)
+                            )
+                            most_frequent_insert_result = await session.execute(most_frequent_insert_stmt)
+                            stored["fieldMostFrequent"] += len(most_frequent_insert_result.all())
+                        if frequency_distribution_rows:
+                            frequency_distribution_rows = _dedupe_rows_by_key(
+                                frequency_distribution_rows,
+                                ("field_profile_id", "bin_index"),
+                            )
+                            frequency_distribution_insert_stmt = (
+                                pg_insert(AppDataMetadataFieldFrequencyDistribution)
+                                .values(frequency_distribution_rows)
+                                .on_conflict_do_nothing(index_elements=["field_profile_id", "bin_index"])
+                                .returning(AppDataMetadataFieldFrequencyDistribution.row_id)
+                            )
+                            frequency_distribution_insert_result = await session.execute(
+                                frequency_distribution_insert_stmt
+                            )
+                            stored["fieldFrequencyDistribution"] += len(frequency_distribution_insert_result.all())
+
             # --- usage ---
             if usage_payloads is not None:
                 usage_records = usage_payloads
-            elif _write_local_fetch_artifacts_enabled():
-                usage_records = _iter_usage_artifacts(APP_USAGE_DIR)
             else:
                 usage_records = []
             for usage_payload in usage_records:
@@ -1639,28 +2026,6 @@ async def _run_db_store_step(
                 )
                 await session.execute(stmt)
                 stored["usage"] += 1
-
-            # --- scripts (optional local source for now; DB becomes runtime source) ---
-            script_artifacts = _iter_script_artifacts(settings.scripts_dir) if _write_local_fetch_artifacts_enabled() else []
-            for script_artifact in script_artifacts:
-                stmt = pg_insert(QlikAppScript).values(
-                    project_id=project_id,
-                    app_id=str(script_artifact["appId"]),
-                    script=str(script_artifact["script"]),
-                    source=script_artifact.get("source"),
-                    file_name=script_artifact.get("fileName"),
-                    data=script_artifact["data"],
-                ).on_conflict_do_update(
-                    index_elements=["project_id", "app_id"],
-                    set_={
-                        "script": str(script_artifact["script"]),
-                        "source": script_artifact.get("source"),
-                        "file_name": script_artifact.get("fileName"),
-                        "data": script_artifact["data"],
-                    },
-                )
-                await session.execute(stmt)
-                stored["scripts"] += 1
 
             # --- nodes ---
             for node_id, node in snapshot.nodes.items():
@@ -1734,6 +2099,13 @@ async def _run_db_store_step(
             "qlik_audits",
             "qlik_license_consumption",
             "qlik_license_status",
+            "app_data_metadata_snapshot",
+            "app_data_metadata_fields",
+            "app_data_metadata_tables",
+            "table_profiles",
+            "field_profiles",
+            "field_most_frequent",
+            "field_frequency_distribution",
         )
         if "does not exist" in exc_msg and any(marker in exc_msg for marker in missing_table_markers):
             raise RuntimeError(
@@ -1806,6 +2178,240 @@ async def data_connections(session: AsyncSession = Depends(_session_with_rls_con
 @app.get("/api/spaces")
 async def spaces(session: AsyncSession = Depends(_session_with_rls_context)):
     return await load_spaces_payload(session)
+
+
+def _analytics_error_detail(code: str, message: str) -> dict[str, str]:
+    return {"code": code, "message": message}
+
+
+@app.get("/api/analytics/areas", response_model=AnalyticsAreasResponse)
+async def analytics_areas(
+    project_id: int | None = Query(default=None, ge=1),
+    days: int = Query(default=ANALYTICS_DEFAULT_DAYS, ge=1, le=3650),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> AnalyticsAreasResponse:
+    try:
+        payload = await load_analytics_areas(session, project_id=project_id, days=days)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_areas_query_failed",
+                "Bereiche konnten nicht geladen werden.",
+            ),
+        ) from exc
+    return AnalyticsAreasResponse.model_validate(payload)
+
+
+@app.get("/api/analytics/areas/{area_key:path}/apps", response_model=AnalyticsAreaAppsResponse)
+async def analytics_area_apps(
+    area_key: str,
+    project_id: int | None = Query(default=None, ge=1),
+    days: int = Query(default=ANALYTICS_DEFAULT_DAYS, ge=1, le=3650),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> AnalyticsAreaAppsResponse:
+    try:
+        payload = await load_analytics_area_apps(
+            session,
+            area_key=area_key,
+            project_id=project_id,
+            days=days,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=_analytics_error_detail("invalid_area_key", str(exc)),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_area_apps_query_failed",
+                "Apps im Bereich konnten nicht geladen werden.",
+            ),
+        ) from exc
+    return AnalyticsAreaAppsResponse.model_validate(payload)
+
+
+@app.get("/api/analytics/apps/{app_id:path}/fields", response_model=AnalyticsAppFieldsResponse)
+async def analytics_app_fields(
+    app_id: str,
+    project_id: int = Query(..., ge=1),
+    limit: int = Query(default=ANALYTICS_DEFAULT_FIELDS_LIMIT, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    sort_by: str = Query(default="byte_size"),
+    sort_dir: Literal["asc", "desc"] = Query(default="desc"),
+    search: str | None = Query(default=None),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> AnalyticsAppFieldsResponse:
+    try:
+        payload = await load_analytics_app_fields(
+            session,
+            project_id=project_id,
+            app_id=app_id,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            search=search,
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=_analytics_error_detail("app_not_found", "App nicht gefunden."),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_app_fields_query_failed",
+                "Felder konnten nicht geladen werden.",
+            ),
+        ) from exc
+    return AnalyticsAppFieldsResponse.model_validate(payload)
+
+
+@app.get("/api/analytics/apps/{app_id:path}/trend", response_model=AnalyticsAppTrendResponse)
+async def analytics_app_trend(
+    app_id: str,
+    project_id: int = Query(..., ge=1),
+    days: int = Query(default=ANALYTICS_DEFAULT_DAYS, ge=1, le=3650),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> AnalyticsAppTrendResponse:
+    try:
+        payload = await load_analytics_app_trend(
+            session,
+            project_id=project_id,
+            app_id=app_id,
+            days=days,
+        )
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail=_analytics_error_detail("app_not_found", "App nicht gefunden."),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_app_trend_query_failed",
+                "Trenddaten konnten nicht geladen werden.",
+            ),
+        ) from exc
+    return AnalyticsAppTrendResponse.model_validate(payload)
+
+
+@app.get("/api/analytics/insights/cost-value", response_model=CostValueMapResponse)
+async def analytics_insight_cost_value(
+    project_id: int | None = Query(default=None, ge=1),
+    days: int = Query(default=ANALYTICS_DEFAULT_DAYS, ge=1, le=3650),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> CostValueMapResponse:
+    try:
+        payload = await load_cost_value_map(session, project_id=project_id, days=days)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_cost_value_query_failed",
+                "Cost-vs-Value Daten konnten nicht geladen werden.",
+            ),
+        ) from exc
+    return CostValueMapResponse.model_validate(payload)
+
+
+@app.get("/api/analytics/insights/bloat", response_model=BloatExplorerResponse)
+async def analytics_insight_bloat(
+    project_id: int | None = Query(default=None, ge=1),
+    days: int = Query(default=ANALYTICS_DEFAULT_DAYS, ge=1, le=3650),
+    limit: int = Query(default=25, ge=1, le=200),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> BloatExplorerResponse:
+    try:
+        payload = await load_bloat_explorer(
+            session,
+            project_id=project_id,
+            days=days,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_bloat_query_failed",
+                "Bloat-Explorer Daten konnten nicht geladen werden.",
+            ),
+        ) from exc
+    return BloatExplorerResponse.model_validate(payload)
+
+
+@app.get("/api/analytics/insights/data-model-pack", response_model=DataModelPackResponse)
+async def analytics_insight_data_model_pack(
+    project_id: int | None = Query(default=None, ge=1),
+    metric: DataModelPackMetric = Query(default="static_byte_size_latest"),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> DataModelPackResponse:
+    try:
+        payload = await load_data_model_pack(
+            session,
+            project_id=project_id,
+            metric=metric,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_data_model_pack_query_failed",
+                "Data-Model-Pack Daten konnten nicht geladen werden.",
+            ),
+        ) from exc
+    return DataModelPackResponse.model_validate(payload)
+
+
+@app.get("/api/analytics/insights/lineage-criticality", response_model=LineageCriticalityResponse)
+async def analytics_insight_lineage_criticality(
+    project_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=30, ge=1, le=200),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> LineageCriticalityResponse:
+    try:
+        payload = await load_lineage_criticality(
+            session,
+            project_id=project_id,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_lineage_criticality_query_failed",
+                "Lineage-Kritikalitaet konnte nicht geladen werden.",
+            ),
+        ) from exc
+    return LineageCriticalityResponse.model_validate(payload)
+
+
+@app.get("/api/analytics/insights/governance-ops", response_model=GovernanceOperationsResponse)
+async def analytics_insight_governance_ops(
+    project_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=ANALYTICS_DEFAULT_GOVERNANCE_LIMIT, ge=1, le=200),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> GovernanceOperationsResponse:
+    try:
+        payload = await load_governance_operations(
+            session,
+            project_id=project_id,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=_analytics_error_detail(
+                "analytics_governance_ops_query_failed",
+                "Governance-Operations Daten konnten nicht geladen werden.",
+            ),
+        ) from exc
+    return GovernanceOperationsResponse.model_validate(payload)
 
 
 @app.get("/api/graph/app/{app_id:path}", response_model=GraphResponse)

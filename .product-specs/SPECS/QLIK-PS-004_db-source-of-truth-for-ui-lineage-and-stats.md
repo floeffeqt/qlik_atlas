@@ -1,7 +1,7 @@
----
+﻿---
 id: QLIK-PS-004
 title: Database as source of truth for UI lineage data and dashboard graph stats
-status: draft
+status: active
 type: architecture
 priority: p0
 product_area: lineage-data-access
@@ -187,3 +187,4 @@ When UI lineage views or dashboard graph statistics use local artifact-backed me
 - Should `/api/health` eventually stop reporting artifact-backed `nodesCount/edgesCount` to avoid ambiguity?
 - Should dashboard also surface DB/project counts separately from artifact pipeline metrics?
 - Which artifact-backed endpoints should be prioritized next for DB-native migration?
+

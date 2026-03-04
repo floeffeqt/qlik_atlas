@@ -1,5 +1,18 @@
-from sqlalchemy import Column, Integer, String, DateTime, func, Boolean, Text, ForeignKey, PrimaryKeyConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import (
+    Column,
+    Integer,
+    BigInteger,
+    Float,
+    String,
+    DateTime,
+    func,
+    Boolean,
+    Text,
+    ForeignKey,
+    PrimaryKeyConstraint,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from .database import Base
 from .credentials_crypto import encrypt_credential, decrypt_credential
 
@@ -317,6 +330,154 @@ class QlikLicenseStatus(Base):
     tenant = Column(String(255), nullable=True)
     data = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AppDataMetadataSnapshot(Base):
+    """Append-only snapshot for /api/v1/apps/{appId}/data/metadata."""
+    __tablename__ = "app_data_metadata_snapshot"
+    snapshot_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    app_id = Column(String(100), nullable=False, index=True)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    static_byte_size = Column(BigInteger, nullable=True)
+    has_section_access = Column(Boolean, nullable=True)
+    is_direct_query_mode = Column(Boolean, nullable=True)
+    reload_meta_cpu_time_spent_ms = Column(BigInteger, nullable=True)
+    reload_meta_peak_memory_bytes = Column(BigInteger, nullable=True)
+    reload_meta_full_reload_peak_memory_bytes = Column(BigInteger, nullable=True)
+    reload_meta_partial_reload_peak_memory_bytes = Column(BigInteger, nullable=True)
+    reload_meta_hardware_total_memory = Column(BigInteger, nullable=True)
+    reload_meta_hardware_logical_cores = Column(Integer, nullable=True)
+    schema_hash = Column(String(64), nullable=False)
+    extra_json = Column(JSONB, nullable=True)
+    source = Column(String(255), nullable=True)
+    tenant = Column(String(255), nullable=True)
+
+
+class AppDataMetadataField(Base):
+    __tablename__ = "app_data_metadata_fields"
+    __table_args__ = (UniqueConstraint("snapshot_id", "field_hash"),)
+    row_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    snapshot_id = Column(BigInteger, ForeignKey("app_data_metadata_snapshot.snapshot_id", ondelete="CASCADE"), nullable=False, index=True)
+    field_hash = Column(String(120), nullable=False)
+    name = Column(String(255), nullable=True)
+    comment = Column(Text, nullable=True)
+    cardinal = Column(BigInteger, nullable=True)
+    byte_size = Column(BigInteger, nullable=True)
+    is_hidden = Column(Boolean, nullable=True)
+    is_locked = Column(Boolean, nullable=True)
+    is_system = Column(Boolean, nullable=True)
+    is_numeric = Column(Boolean, nullable=True)
+    is_semantic = Column(Boolean, nullable=True)
+    total_count = Column(BigInteger, nullable=True)
+    distinct_only = Column(Boolean, nullable=True)
+    always_one_selected = Column(Boolean, nullable=True)
+    tags = Column(ARRAY(Text), nullable=True)
+    src_tables = Column(ARRAY(Text), nullable=True)
+    extra_json = Column(JSONB, nullable=True)
+
+
+class AppDataMetadataTable(Base):
+    __tablename__ = "app_data_metadata_tables"
+    __table_args__ = (UniqueConstraint("snapshot_id", "name"),)
+    row_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    snapshot_id = Column(BigInteger, ForeignKey("app_data_metadata_snapshot.snapshot_id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    comment = Column(Text, nullable=True)
+    is_loose = Column(Boolean, nullable=True)
+    byte_size = Column(BigInteger, nullable=True)
+    is_system = Column(Boolean, nullable=True)
+    is_semantic = Column(Boolean, nullable=True)
+    no_of_rows = Column(BigInteger, nullable=True)
+    no_of_fields = Column(Integer, nullable=True)
+    no_of_key_fields = Column(Integer, nullable=True)
+    extra_json = Column(JSONB, nullable=True)
+
+
+class AppDataMetadataTableProfile(Base):
+    __tablename__ = "table_profiles"
+    __table_args__ = (UniqueConstraint("snapshot_id", "profile_index"),)
+    table_profile_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    snapshot_id = Column(BigInteger, ForeignKey("app_data_metadata_snapshot.snapshot_id", ondelete="CASCADE"), nullable=False, index=True)
+    profile_index = Column(Integer, nullable=False)
+    no_of_rows = Column(BigInteger, nullable=True)
+    extra_json = Column(JSONB, nullable=True)
+
+
+class AppDataMetadataFieldProfile(Base):
+    __tablename__ = "field_profiles"
+    __table_args__ = (UniqueConstraint("table_profile_id", "profile_index"),)
+    field_profile_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    snapshot_id = Column(BigInteger, ForeignKey("app_data_metadata_snapshot.snapshot_id", ondelete="CASCADE"), nullable=False, index=True)
+    table_profile_id = Column(BigInteger, ForeignKey("table_profiles.table_profile_id", ondelete="CASCADE"), nullable=False, index=True)
+    profile_index = Column(Integer, nullable=False)
+    name = Column(String(255), nullable=True)
+    max_value = Column(Float, nullable=True)
+    min_value = Column(Float, nullable=True)
+    std_value = Column(Float, nullable=True)
+    sum_value = Column(Float, nullable=True)
+    sum2_value = Column(Float, nullable=True)
+    median_value = Column(Float, nullable=True)
+    average_value = Column(Float, nullable=True)
+    kurtosis = Column(Float, nullable=True)
+    skewness = Column(Float, nullable=True)
+    field_tags = Column(ARRAY(Text), nullable=True)
+    fractiles = Column(JSONB, nullable=True)
+    neg_values = Column(BigInteger, nullable=True)
+    pos_values = Column(BigInteger, nullable=True)
+    last_sorted = Column(Text, nullable=True)
+    null_values = Column(BigInteger, nullable=True)
+    text_values = Column(BigInteger, nullable=True)
+    zero_values = Column(BigInteger, nullable=True)
+    first_sorted = Column(Text, nullable=True)
+    avg_string_len = Column(Float, nullable=True)
+    data_evenness = Column(Float, nullable=True)
+    empty_strings = Column(BigInteger, nullable=True)
+    max_string_len = Column(BigInteger, nullable=True)
+    min_string_len = Column(BigInteger, nullable=True)
+    sum_string_len = Column(BigInteger, nullable=True)
+    numeric_values = Column(BigInteger, nullable=True)
+    distinct_values = Column(BigInteger, nullable=True)
+    distinct_text_values = Column(BigInteger, nullable=True)
+    distinct_numeric_values = Column(BigInteger, nullable=True)
+    number_format_dec = Column(String(32), nullable=True)
+    number_format_fmt = Column(String(120), nullable=True)
+    number_format_thou = Column(String(32), nullable=True)
+    number_format_ndec = Column(Integer, nullable=True)
+    number_format_use_thou = Column(Integer, nullable=True)
+    extra_json = Column(JSONB, nullable=True)
+
+
+class AppDataMetadataFieldMostFrequent(Base):
+    __tablename__ = "field_most_frequent"
+    __table_args__ = (UniqueConstraint("field_profile_id", "rank"),)
+    row_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    snapshot_id = Column(BigInteger, ForeignKey("app_data_metadata_snapshot.snapshot_id", ondelete="CASCADE"), nullable=False, index=True)
+    field_profile_id = Column(BigInteger, ForeignKey("field_profiles.field_profile_id", ondelete="CASCADE"), nullable=False, index=True)
+    rank = Column(Integer, nullable=False)
+    symbol_text = Column(Text, nullable=True)
+    symbol_number = Column(Float, nullable=True)
+    frequency = Column(BigInteger, nullable=True)
+    extra_json = Column(JSONB, nullable=True)
+
+
+class AppDataMetadataFieldFrequencyDistribution(Base):
+    __tablename__ = "field_frequency_distribution"
+    __table_args__ = (UniqueConstraint("field_profile_id", "bin_index"),)
+    row_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    snapshot_id = Column(BigInteger, ForeignKey("app_data_metadata_snapshot.snapshot_id", ondelete="CASCADE"), nullable=False, index=True)
+    field_profile_id = Column(BigInteger, ForeignKey("field_profiles.field_profile_id", ondelete="CASCADE"), nullable=False, index=True)
+    bin_index = Column(Integer, nullable=False)
+    bin_edge = Column(Float, nullable=True)
+    frequency = Column(BigInteger, nullable=True)
+    number_of_bins = Column(Integer, nullable=True)
+    extra_json = Column(JSONB, nullable=True)
 
 
 class LineageNode(Base):

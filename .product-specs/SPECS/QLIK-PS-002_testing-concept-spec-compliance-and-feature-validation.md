@@ -1,7 +1,7 @@
 ﻿---
 id: QLIK-PS-002
 title: Project testing concept for spec compliance and feature validation
-status: draft
+status: active
 type: compliance
 priority: p0
 product_area: testing-and-quality
@@ -247,3 +247,4 @@ Without a project-specific testing concept, agents may test inconsistently acros
 - What exact frontend pages/flows should be considered mandatory smoke paths by default?
 - Should `qlik_atlas` standardize a frontend automated test runner in a dedicated follow-up spec?
 - What is the preferred safe source for representative non-production lineage datasets in testing?
+
