@@ -7,7 +7,7 @@ tags:
   - release-notes
   - index
   - changes
-updated: 2026-03-04
+updated: 2026-03-05
 owners: []
 source_of_truth: no
 related_specs: []
@@ -45,6 +45,7 @@ related_docs:
   - `2026-03-04_analytics-data-model-capacity-merge.md`
   - `2026-03-04_remove-local-output-artifact-runtime-paths.md`
   - `2026-03-04_analytics-governance-ops-live.md`
+  - `2026-03-05_field-level-lineage-fetch-mode.md`
 
 ## Open Questions / Risks
 

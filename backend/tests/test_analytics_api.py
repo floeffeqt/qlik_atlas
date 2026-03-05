@@ -272,7 +272,7 @@ async def test_data_model_pack_insight_endpoint_contract(override_session_dep, m
     async def fake_loader(*_args, **_kwargs):
         return {
             "metric": "static_byte_size_latest",
-            "metric_options": ["static_byte_size_latest", "complexity_latest"],
+            "metric_options": ["static_byte_size_latest", "complexity_latest", "reload_meta_peak_memory_bytes_latest"],
             "areas": [
                 {
                     "area_key": "space:s-1",
@@ -305,6 +305,30 @@ async def test_data_model_pack_insight_endpoint_contract(override_session_dep, m
     assert payload["metric"] == "static_byte_size_latest"
     assert payload["summary"]["areas_count"] == 1
     assert payload["areas"][0]["apps"][0]["app_id"] == "app-1"
+
+
+@pytest.mark.asyncio
+async def test_data_model_pack_insight_reload_ram_metric_contract(override_session_dep, monkeypatch):
+    captured: dict[str, str] = {}
+
+    async def fake_loader(*_args, **kwargs):
+        metric = kwargs.get("metric", "reload_meta_peak_memory_bytes_latest")
+        captured["metric"] = str(metric)
+        return {
+            "metric": metric,
+            "metric_options": ["static_byte_size_latest", "complexity_latest", "reload_meta_peak_memory_bytes_latest"],
+            "areas": [],
+            "summary": {"areas_count": 0, "apps_count": 0, "total_metric_value": 0.0},
+        }
+
+    monkeypatch.setattr(main_module, "load_data_model_pack", fake_loader)
+    transport = ASGITransport(app=main_module.app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.get("/api/analytics/insights/data-model-pack?metric=reload_meta_peak_memory_bytes_latest")
+    assert res.status_code == 200, res.text
+    payload = res.json()
+    assert payload["metric"] == "reload_meta_peak_memory_bytes_latest"
+    assert captured["metric"] == "reload_meta_peak_memory_bytes_latest"
 
 
 @pytest.mark.asyncio

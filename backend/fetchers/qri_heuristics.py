@@ -40,6 +40,12 @@ def derive_type_group_layer(qri: str, label: str, metadata: Dict) -> Dict[str, O
     is_file = qri_l.startswith("qri:file:") or "file://" in qri_l
     is_app = qri_l.startswith("qri:app:sense://")
     is_db = qri_l.startswith("qri:db:")
+    is_field = (
+        str(subtype or "").upper() == "FIELD"
+        or str(meta_type or "").upper() == "FIELD"
+        or qri_l.startswith("qri:field:")
+        or "#field" in qri_l
+    )
 
     if is_qvd:
         return {"type": "qvd", "layer": "extract", "group": "qvd"}
@@ -47,6 +53,10 @@ def derive_type_group_layer(qri: str, label: str, metadata: Dict) -> Dict[str, O
         return {"type": "file", "layer": "extract", "group": "file"}
     if is_app:
         return {"type": "app", "layer": "app", "group": None}
+    if is_field:
+        group = extract_db_group(qri) if is_db else None
+        layer = "db" if is_db else "transform"
+        return {"type": "field", "layer": layer, "group": group}
     if is_db:
         group = extract_db_group(qri)
         if subtype == "TABLE":

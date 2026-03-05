@@ -29,6 +29,12 @@
     .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
     .nav-link:hover { color: var(--text); background: var(--surface-hover); }
     .nav-link.active { color: var(--accent); background: var(--surface-hover); }
+    .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; min-width: 0; }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.28) inset; }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
     .nav-spacer { flex: 1; }
     .nav-user { display: flex; align-items: center; gap: 0.75rem; }
     .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
@@ -317,12 +323,20 @@
 <nav>
   <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>Atlas</a>
     <div class="nav-links">
-      <a class="nav-link" href="/">Dashboard</a>
       <a class="nav-link active" href="/projects.html">Projekte</a>
+      <a class="nav-link" href="/">Dashboard</a>
       <a class="nav-link" href="/analytics.html">Analytics</a>
       <a class="nav-link" href="/lineage.html">Lineage</a>
       <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
     </div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
+  </div>
   <div class="nav-spacer"></div>
   <div class="nav-user">
     <span class="nav-user-email" id="userEmail">—</span>
@@ -402,6 +416,15 @@
         <button type="button" class="btn-step" id="fetchSelectNone">Alle abwahlen</button>
       </div>
     </div>
+    <div class="form-group">
+      <label for="fetchLineageLevel">Lineage-Level (fuer App Edges)</label>
+      <select id="fetchLineageLevel">
+        <option value="resource">Resource (Standard)</option>
+        <option value="field">Field</option>
+        <option value="table">Table</option>
+        <option value="all">All</option>
+      </select>
+    </div>
     <div class="modal-footer">
       <button class="btn-modal-cancel" id="fetchModalCancel">Abbrechen</button>
       <button class="btn-modal-save" id="fetchModalStart">Job starten</button>
@@ -466,6 +489,102 @@
     if (res.status === 401) { localStorage.removeItem('auth_access_token'); window.location.href = '/login.html'; }
     return res;
   }
+  var FOCUS_PROJECT_STORAGE_KEY = 'atlas_focus_project_id_v1';
+  var FOCUS_CUSTOMER_STORAGE_KEY = 'atlas_focus_customer_id_v1';
+  var focusState = {
+    project: String(new URLSearchParams(window.location.search).get('project') || localStorage.getItem(FOCUS_PROJECT_STORAGE_KEY) || '').trim(),
+    customer: String(new URLSearchParams(window.location.search).get('customer') || localStorage.getItem(FOCUS_CUSTOMER_STORAGE_KEY) || '').trim()
+  };
+  function projectCustomerId(project) {
+    if (!project || typeof project !== 'object') return '';
+    if (project.customer_id !== undefined && project.customer_id !== null) return String(project.customer_id);
+    if (project.customer && project.customer.id !== undefined && project.customer.id !== null) return String(project.customer.id);
+    return '';
+  }
+  function applyFocusPersistence() {
+    if (focusState.project) localStorage.setItem(FOCUS_PROJECT_STORAGE_KEY, focusState.project);
+    else localStorage.removeItem(FOCUS_PROJECT_STORAGE_KEY);
+    if (focusState.customer) localStorage.setItem(FOCUS_CUSTOMER_STORAGE_KEY, focusState.customer);
+    else localStorage.removeItem(FOCUS_CUSTOMER_STORAGE_KEY);
+  }
+  function syncCustomerFromProject() {
+    if (!focusState.project) return;
+    var selected = (Array.isArray(projects) ? projects : []).find(function(p) { return String(p.id) === String(focusState.project); });
+    var cid = projectCustomerId(selected);
+    if (cid) focusState.customer = String(cid);
+  }
+  function updateFocusNavLinks(projectId, customerId) {
+    var pid = String(projectId || '').trim();
+    var cid = String(customerId || '').trim();
+    document.querySelectorAll('a.nav-link').forEach(function(link) {
+      var baseHref = link.getAttribute('data-base-href');
+      if (!baseHref) {
+        baseHref = String(link.getAttribute('href') || '').split('?')[0];
+        link.setAttribute('data-base-href', baseHref);
+      }
+      var nextHref = baseHref;
+      if (baseHref === '/' || baseHref === '/analytics.html' || baseHref === '/lineage.html') {
+        var navQ = new URLSearchParams();
+        if (pid) navQ.set('project', pid);
+        if (cid) navQ.set('customer', cid);
+        var navQs = navQ.toString();
+        nextHref = baseHref + (navQs ? ('?' + navQs) : '');
+      }
+      link.setAttribute('href', nextHref);
+    });
+  }
+  function syncFocusInUrl(projectId, customerId) {
+    var q = new URLSearchParams(window.location.search);
+    if (projectId) q.set('project', String(projectId));
+    else q.delete('project');
+    if (customerId) q.set('customer', String(customerId));
+    else q.delete('customer');
+    history.replaceState(null, '', '/projects.html' + (q.toString() ? ('?' + q.toString()) : ''));
+  }
+  function renderFocusCustomerSelect() {
+    var sel = document.getElementById('navCustomerSelect');
+    var list = Array.isArray(customers) ? customers : [];
+    if (!list.length) {
+      focusState.customer = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Kunden verfuegbar</option>';
+      return;
+    }
+    sel.disabled = false;
+    if (!focusState.customer || !list.find(function(c) { return String(c.id) === String(focusState.customer); })) {
+      focusState.customer = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(c) {
+      return '<option value="' + escHtml(String(c.id)) + '"' + (String(c.id) === String(focusState.customer) ? ' selected' : '') + '>' + escHtml(c.name || ('Kunde ' + c.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.customer);
+  }
+  function renderFocusProjectSelect() {
+    var sel = document.getElementById('navProjectSelect');
+    var list = (Array.isArray(projects) ? projects : []).filter(function(p) {
+      return String(projectCustomerId(p)) === String(focusState.customer || '');
+    });
+    if (!list.length) {
+      focusState.project = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Projekte fuer Kunden</option>';
+      applyFocusPersistence();
+      updateFocusNavLinks('', focusState.customer);
+      syncFocusInUrl('', focusState.customer);
+      return;
+    }
+    sel.disabled = false;
+    if (!focusState.project || !list.find(function(p) { return String(p.id) === String(focusState.project); })) {
+      focusState.project = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(p) {
+      return '<option value="' + escHtml(String(p.id)) + '"' + (String(p.id) === String(focusState.project) ? ' selected' : '') + '>' + escHtml(p.name || ('Projekt ' + p.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.project);
+    applyFocusPersistence();
+    updateFocusNavLinks(focusState.project, focusState.customer);
+    syncFocusInUrl(focusState.project, focusState.customer);
+  }
 
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -493,6 +612,9 @@
     ]);
     projects = await projRes.json();
     customers = await custRes.json();
+    syncCustomerFromProject();
+    renderFocusCustomerSelect();
+    renderFocusProjectSelect();
     renderProjects();
     populateCustomerDropdown();
   }
@@ -789,16 +911,25 @@
     return selected;
   }
 
+  function getSelectedLineageLevel() {
+    var sel = document.getElementById('fetchLineageLevel');
+    var value = String((sel && sel.value) || 'resource').trim().toLowerCase();
+    if (value === 'field' || value === 'table' || value === 'all' || value === 'resource') return value;
+    return 'resource';
+  }
+
   function openFetchModal(projectId) {
     fetchModalProjectId = projectId;
     var project = projects.find(function(p) { return p.id === projectId; });
     var projectName = project ? project.name : ('Projekt ' + projectId);
     document.getElementById('fetchModalProject').textContent = 'Projekt: ' + projectName;
     renderFetchStepList(true);
+    var lineageLevelSel = document.getElementById('fetchLineageLevel');
+    if (lineageLevelSel) lineageLevelSel.value = 'resource';
     openModal('fetchModal');
   }
 
-  async function startFetch(projectId, steps) {
+  async function startFetch(projectId, steps, lineageLevel) {
     var project = projects.find(function(p) { return p.id === projectId; });
     var projectName = project ? project.name : 'Projekt ' + projectId;
     var btn = document.getElementById('fetchBtn-' + projectId);
@@ -807,7 +938,7 @@
       var res = await apiFetch('/api/fetch/jobs', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({project_id: projectId, steps: steps})
+        body: JSON.stringify({project_id: projectId, steps: steps, lineageLevel: lineageLevel || 'resource'})
       });
       if (!res.ok) {
         var err = await res.json().catch(function(){ return {}; });
@@ -837,12 +968,13 @@
   document.getElementById('fetchModalStart').addEventListener('click', async function() {
     if (fetchModalProjectId == null) return;
     var steps = getSelectedFetchSteps();
+    var lineageLevel = getSelectedLineageLevel();
     if (!steps.length) {
       showToast('Bitte mindestens einen Step auswaehlen');
       return;
     }
     closeModal('fetchModal');
-    await startFetch(fetchModalProjectId, steps);
+    await startFetch(fetchModalProjectId, steps, lineageLevel);
   });
 
   function resetForm() {
@@ -943,6 +1075,20 @@
     deleteTargetId = null;
   });
 
+  document.getElementById('navCustomerSelect').addEventListener('change', function() {
+    focusState.customer = String(this.value || '').trim();
+    renderFocusProjectSelect();
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function() {
+    focusState.project = String(this.value || '').trim();
+    syncCustomerFromProject();
+    renderFocusCustomerSelect();
+    applyFocusPersistence();
+    updateFocusNavLinks(focusState.project, focusState.customer);
+    syncFocusInUrl(focusState.project, focusState.customer);
+  });
+
+  updateFocusNavLinks(focusState.project, focusState.customer);
   loadData();
 </script>
 </body>

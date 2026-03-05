@@ -14,6 +14,12 @@
     .brand-icon img{width:100%;height:100%;object-fit:contain;display:block}
     .nav-links{display:flex;gap:.25rem;margin-left:1rem}.nav-link{text-decoration:none;color:var(--muted);font-size:.875rem;padding:.4rem .75rem;border-radius:var(--rs)}
     .nav-link:hover,.nav-link.active{background:var(--surface-hover);color:var(--text)}.nav-link.active{color:var(--accent)}
+    .nav-project-badge{margin-left:.5rem;padding:.25rem .55rem;border:1px solid rgba(148,163,184,.35);border-radius:999px;background:rgba(30,41,59,.45);display:inline-flex;align-items:center;gap:.42rem;min-width:0}
+    .nav-project-badge .k{color:rgba(219,234,254,.74);text-transform:uppercase;font-size:.67rem;letter-spacing:.02em}
+    .nav-project-select{height:28px;min-width:220px;max-width:280px;background:rgba(15,23,42,.82);border:1px solid rgba(148,163,184,.35);color:#fff;border-radius:999px;padding:0 .6rem;font-size:.76rem;outline:none}
+    .nav-project-select:disabled{opacity:.65;cursor:not-allowed}
+    .nav-project-select:focus{border-color:rgba(102,126,234,.72);box-shadow:0 0 0 1px rgba(102,126,234,.28) inset}
+    .nav-project-select option{background:#1a1a2e;color:#fff}
     .nav-spacer{flex:1}.nav-user{display:flex;align-items:center;gap:.75rem}.nav-user-email{font-size:.8rem;color:var(--muted)}
     .btn-sm,.btn,.chip{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:var(--rs);cursor:pointer}
     .btn-sm{padding:.4rem .9rem;font-size:.8rem}.btn{padding:.5rem .86rem;font-size:.8rem}.btn:hover,.btn-sm:hover,.chip:hover{background:var(--surface-hover);color:var(--text)}
@@ -148,11 +154,19 @@
 <nav>
   <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>Atlas</a>
   <div class="nav-links">
-    <a class="nav-link" href="/">Dashboard</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/">Dashboard</a>
     <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
     <a class="nav-link active" href="/theme-builder.html">Theme Builder</a>
+  </div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
   </div>
   <div class="nav-spacer"></div>
   <div class="nav-user"><span class="nav-user-email" id="userEmail">-</span><button class="btn-sm" id="logoutBtn">Sign out</button></div>
@@ -310,6 +324,16 @@
   var uiStyleMode = String(window.__ATLAS_UI_STYLE__ || localStorage.getItem("atlas_theme_builder_style") || "retro").toLowerCase();
   var previewCollapsed = localStorage.getItem("atlas_theme_builder_preview_collapsed")==="1";
   var variableManagerCollapsed = localStorage.getItem("atlas_theme_builder_variables_collapsed")==="1";
+  var FOCUS_PROJECT_STORAGE_KEY = "atlas_focus_project_id_v1";
+  var FOCUS_CUSTOMER_STORAGE_KEY = "atlas_focus_customer_id_v1";
+  var focusProjects = [];
+  var focusCustomers = [];
+  var projectsById = {};
+  var customersById = {};
+  var focusState = {
+    project: String(new URLSearchParams(window.location.search).get("project") || localStorage.getItem(FOCUS_PROJECT_STORAGE_KEY) || "").trim(),
+    customer: String(new URLSearchParams(window.location.search).get("customer") || localStorage.getItem(FOCUS_CUSTOMER_STORAGE_KEY) || "").trim()
+  };
 
   function applyUiStyleMode(mode){
     var body=document.body;
@@ -336,6 +360,109 @@
     btn.textContent=variableManagerCollapsed?"Aufklappen":"Einklappen";
     btn.setAttribute("aria-expanded",variableManagerCollapsed?"false":"true");
     localStorage.setItem("atlas_theme_builder_variables_collapsed",variableManagerCollapsed?"1":"0");
+  }
+  function projectCustomerId(project){
+    if(!project || typeof project !== "object") return "";
+    if(project.customer_id !== undefined && project.customer_id !== null) return String(project.customer_id);
+    if(project.customer && project.customer.id !== undefined && project.customer.id !== null) return String(project.customer.id);
+    return "";
+  }
+  function applyFocusStatePersistence(){
+    if(focusState.project) localStorage.setItem(FOCUS_PROJECT_STORAGE_KEY, String(focusState.project));
+    else localStorage.removeItem(FOCUS_PROJECT_STORAGE_KEY);
+    if(focusState.customer) localStorage.setItem(FOCUS_CUSTOMER_STORAGE_KEY, String(focusState.customer));
+    else localStorage.removeItem(FOCUS_CUSTOMER_STORAGE_KEY);
+  }
+  function syncCustomerFromProject(){
+    if(!focusState.project) return;
+    var project = projectsById[String(focusState.project)];
+    var cid = projectCustomerId(project);
+    if(cid) focusState.customer = String(cid);
+  }
+  function updateFocusNavLinks(projectId, customerId){
+    var pid=String(projectId||"").trim();
+    var cid=String(customerId||"").trim();
+    document.querySelectorAll("a.nav-link").forEach(function(link){
+      var baseHref=link.getAttribute("data-base-href");
+      if(!baseHref){
+        baseHref=String(link.getAttribute("href")||"").split("?")[0];
+        link.setAttribute("data-base-href",baseHref);
+      }
+      var nextHref=baseHref;
+      if(baseHref==="/" || baseHref==="/analytics.html" || baseHref==="/lineage.html"){
+        var navQ = new URLSearchParams();
+        if(pid) navQ.set("project", pid);
+        if(cid) navQ.set("customer", cid);
+        var navQs = navQ.toString();
+        nextHref = baseHref + (navQs ? ("?" + navQs) : "");
+      }
+      link.setAttribute("href",nextHref);
+    });
+  }
+  function syncFocusProjectInUrl(projectId, customerId){
+    var pid=String(projectId||"").trim();
+    var cid=String(customerId||"").trim();
+    var q=new URLSearchParams(window.location.search);
+    if(pid) q.set("project",pid);
+    else q.delete("project");
+    if(cid) q.set("customer",cid);
+    else q.delete("customer");
+    history.replaceState(null,"","/theme-builder.html"+(q.toString()?"?"+q.toString():""));
+  }
+  function renderFocusCustomerSelect(){
+    var sel=document.getElementById("navCustomerSelect");
+    if(!sel) return;
+    if(!focusCustomers.length){
+      focusState.customer="";
+      sel.disabled=true;
+      sel.innerHTML='<option value="">Keine Kunden verfuegbar</option>';
+      return;
+    }
+    if(!focusState.customer || !customersById[String(focusState.customer)]){
+      focusState.customer=String(focusCustomers[0].id);
+    }
+    sel.innerHTML="";
+    focusCustomers.forEach(function(c){
+      var opt=document.createElement("option");
+      opt.value=String(c.id);
+      opt.textContent=(c && c.name) ? c.name : ("Kunde "+c.id);
+      sel.appendChild(opt);
+    });
+    sel.disabled=false;
+    sel.value=String(focusState.customer);
+  }
+  function renderFocusProjectSelect(){
+    var sel=document.getElementById("navProjectSelect");
+    if(!sel) return;
+    var filteredProjects = focusProjects.filter(function(p){
+      return String(projectCustomerId(p)) === String(focusState.customer || "");
+    });
+    if(!filteredProjects.length){
+      sel.disabled=true;
+      sel.innerHTML='<option value="">Keine Projekte fuer Kunden</option>';
+      focusState.project="";
+      applyFocusStatePersistence();
+      updateFocusNavLinks("", focusState.customer);
+      syncFocusProjectInUrl("", focusState.customer);
+      return;
+    }
+    var selected=focusState.project;
+    if(!selected || !filteredProjects.find(function(p){return String(p.id)===selected;})){
+      selected=String(filteredProjects[0].id);
+    }
+    sel.innerHTML="";
+    filteredProjects.forEach(function(p){
+      var opt=document.createElement("option");
+      opt.value=String(p.id);
+      opt.textContent=(p && p.name) ? p.name : ("Projekt "+p.id);
+      sel.appendChild(opt);
+    });
+    sel.disabled=false;
+    sel.value=selected;
+    focusState.project=selected;
+    applyFocusStatePersistence();
+    updateFocusNavLinks(selected, focusState.customer);
+    syncFocusProjectInUrl(selected, focusState.customer);
   }
 
   var DEFAULT_THEME_JSON = {
@@ -1278,6 +1405,41 @@
   function showToast(msg, duration){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(function(){t.classList.remove("show")},duration||3200)}
   function parseTokenPayload(raw){try{return JSON.parse(atob(raw.split(".")[1]))}catch(e){return {}}}
   function authHeaders(extra){return Object.assign({"Authorization":"Bearer "+token},extra||{})}
+  async function loadFocusProjects(){
+    var projectSel=document.getElementById("navProjectSelect");
+    var customerSel=document.getElementById("navCustomerSelect");
+    if(projectSel) projectSel.disabled=true;
+    if(customerSel) customerSel.disabled=true;
+    try{
+      var responses=await Promise.all([
+        fetch("/api/projects",{headers:authHeaders()}),
+        fetch("/api/customers/names",{headers:authHeaders()})
+      ]);
+      if(responses[0].status===401 || responses[1].status===401){
+        localStorage.removeItem("auth_access_token");
+        window.location.href="/login.html";
+        return;
+      }
+      if(!responses[0].ok || !responses[1].ok) throw new Error("HTTP "+responses[0].status+"/"+responses[1].status);
+      var projectsData=await responses[0].json().catch(function(){return []});
+      var customersData=await responses[1].json().catch(function(){return []});
+      focusProjects=Array.isArray(projectsData)?projectsData:[];
+      focusCustomers=Array.isArray(customersData)?customersData:[];
+      projectsById={};
+      focusProjects.forEach(function(p){ projectsById[String(p.id)] = p; });
+      customersById={};
+      focusCustomers.forEach(function(c){ customersById[String(c.id)] = c; });
+      syncCustomerFromProject();
+      renderFocusCustomerSelect();
+    }catch(err){
+      focusProjects=[];
+      focusCustomers=[];
+      projectsById={};
+      customersById={};
+      console.warn("Projekt/Kunden-Fokus konnte nicht geladen werden:",err);
+    }
+    renderFocusProjectSelect();
+  }
   function parseKeywords(raw){return String(raw||"").split(",").map(function(v){return v.trim()}).filter(function(v){return v.length>0})}
   function looksHexColor(v){return typeof v==="string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v.trim())}
   function normalizeHex(v){v=String(v||"").trim();if(!looksHexColor(v))return v;if(v.length===4)return "#"+v[1]+v[1]+v[2]+v[2]+v[3]+v[3];return v.toLowerCase()}
@@ -2221,8 +2383,23 @@
       }
     },260);
   });
+  document.getElementById("navCustomerSelect").addEventListener("change",function(){
+    focusState.customer=String(this.value||"").trim();
+    renderFocusProjectSelect();
+  });
+  document.getElementById("navProjectSelect").addEventListener("change",function(){
+    var selected=String(this.value||"").trim();
+    focusState.project=selected;
+    syncCustomerFromProject();
+    renderFocusCustomerSelect();
+    applyFocusStatePersistence();
+    updateFocusNavLinks(selected, focusState.customer);
+    syncFocusProjectInUrl(selected, focusState.customer);
+  });
   document.getElementById("logoutBtn").addEventListener("click",function(){localStorage.removeItem("auth_access_token");window.location.href="/login.html"});
 
+  updateFocusNavLinks(focusState.project, focusState.customer);
+  loadFocusProjects();
   applyUiStyleMode(uiStyleMode);
   applyPreviewCollapsedState(previewCollapsed);
   applyVariableManagerCollapsedState(variableManagerCollapsed);

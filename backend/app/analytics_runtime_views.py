@@ -24,8 +24,8 @@ DEFAULT_FIELDS_LIMIT = 200
 MAX_FIELDS_LIMIT = 1000
 DEFAULT_GOVERNANCE_LIMIT = 30
 AREA_UNASSIGNED_KEY = "unassigned"
-DATA_MODEL_PACK_METRICS = ("static_byte_size_latest", "complexity_latest")
-DataModelPackMetric = Literal["static_byte_size_latest", "complexity_latest"]
+DATA_MODEL_PACK_METRICS = ("static_byte_size_latest", "complexity_latest", "reload_meta_peak_memory_bytes_latest")
+DataModelPackMetric = Literal["static_byte_size_latest", "complexity_latest", "reload_meta_peak_memory_bytes_latest"]
 
 
 @dataclass(frozen=True)
@@ -268,9 +268,17 @@ def _empty_area_totals() -> dict[str, int]:
     }
 
 
-def _metric_value_for_pack(*, metric: DataModelPackMetric, static_byte_size: int, complexity: int) -> float:
+def _metric_value_for_pack(
+    *,
+    metric: DataModelPackMetric,
+    static_byte_size: int,
+    complexity: int,
+    reload_meta_peak_memory_bytes: int,
+) -> float:
     if metric == "complexity_latest":
         return float(complexity)
+    if metric == "reload_meta_peak_memory_bytes_latest":
+        return float(reload_meta_peak_memory_bytes)
     return float(static_byte_size)
 
 
@@ -1486,11 +1494,13 @@ async def load_data_model_pack(
         fields_count_latest = _safe_int(field_count_by_snapshot.get(snapshot_id))
         tables_count_latest = _safe_int(table_stats_by_snapshot.get(snapshot_id, {}).get("tables_count"))
         static_byte_size_latest = _safe_int(row.get("static_byte_size"))
+        reload_meta_peak_memory_bytes_latest = _safe_int(row.get("reload_meta_peak_memory_bytes"))
         complexity_latest = fields_count_latest + (tables_count_latest * 8)
         metric_value = _metric_value_for_pack(
             metric=metric,
             static_byte_size=static_byte_size_latest,
             complexity=complexity_latest,
+            reload_meta_peak_memory_bytes=reload_meta_peak_memory_bytes_latest,
         )
         area = _area_from_snapshot_row(row)
 
@@ -1511,6 +1521,7 @@ async def load_data_model_pack(
                 "app_name": _app_name_from_snapshot_row(row),
                 "space_name": area.area_name if area.area_key != AREA_UNASSIGNED_KEY else "Unassigned",
                 "static_byte_size_latest": static_byte_size_latest,
+                "reload_meta_peak_memory_bytes_latest": reload_meta_peak_memory_bytes_latest,
                 "fields_count_latest": fields_count_latest,
                 "tables_count_latest": tables_count_latest,
                 "complexity_latest": complexity_latest,

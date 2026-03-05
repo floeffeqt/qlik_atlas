@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from main import (  # type: ignore
+    FetchJobRequest,
     FETCH_STEP_ALL_ORDER,
     _app_payload_columns,
     _app_data_metadata_snapshot_columns,
@@ -304,3 +305,13 @@ def test_select_apps_for_app_edges_falls_back_to_all_apps():
     selected, source = _select_apps_for_app_edges(apps, lineage_payloads=[])
     assert source == "fallback_all_apps"
     assert [a["appId"] for a in selected] == ["app-1", "app-2"]
+
+
+def test_fetch_job_request_defaults_lineage_level_to_resource():
+    req = FetchJobRequest(project_id=1)
+    assert req.lineageLevel == "resource"
+
+
+def test_fetch_job_request_accepts_field_level():
+    req = FetchJobRequest(project_id=1, lineageLevel="field")
+    assert req.lineageLevel == "field"

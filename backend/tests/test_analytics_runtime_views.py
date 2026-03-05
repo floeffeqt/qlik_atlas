@@ -536,6 +536,61 @@ async def test_load_data_model_pack_complexity_metric_uses_fields_and_tables(mon
     assert apps[0]["metric_value"] == 52.0
 
 
+@pytest.mark.asyncio
+async def test_load_data_model_pack_reload_ram_metric_uses_peak_memory(monkeypatch):
+    async def fake_latest_rows(*_args, **_kwargs):
+        return [
+            {
+                "snapshot_id": 301,
+                "project_id": 3,
+                "app_id": "app-r1",
+                "static_byte_size": 10,
+                "reload_meta_peak_memory_bytes": 500,
+                "qa_app_name": "App R1",
+                "qa_name_value": None,
+                "qa_space_id": "s-r",
+                "qs_space_id": "s-r",
+                "qs_space_name": "Area R",
+            },
+            {
+                "snapshot_id": 302,
+                "project_id": 3,
+                "app_id": "app-r2",
+                "static_byte_size": 999,
+                "reload_meta_peak_memory_bytes": 250,
+                "qa_app_name": "App R2",
+                "qa_name_value": None,
+                "qa_space_id": "s-r",
+                "qs_space_id": "s-r",
+                "qs_space_name": "Area R",
+            },
+        ]
+
+    async def fake_field_counts(*_args, **_kwargs):
+        return {301: 1, 302: 1}
+
+    async def fake_table_stats(*_args, **_kwargs):
+        return {301: {"tables_count": 1}, 302: {"tables_count": 1}}
+
+    monkeypatch.setattr(arv, "_load_latest_snapshot_rows", fake_latest_rows)
+    monkeypatch.setattr(arv, "_load_field_count_by_snapshot", fake_field_counts)
+    monkeypatch.setattr(arv, "_load_table_stats_by_snapshot", fake_table_stats)
+
+    payload = await arv.load_data_model_pack(
+        session=object(),
+        project_id=3,
+        metric="reload_meta_peak_memory_bytes_latest",
+    )
+    assert payload["metric"] == "reload_meta_peak_memory_bytes_latest"
+    assert payload["summary"]["areas_count"] == 1
+    assert payload["summary"]["apps_count"] == 2
+    assert payload["summary"]["total_metric_value"] == 750.0
+    apps = payload["areas"][0]["apps"]
+    assert apps[0]["app_id"] == "app-r1"
+    assert apps[0]["reload_meta_peak_memory_bytes_latest"] == 500
+    assert apps[0]["metric_value"] == 500.0
+
+
 class _RowsOnlyResult:
     def __init__(self, rows: list[Any]):
         self._rows = list(rows)

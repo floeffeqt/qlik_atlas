@@ -216,6 +216,7 @@ class DataModelPackAppItem(BaseModel):
     app_name: str
     space_name: str | None = None
     static_byte_size_latest: int = 0
+    reload_meta_peak_memory_bytes_latest: int = 0
     fields_count_latest: int = 0
     tables_count_latest: int = 0
     complexity_latest: int = 0
@@ -236,8 +237,8 @@ class DataModelPackSummary(BaseModel):
 
 
 class DataModelPackResponse(BaseModel):
-    metric: Literal["static_byte_size_latest", "complexity_latest"]
-    metric_options: list[Literal["static_byte_size_latest", "complexity_latest"]]
+    metric: Literal["static_byte_size_latest", "complexity_latest", "reload_meta_peak_memory_bytes_latest"]
+    metric_options: list[Literal["static_byte_size_latest", "complexity_latest", "reload_meta_peak_memory_bytes_latest"]]
     areas: list[DataModelPackAreaItem]
     summary: DataModelPackSummary
 

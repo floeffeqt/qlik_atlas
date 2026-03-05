@@ -91,6 +91,7 @@ FetchStep = Literal[
     "app-edges",
     "usage",
 ]
+LineageGraphLevel = Literal["field", "table", "resource", "all"]
 FETCH_STEP_ORDER: list[FetchStep] = [
     "spaces",
     "apps",
@@ -128,6 +129,7 @@ class FetchJobRequest(BaseModel):
     onlySpace: str | None = None
     clearOutputs: bool = False
     lineageConcurrency: int | None = Field(default=None, ge=1)
+    lineageLevel: LineageGraphLevel = "resource"
     usageConcurrency: int | None = Field(default=None, ge=1)
     usageWindowDays: int | None = Field(default=None, ge=1)
     project_id: int  # Credentials are loaded from the project's customer
@@ -473,6 +475,7 @@ async def _run_app_edges_step(
             "apps": len(apps),
             "eligibleApps": 0,
             "filterSource": filter_source,
+            "lineageLevel": request.lineageLevel,
             "appEdges": {"success": 0, "failed": 0, "edges": 0},
             "storage": "db-first-memory",
             "localArtifactWritten": False,
@@ -489,12 +492,14 @@ async def _run_app_edges_step(
         concurrency=lineage_concurrency,
         up_depth=os.getenv("QLIK_APP_EDGES_UP_DEPTH", "-1"),
         collapse=os.getenv("QLIK_APP_EDGES_COLLAPSE", "true"),
+        graph_level=request.lineageLevel,
         collector=app_edges_payloads,
     )
     return app_edges_payloads, {
         "apps": len(apps),
         "eligibleApps": len(eligible_apps),
         "filterSource": filter_source,
+        "lineageLevel": request.lineageLevel,
         "appEdges": {
             "success": edges_result.get("success", 0),
             "failed": edges_result.get("failed", 0),
@@ -659,7 +664,10 @@ async def _execute_fetch_job(
                     lineage_payloads=lineage_payloads_cache,
                 )
                 edges = result.get("appEdges", {}).get("edges", 0)
-                await _append_log(job_id, f"✓ {edges} App-Kanten gefunden")
+                await _append_log(
+                    job_id,
+                    f"✓ {edges} App-Kanten gefunden (Lineage-Level: {request.lineageLevel})",
+                )
             elif step == "usage":
                 if apps_cache is None:
                     raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'usage'")
@@ -2142,13 +2150,23 @@ async def api_health() -> HealthResponse:
 
 
 @app.get("/api/dashboard/stats", response_model=HealthResponse)
-async def dashboard_stats(session: AsyncSession = Depends(_session_with_rls_context)) -> HealthResponse:
+async def dashboard_stats(
+    project_id: int | None = Query(default=None, ge=1),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> HealthResponse:
     """Authenticated dashboard stats with DB-backed app/node/edge counts (RLS-scoped)."""
     from app.models import QlikApp, LineageNode, LineageEdge
 
-    apps_result = await session.execute(select(sa_func.count()).select_from(QlikApp))
-    nodes_result = await session.execute(select(sa_func.count()).select_from(LineageNode))
-    edges_result = await session.execute(select(sa_func.count()).select_from(LineageEdge))
+    apps_stmt = select(sa_func.count()).select_from(QlikApp)
+    nodes_stmt = select(sa_func.count()).select_from(LineageNode)
+    edges_stmt = select(sa_func.count()).select_from(LineageEdge)
+    if project_id is not None:
+        apps_stmt = apps_stmt.where(QlikApp.project_id == project_id)
+        nodes_stmt = nodes_stmt.where(LineageNode.project_id == project_id)
+        edges_stmt = edges_stmt.where(LineageEdge.project_id == project_id)
+    apps_result = await session.execute(apps_stmt)
+    nodes_result = await session.execute(nodes_stmt)
+    edges_result = await session.execute(edges_stmt)
     return HealthResponse(
         status="ok",
         filesLoaded=int(apps_result.scalar() or 0),  # backward-compatible field name; DB metric for dashboard UI

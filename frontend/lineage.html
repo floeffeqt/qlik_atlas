@@ -167,19 +167,32 @@
     .nav-link:hover { color: var(--text); background: var(--surface-hover); box-shadow: inset 0 0 0 1px rgba(56,189,248,0.2); }
     .nav-link.active { color: #9be7ff; background: rgba(56,189,248,0.16); box-shadow: inset 0 0 0 1px rgba(56,189,248,0.34), var(--glow-cyan); }
     .nav-project-badge {
+      margin-left: 0.5rem;
+      padding: 0.25rem 0.55rem;
+      border: 1px solid rgba(148,163,184,0.35);
+      border-radius: 999px;
+      background: rgba(30,41,59,0.45);
       display: inline-flex;
       align-items: center;
-      gap: 0.35rem;
-      padding: 0.3rem 0.72rem;
-      border-radius: 999px;
-      border: 1px solid rgba(56,189,248,0.45);
-      background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(244,114,182,0.18));
-      color: #dbeafe;
-      font-size: 0.74rem;
-      white-space: nowrap;
+      gap: 0.42rem;
+      min-width: 0;
     }
     .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
-    .nav-project-badge .v { color: #fff; font-weight: 600; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+    .nav-project-select {
+      height: 28px;
+      min-width: 220px;
+      max-width: 280px;
+      background: rgba(15,23,42,0.82);
+      border: 1px solid rgba(148,163,184,0.35);
+      color: #fff;
+      border-radius: 999px;
+      padding: 0 0.6rem;
+      font-size: 0.76rem;
+      outline: none;
+    }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.28) inset; }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
     .nav-spacer { flex: 1; }
     .nav-user { display: flex; align-items: center; gap: 0.75rem; }
     .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
@@ -470,13 +483,20 @@
     Atlas
   </a>
   <div class="nav-links">
-    <a class="nav-link" href="/">Dashboard</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/">Dashboard</a>
     <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link active" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
   </div>
-  <div class="nav-project-badge" id="navProjectBadge"><span class="k">Projektfokus</span><span class="v">wird geladen ...</span></div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
+  </div>
   <div class="nav-spacer"></div>
   <div class="nav-user">
     <span class="nav-user-email" id="userEmail">—</span>
@@ -485,21 +505,24 @@
 </nav>
 
 <div class="toolbar">
-  <span class="toolbar-label">Projekt (Pflicht):</span>
-  <select id="projectSelect">
-    <option value="">Projekt wird geladen ...</option>
-  </select>
-  <div class="toolbar-sep"></div>
   <span class="toolbar-label">Typ:</span>
   <select id="typeFilter">
     <option value="">Alle</option>
     <option value="app">App</option>
     <option value="db">Database</option>
     <option value="table">Table</option>
+    <option value="field">Field</option>
     <option value="dataset">Dataset</option>
     <option value="qvd">QVD</option>
     <option value="file">File</option>
     <option value="other">Other</option>
+  </select>
+  <span class="toolbar-label">Lineage-Ebene:</span>
+  <select id="lineageLevelFilter">
+    <option value="all">All</option>
+    <option value="resource">Resource</option>
+    <option value="table">Table</option>
+    <option value="field">Field</option>
   </select>
   <span class="toolbar-label">App:</span>
   <select id="appFilter">
@@ -574,6 +597,7 @@
     <div class="legend-item"><div class="legend-dot" data-node-type="app"></div>App <span class="legend-desc">- Qlik Anwendung</span></div>
     <div class="legend-item"><div class="legend-dot" data-node-type="db"></div>Database <span class="legend-desc">- Datenbankquelle</span></div>
     <div class="legend-item"><div class="legend-dot" data-node-type="table"></div>Table <span class="legend-desc">- Tabelle/Entitaet</span></div>
+    <div class="legend-item"><div class="legend-dot" data-node-type="field"></div>Field <span class="legend-desc">- Feldspalte</span></div>
     <div class="legend-item"><div class="legend-dot" data-node-type="dataset"></div>Dataset <span class="legend-desc">- aufbereiteter Datensatz</span></div>
     <div class="legend-item"><div class="legend-dot" data-node-type="qvd"></div>QVD <span class="legend-desc">- Qlik Data File</span></div>
     <div class="legend-item"><div class="legend-dot" data-node-type="file"></div>File <span class="legend-desc">- externe Datei</span></div>
@@ -608,20 +632,37 @@
   });
 
   var lineageUrlParams = new URLSearchParams(window.location.search);
+  var FOCUS_PROJECT_STORAGE_KEY = 'atlas_focus_project_id_v1';
+  var FOCUS_CUSTOMER_STORAGE_KEY = 'atlas_focus_customer_id_v1';
   var deepLinkAppFilter = String(lineageUrlParams.get('app') || '').trim().toLowerCase();
   var deepLinkAppId = String(lineageUrlParams.get('app_id') || '').trim().toLowerCase();
   var deepLinkNodeIdRaw = String(lineageUrlParams.get('node_id') || '').trim();
   var deepLinkNodeId = deepLinkNodeIdRaw.toLowerCase();
   var deepLinkApplied = false;
   var deepLinkHighlightPending = !!(deepLinkAppFilter || deepLinkAppId || deepLinkNodeIdRaw);
-  function updateNavProjectContext(projectId, projectName) {
+  var allProjects = [];
+  var allCustomers = [];
+  var projectsById = {};
+  var customersById = {};
+  var focusState = {
+    project: String(lineageUrlParams.get('project') || localStorage.getItem(FOCUS_PROJECT_STORAGE_KEY) || '').trim(),
+    customer: String(lineageUrlParams.get('customer') || localStorage.getItem(FOCUS_CUSTOMER_STORAGE_KEY) || '').trim()
+  };
+  function projectCustomerId(project) {
+    if (!project || typeof project !== 'object') return '';
+    if (project.customer_id !== undefined && project.customer_id !== null) return String(project.customer_id);
+    if (project.customer && project.customer.id !== undefined && project.customer.id !== null) return String(project.customer.id);
+    return '';
+  }
+  function applyFocusStatePersistence() {
+    if (focusState.project) localStorage.setItem(FOCUS_PROJECT_STORAGE_KEY, String(focusState.project));
+    else localStorage.removeItem(FOCUS_PROJECT_STORAGE_KEY);
+    if (focusState.customer) localStorage.setItem(FOCUS_CUSTOMER_STORAGE_KEY, String(focusState.customer));
+    else localStorage.removeItem(FOCUS_CUSTOMER_STORAGE_KEY);
+  }
+  function updateNavProjectContext(projectId, customerId) {
     var pid = String(projectId || '').trim();
-    var pName = String(projectName || '').trim();
-    var badge = document.getElementById('navProjectBadge');
-    if (badge) {
-      var valueEl = badge.querySelector('.v');
-      if (valueEl) valueEl.textContent = pName || (pid ? ('Projekt ' + pid) : 'kein Projekt aktiv');
-    }
+    var cid = String(customerId || '').trim();
     document.querySelectorAll('a.nav-link').forEach(function(link) {
       var baseHref = link.getAttribute('data-base-href');
       if (!baseHref) {
@@ -629,23 +670,81 @@
         link.setAttribute('data-base-href', baseHref);
       }
       var nextHref = baseHref;
-      if ((baseHref === '/analytics.html' || baseHref === '/lineage.html') && pid) {
-        nextHref = baseHref + '?project=' + encodeURIComponent(pid);
+      if (baseHref === '/' || baseHref === '/analytics.html' || baseHref === '/lineage.html') {
+        var navQ = new URLSearchParams();
+        if (pid) navQ.set('project', pid);
+        if (cid) navQ.set('customer', cid);
+        var navQs = navQ.toString();
+        nextHref = baseHref + (navQs ? ('?' + navQs) : '');
       }
       link.setAttribute('href', nextHref);
     });
   }
-  function syncProjectInUrl(projectId) {
+  function syncProjectInUrl(projectId, customerId) {
     var params = new URLSearchParams(window.location.search);
     if (projectId) params.set('project', String(projectId));
     else params.delete('project');
+    if (customerId) params.set('customer', String(customerId));
+    else params.delete('customer');
     var query = params.toString();
     history.replaceState(null, '', '/lineage.html' + (query ? ('?' + query) : ''));
   }
+  function syncCustomerFromProject() {
+    if (!focusState.project) return;
+    var project = projectsById[String(focusState.project)];
+    var cid = projectCustomerId(project);
+    if (cid) focusState.customer = String(cid);
+  }
+  function renderCustomerSelect() {
+    var sel = document.getElementById('navCustomerSelect');
+    if (!allCustomers.length) {
+      focusState.customer = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Kunden verfuegbar</option>';
+      return;
+    }
+    sel.disabled = false;
+    if (!focusState.customer || !customersById[String(focusState.customer)]) {
+      focusState.customer = String(allCustomers[0].id);
+    }
+    sel.innerHTML = allCustomers.map(function(c) {
+      var selected = String(c.id) === String(focusState.customer) ? ' selected' : '';
+      return '<option value="' + escHtml(String(c.id)) + '"' + selected + '>' + escHtml(c.name || ('Kunde ' + c.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.customer);
+  }
+  function renderProjectSelectForCustomer() {
+    var sel = document.getElementById('navProjectSelect');
+    var filtered = allProjects.filter(function(p) {
+      return String(projectCustomerId(p)) === String(focusState.customer || '');
+    });
+    if (!filtered.length) {
+      focusState.project = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Projekte fuer Kunden</option>';
+      applyFocusStatePersistence();
+      updateNavProjectContext('', focusState.customer);
+      syncProjectInUrl('', focusState.customer);
+      return filtered;
+    }
+    sel.disabled = false;
+    if (!focusState.project || !filtered.find(function(p) { return String(p.id) === String(focusState.project); })) {
+      focusState.project = String(filtered[0].id);
+    }
+    sel.innerHTML = filtered.map(function(p) {
+      var selected = String(p.id) === String(focusState.project) ? ' selected' : '';
+      return '<option value="' + escHtml(String(p.id)) + '"' + selected + '>' + escHtml(p.name || ('Projekt ' + p.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.project);
+    applyFocusStatePersistence();
+    updateNavProjectContext(focusState.project, focusState.customer);
+    syncProjectInUrl(focusState.project, focusState.customer);
+    return filtered;
+  }
   function requireLineageProject() {
-    var projectId = String(document.getElementById('projectSelect').value || '').trim();
+    var projectId = String(document.getElementById('navProjectSelect').value || '').trim();
     if (projectId) return projectId;
-    showToast('Lineage laeuft im Projektfokus. Bitte zuerst ein Projekt waehlen.', 3200);
+    showToast('Lineage ist projektgefiltert. Bitte zuerst ein Projekt waehlen.', 3200);
     document.getElementById('emptyState').classList.add('show');
     return '';
   }
@@ -658,6 +757,7 @@
   }
 
   var THEME_STORAGE_KEY = 'lineage_theme_mode_v1';
+  var LINEAGE_LEVEL_FILTER_STORAGE_KEY = 'lineage_level_filter_v1';
   function normalizeThemeMode(mode) {
     var m = String(mode || '').trim().toLowerCase();
     if (m === 'classic' || m === 'performance') return m;
@@ -678,11 +778,23 @@
     try { stored = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
     applyThemeMode(stored || 'neon', false);
   })();
+  (function initLineageLevelFilter() {
+    var sel = document.getElementById('lineageLevelFilter');
+    if (!sel) return;
+    var stored = null;
+    try { stored = localStorage.getItem(LINEAGE_LEVEL_FILTER_STORAGE_KEY); } catch (e) {}
+    var value = String(stored || 'all').toLowerCase();
+    if (value !== 'all' && value !== 'resource' && value !== 'table' && value !== 'field') {
+      value = 'all';
+    }
+    sel.value = value;
+  })();
 
   var nodeColors = {
     app: '#38bdf8',
     db: '#34d399',
     table: '#fbbf24',
+    field: '#f59e0b',
     dataset: '#a78bfa',
     qvd: '#fb7185',
     file: '#22d3ee',
@@ -701,6 +813,14 @@
   function normalizedNodeType(type) {
     var t = String(type || '').toLowerCase();
     return nodeColors[t] ? t : 'other';
+  }
+  function nodePassesLineageLevel(nodeType, levelMode) {
+    var t = normalizedNodeType(nodeType);
+    var level = String(levelMode || 'all').toLowerCase();
+    if (level === 'all' || level === 'field') return true;
+    if (level === 'table') return t !== 'field';
+    if (level === 'resource') return t !== 'field' && t !== 'table';
+    return true;
   }
   function nodeAppId(node) {
     return String((node && (node.group || node.appId || (node.meta && (node.meta.appId || node.meta.app_id)))) || '').trim();
@@ -1056,6 +1176,73 @@
   function edgeNodeId(value) {
     return (value && typeof value === 'object') ? value.id : value;
   }
+  function edgeKeyFromLink(edge) {
+    if (edge && edge.id !== undefined && edge.id !== null) {
+      var rawId = String(edge.id || '').trim();
+      if (rawId) return 'id:' + rawId;
+    }
+    var sourceId = String(edgeNodeId(edge && edge.source) || '').trim();
+    var targetId = String(edgeNodeId(edge && edge.target) || '').trim();
+    return 'st:' + sourceId + '->' + targetId;
+  }
+  function buildImpactState(startNodeId, simLinks, visibleNodeIds) {
+    var start = String(startNodeId || '').trim();
+    if (!start) return null;
+    if (visibleNodeIds instanceof Set && !visibleNodeIds.has(start)) return null;
+
+    var outgoingBySource = Object.create(null);
+    var incomingByTarget = Object.create(null);
+    (simLinks || []).forEach(function(e) {
+      var sourceId = String(edgeNodeId(e && e.source) || '').trim();
+      var targetId = String(edgeNodeId(e && e.target) || '').trim();
+      if (!sourceId || !targetId) return;
+      var edgeKey = edgeKeyFromLink(e);
+      if (!outgoingBySource[sourceId]) outgoingBySource[sourceId] = [];
+      if (!incomingByTarget[targetId]) incomingByTarget[targetId] = [];
+      outgoingBySource[sourceId].push({ nextNodeId: targetId, edgeKey: edgeKey });
+      incomingByTarget[targetId].push({ nextNodeId: sourceId, edgeKey: edgeKey });
+    });
+
+    function traverse(adjacency) {
+      var nodes = new Set();
+      var edges = new Set();
+      var queue = [start];
+      var seen = new Set([start]);
+      while (queue.length) {
+        var current = String(queue.shift() || '');
+        var nextItems = adjacency[current] || [];
+        for (var i = 0; i < nextItems.length; i++) {
+          var item = nextItems[i] || {};
+          var nextId = String(item.nextNodeId || '').trim();
+          if (!nextId) continue;
+          edges.add(String(item.edgeKey || ''));
+          if (!seen.has(nextId)) {
+            seen.add(nextId);
+            nodes.add(nextId);
+            queue.push(nextId);
+          }
+        }
+      }
+      return { nodes: nodes, edges: edges };
+    }
+
+    var downstream = traverse(outgoingBySource);
+    var upstream = traverse(incomingByTarget);
+    var nodeIds = new Set([start]);
+    downstream.nodes.forEach(function(id) { nodeIds.add(id); });
+    upstream.nodes.forEach(function(id) { nodeIds.add(id); });
+    var edgeKeys = new Set();
+    downstream.edges.forEach(function(key) { if (key) edgeKeys.add(key); });
+    upstream.edges.forEach(function(key) { if (key) edgeKeys.add(key); });
+
+    return {
+      selectedNodeId: start,
+      nodeIds: nodeIds,
+      edgeKeys: edgeKeys,
+      upstreamNodeIds: upstream.nodes,
+      downstreamNodeIds: downstream.nodes,
+    };
+  }
   function buildGraphMetrics(simNodes, simLinks) {
     graphMetrics.byNodeId = Object.create(null);
     graphMetrics.outgoingBySource = Object.create(null);
@@ -1138,6 +1325,9 @@
     blastCache: Object.create(null),
     maxBlastVisits: 5000
   };
+  var selectedImpactNodeId = '';
+  var lastRenderedImpactLinks = [];
+  var lastRenderedNodeIdSet = new Set();
   var tidyExpandedByScope = Object.create(null);
   var layoutPositionsByScope = (function() {
     try {
@@ -1153,7 +1343,7 @@
     try { localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutPositionsByScope)); } catch (e) {}
   }
   function currentGraphScopeKey() {
-    var projectId = document.getElementById('projectSelect').value || 'none';
+    var projectId = document.getElementById('navProjectSelect').value || 'none';
     return 'project:' + String(projectId);
   }
   function scopedPinnedPositions() {
@@ -1573,11 +1763,16 @@
     });
 
     var treeLinks = treeLinksRaw.map(function(l) {
+      var sourceKey = String(l.source.data.id);
+      var targetKey = String(l.target.data.id);
       return {
-        sourceKey: String(l.source.data.id),
-        targetKey: String(l.target.data.id),
-        source: { id: String(l.source.data.id), x: l.source.y, y: l.source.x },
-        target: { id: String(l.target.data.id), x: l.target.y, y: l.target.x }
+        id: 'tree:' + sourceKey + '->' + targetKey,
+        sourceKey: sourceKey,
+        targetKey: targetKey,
+        sourceNodeId: String(l.source.data.nodeId || ''),
+        targetNodeId: String(l.target.data.nodeId || ''),
+        source: { id: sourceKey, x: l.source.y, y: l.source.x },
+        target: { id: targetKey, x: l.target.y, y: l.target.x }
       };
     });
 
@@ -1586,10 +1781,23 @@
       var t = positionedById[String(e.target)];
       if (!s || !t) return null;
       return {
+        id: 'cross:' + String(e.source) + '->' + String(e.target),
+        sourceNodeId: String(s.id || ''),
+        targetNodeId: String(t.id || ''),
         source: { id: s.id, x: s.x, y: s.y },
         target: { id: t.id, x: t.x, y: t.y }
       };
     }).filter(function(v) { return !!v; });
+    var tidyImpactLinks = treeLinks.map(function(e) {
+      return { id: e.id, source: e.sourceNodeId, target: e.targetNodeId };
+    }).concat(crossLinks.map(function(e) {
+      return { id: e.id, source: e.sourceNodeId, target: e.targetNodeId };
+    }));
+    var tidyVisibleNodeIds = new Set(positionedNodes.map(function(n) { return String(n.id || ''); }).filter(Boolean));
+    lastRenderedImpactLinks = tidyImpactLinks;
+    lastRenderedNodeIdSet = tidyVisibleNodeIds;
+    var tidyImpactState = buildImpactState(selectedImpactNodeId, tidyImpactLinks, tidyVisibleNodeIds);
+    if (!tidyImpactState && selectedImpactNodeId) selectedImpactNodeId = '';
 
     var linkGen = d3.linkHorizontal()
       .x(function(d) { return d.x; })
@@ -1621,6 +1829,8 @@
         .style('cursor', 'pointer')
         .attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; })
         .on('click', function(event, d) {
+          selectedImpactNodeId = String(d && d.id || '').trim();
+          showDetail(d);
           if (d.__tidyHasChildren) {
             var nextExpanded = !isTidyExpanded(d.__tidyKey);
             setTidyExpanded(d.__tidyKey, nextExpanded);
@@ -1638,7 +1848,8 @@
             }
             if (lastData) renderGraph(lastData);
           } else {
-            showDetail(d);
+            tidyImpactState = buildImpactState(selectedImpactNodeId, tidyImpactLinks, tidyVisibleNodeIds);
+            applyTidyImpactHighlight();
           }
           event.stopPropagation();
         });
@@ -1698,9 +1909,66 @@
     function linkTouchesNode(linkDatum, nodeId) {
       return String(linkDatum.sourceKey) === String(nodeId) || String(linkDatum.targetKey) === String(nodeId);
     }
+    function resetTidyStyles() {
+      nodeGroup.attr('opacity', 1);
+      nodeGroup.select('.node-circle')
+        .attr('fill-opacity', 0.9)
+        .attr('stroke', function(d) { return baseNodeStrokeColor(d); })
+        .attr('stroke-opacity', function(d) { return baseNodeStrokeOpacity(d); })
+        .attr('stroke-width', function(d) { return baseNodeStrokeWidth(d); })
+        .attr('stroke-dasharray', function(d) { return baseNodeStrokeDasharray(d); });
+      nodeGroup.select('text').attr('fill', 'rgba(255,255,255,0.72)');
+      treeLink
+        .attr('stroke', 'rgba(255,255,255,0.24)')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-opacity', 1);
+      crossLink
+        .attr('stroke', 'rgba(245,158,11,0.45)')
+        .attr('stroke-width', 1.2)
+        .attr('stroke-opacity', 1);
+    }
+    function applyTidyImpactHighlight() {
+      if (!tidyImpactState || !tidyImpactState.nodeIds || !tidyImpactState.nodeIds.size) {
+        resetTidyStyles();
+        return;
+      }
+      var selectedId = String(tidyImpactState.selectedNodeId || '');
+      nodeGroup
+        .attr('opacity', function(d) { return tidyImpactState.nodeIds.has(String(d.id || '')) ? 1 : 0.24; });
+      nodeGroup.select('.node-circle')
+        .attr('fill-opacity', function(d) { return tidyImpactState.nodeIds.has(String(d.id || '')) ? 0.94 : 0.4; })
+        .attr('stroke', function(d) {
+          var id = String(d.id || '');
+          if (id === selectedId) return '#22d3ee';
+          if (tidyImpactState.nodeIds.has(id)) return 'rgba(147,197,253,0.95)';
+          return baseNodeStrokeColor(d);
+        })
+        .attr('stroke-opacity', function(d) {
+          var id = String(d.id || '');
+          if (id === selectedId || tidyImpactState.nodeIds.has(id)) return 0.95;
+          return Math.min(baseNodeStrokeOpacity(d), 0.55);
+        })
+        .attr('stroke-width', function(d) {
+          var id = String(d.id || '');
+          if (id === selectedId) return Math.max(2.8, baseNodeStrokeWidth(d));
+          if (tidyImpactState.nodeIds.has(id)) return Math.max(2.2, baseNodeStrokeWidth(d));
+          return baseNodeStrokeWidth(d);
+        });
+      nodeGroup.select('text')
+        .attr('fill', function(d) { return tidyImpactState.nodeIds.has(String(d.id || '')) ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.32)'; });
+      treeLink
+        .attr('stroke', function(l) { return tidyImpactState.edgeKeys.has(edgeKeyFromLink(l)) ? 'rgba(56,189,248,0.9)' : 'rgba(255,255,255,0.08)'; })
+        .attr('stroke-width', function(l) { return tidyImpactState.edgeKeys.has(edgeKeyFromLink(l)) ? 2.3 : 1.0; })
+        .attr('stroke-opacity', function(l) { return tidyImpactState.edgeKeys.has(edgeKeyFromLink(l)) ? 1 : 0.5; });
+      crossLink
+        .attr('stroke', function(l) { return tidyImpactState.edgeKeys.has(edgeKeyFromLink(l)) ? 'rgba(245,158,11,0.92)' : 'rgba(245,158,11,0.18)'; })
+        .attr('stroke-width', function(l) { return tidyImpactState.edgeKeys.has(edgeKeyFromLink(l)) ? 2.0 : 1.0; })
+        .attr('stroke-opacity', function(l) { return tidyImpactState.edgeKeys.has(edgeKeyFromLink(l)) ? 1 : 0.45; });
+    }
 
     nodeGroup
       .on('mouseenter', function(event, d) {
+        if (selectedImpactNodeId) return;
         d3.select(this).select('.node-circle')
           .attr('stroke', '#fff').attr('stroke-opacity', 0.95).attr('stroke-width', 2.2);
 
@@ -1713,6 +1981,7 @@
           .attr('stroke-width', function(l) { return linkTouchesNode(l, d.__tidyKey) ? 1.8 : 1.0; });
       })
       .on('mouseleave', function(event, d) {
+        if (selectedImpactNodeId) return;
         d3.select(this).select('.node-circle')
           .attr('stroke', function() { return baseNodeStrokeColor(d); })
           .attr('stroke-opacity', function() { return baseNodeStrokeOpacity(d); })
@@ -1729,6 +1998,7 @@
       });
 
     triggerDeepLinkNodeHighlight(nodeGroup, 260);
+    applyTidyImpactHighlight();
 
     var outOfAreaAppCount = areaFilterValue
       ? positionedNodes.filter(function(n) { return n.__outOfAreaApp; }).length
@@ -1750,7 +2020,14 @@
     if (shouldAutoFit) {
       fitView(positionedNodes);
     }
-    svg.on('click', function() { closeDetail(); });
+    svg.on('click', function() {
+      closeDetail();
+      if (selectedImpactNodeId) {
+        selectedImpactNodeId = '';
+        tidyImpactState = null;
+        applyTidyImpactHighlight();
+      }
+    });
   }
 
   function renderGraph(data) {
@@ -1759,6 +2036,7 @@
     var viewMode = document.getElementById('viewMode').value || 'force';
     var outsideAreaMode = document.getElementById('outsideAreaMode').value || 'show';
     var typeFilter = document.getElementById('typeFilter').value;
+    var lineageLevelFilter = document.getElementById('lineageLevelFilter').value || 'all';
     var appFilter = document.getElementById('appFilter').value;
     var areaFilter = document.getElementById('areaFilter').value;
     var areaFilterValue = String(areaFilter || '').trim().toLowerCase();
@@ -1780,6 +2058,7 @@
     }
 
     var filteredNodes = rawNodes.filter(function(n) {
+      if (!nodePassesLineageLevel(n.type, lineageLevelFilter)) return false;
       if (baseVisibleNodeIds && !baseVisibleNodeIds.has(String(n.id))) return false;
       if (typeFilter && normalizedNodeType(n.type) !== typeFilter) {
         if (!(viewMode === 'tidy' && normalizedNodeType(n.type) === 'app')) return false;
@@ -1846,6 +2125,10 @@
     var simLinks = filteredEdges.map(function(e) {
       return { source: e.source, target: e.target, relation: e.relation, id: e.id };
     }).filter(function(e) { return nodeMap[e.source] && nodeMap[e.target]; });
+    lastRenderedImpactLinks = simLinks.map(function(e) {
+      return { id: e.id, source: e.source, target: e.target };
+    });
+    lastRenderedNodeIdSet = new Set(simNodes.map(function(n) { return String(n.id || ''); }).filter(Boolean));
     buildGraphMetrics(simNodes, simLinks);
 
     if (viewMode === 'tidy') {
@@ -1932,7 +2215,13 @@
             pinNodePosition(d);
           })
         )
-        .on('click', function(event, d) { showDetail(d); event.stopPropagation(); });
+        .on('click', function(event, d) {
+          selectedImpactNodeId = String((d && d.id) || '').trim();
+          showDetail(d);
+          forceImpactState = buildImpactState(selectedImpactNodeId, simLinks, lastRenderedNodeIdSet);
+          applyForceImpactHighlight();
+          event.stopPropagation();
+        });
 
     nodeGroup.append('circle')
       .attr('class', 'node-circle')
@@ -1963,9 +2252,57 @@
       .attr('font-size', '10px')
       .attr('fill', 'rgba(255,255,255,0.6)')
       .style('pointer-events', 'none');
+    var forceImpactState = buildImpactState(selectedImpactNodeId, simLinks, lastRenderedNodeIdSet);
+    if (!forceImpactState && selectedImpactNodeId) selectedImpactNodeId = '';
+    function resetForceStyles() {
+      nodeGroup.attr('opacity', 1);
+      nodeGroup.select('.node-circle')
+        .attr('fill-opacity', 0.9)
+        .attr('stroke', function(d) { return baseNodeStrokeColor(d); })
+        .attr('stroke-opacity', function(d) { return baseNodeStrokeOpacity(d); })
+        .attr('stroke-width', function(d) { return baseNodeStrokeWidth(d); })
+        .attr('stroke-dasharray', function(d) { return baseNodeStrokeDasharray(d); });
+      nodeGroup.select('text').attr('fill', 'rgba(255,255,255,0.6)');
+      link.attr('stroke', 'rgba(255,255,255,0.18)').attr('stroke-width', 1.5).attr('stroke-opacity', 1);
+    }
+    function applyForceImpactHighlight() {
+      if (!forceImpactState || !forceImpactState.nodeIds || !forceImpactState.nodeIds.size) {
+        resetForceStyles();
+        return;
+      }
+      var selectedId = String(forceImpactState.selectedNodeId || '');
+      nodeGroup
+        .attr('opacity', function(d) { return forceImpactState.nodeIds.has(String(d.id || '')) ? 1 : 0.24; });
+      nodeGroup.select('.node-circle')
+        .attr('fill-opacity', function(d) { return forceImpactState.nodeIds.has(String(d.id || '')) ? 0.94 : 0.4; })
+        .attr('stroke', function(d) {
+          var id = String(d.id || '');
+          if (id === selectedId) return '#22d3ee';
+          if (forceImpactState.nodeIds.has(id)) return 'rgba(147,197,253,0.95)';
+          return baseNodeStrokeColor(d);
+        })
+        .attr('stroke-opacity', function(d) {
+          var id = String(d.id || '');
+          if (id === selectedId || forceImpactState.nodeIds.has(id)) return 0.95;
+          return Math.min(baseNodeStrokeOpacity(d), 0.55);
+        })
+        .attr('stroke-width', function(d) {
+          var id = String(d.id || '');
+          if (id === selectedId) return Math.max(2.8, baseNodeStrokeWidth(d));
+          if (forceImpactState.nodeIds.has(id)) return Math.max(2.2, baseNodeStrokeWidth(d));
+          return baseNodeStrokeWidth(d);
+        });
+      nodeGroup.select('text')
+        .attr('fill', function(d) { return forceImpactState.nodeIds.has(String(d.id || '')) ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.32)'; });
+      link
+        .attr('stroke', function(e) { return forceImpactState.edgeKeys.has(edgeKeyFromLink(e)) ? 'rgba(56,189,248,0.9)' : 'rgba(255,255,255,0.07)'; })
+        .attr('stroke-width', function(e) { return forceImpactState.edgeKeys.has(edgeKeyFromLink(e)) ? 2.4 : 1.0; })
+        .attr('stroke-opacity', function(e) { return forceImpactState.edgeKeys.has(edgeKeyFromLink(e)) ? 1 : 0.5; });
+    }
 
     nodeGroup
       .on('mouseenter', function(event, d) {
+        if (selectedImpactNodeId) return;
         d3.select(this).select('.node-circle')
           .attr('stroke', '#fff').attr('stroke-opacity', 0.8).attr('stroke-width', 2);
         link.attr('stroke', function(e) {
@@ -1979,6 +2316,7 @@
         });
       })
       .on('mouseleave', function(event, d) {
+        if (selectedImpactNodeId) return;
         d3.select(this).select('.node-circle')
           .attr('stroke', function() { return baseNodeStrokeColor(d); })
           .attr('stroke-opacity', function() { return baseNodeStrokeOpacity(d); })
@@ -1988,8 +2326,16 @@
       });
 
     triggerDeepLinkNodeHighlight(nodeGroup, 420);
+    applyForceImpactHighlight();
 
-    svg.on('click', function() { closeDetail(); });
+    svg.on('click', function() {
+      closeDetail();
+      if (selectedImpactNodeId) {
+        selectedImpactNodeId = '';
+        forceImpactState = null;
+        applyForceImpactHighlight();
+      }
+    });
 
     simulation.on('tick', function() {
       link
@@ -2016,6 +2362,10 @@
     var nodeId = String((d && d.id) || '');
     var metrics = graphMetrics.byNodeId[nodeId] || { inDegree: 0, outDegree: 0, degree: 0 };
     var blastRadius = blastRadiusForNode(nodeId);
+    var impactState = buildImpactState(nodeId, lastRenderedImpactLinks, lastRenderedNodeIdSet);
+    var upstreamImpactCount = impactState ? impactState.upstreamNodeIds.size : 0;
+    var downstreamImpactCount = impactState ? impactState.downstreamNodeIds.size : 0;
+    var totalImpactCount = impactState ? Math.max(0, impactState.nodeIds.size - 1) : 0;
 
     var rows = '';
     rows += detailRow('Display Name', displayName);
@@ -2031,6 +2381,9 @@
     rows += detailRow('Out-Degree', metrics.outDegree);
     rows += detailRow('Total Degree', metrics.degree);
     rows += detailRow('Blast Radius', blastRadius);
+    rows += detailRow('Impact Upstream (transitiv)', upstreamImpactCount);
+    rows += detailRow('Impact Downstream (transitiv)', downstreamImpactCount);
+    rows += detailRow('Impact Total (transitiv)', totalImpactCount);
 
     var extraRows = '';
     if (d.__outOfAreaApp) extraRows += detailRow('Hinweis', 'App liegt ausserhalb des Bereichsfilters');
@@ -2072,36 +2425,26 @@
   }
   document.getElementById('detailClose').addEventListener('click', closeDetail);
 
-  async function loadProjects() {
+  async function loadFocusSelectors() {
     try {
-      var res = await fetch('/api/projects', { headers: { 'Authorization': 'Bearer ' + token } });
-      if (!res.ok) return;
-      var projects = await res.json();
-      var sel = document.getElementById('projectSelect');
-      var list = Array.isArray(projects) ? projects : [];
-      var urlProject = new URLSearchParams(window.location.search).get('project');
-      if (!list.length) {
-        sel.disabled = true;
-        sel.innerHTML = '<option value="">Keine Projekte verfuegbar</option>';
-        updateNavProjectContext('', '');
-        return [];
-      }
-      sel.disabled = false;
-      var selectedId = String(urlProject || sel.value || '').trim();
-      if (!selectedId || !list.find(function(p) { return String(p.id) === selectedId; })) {
-        selectedId = String(list[0].id);
-      }
-      sel.innerHTML = list.map(function(p) {
-        var custName = p.customer ? ' (' + p.customer.name + ')' : '';
-        var selected = String(p.id) === selectedId ? ' selected' : '';
-        return '<option value="' + p.id + '"' + selected + '>'
-          + escHtml(p.name + custName) + '</option>';
-      }).join('');
-      sel.value = selectedId;
-      var selectedProject = list.find(function(p) { return String(p.id) === selectedId; }) || null;
-      updateNavProjectContext(selectedId, selectedProject ? (selectedProject.name || ('Projekt ' + selectedId)) : '');
-      syncProjectInUrl(selectedId);
-      return list;
+      var responses = await Promise.all([
+        fetch('/api/projects', { headers: { 'Authorization': 'Bearer ' + token } }),
+        fetch('/api/customers/names', { headers: { 'Authorization': 'Bearer ' + token } })
+      ]);
+      if (!responses[0].ok || !responses[1].ok) return [];
+      allProjects = await responses[0].json();
+      allCustomers = await responses[1].json();
+      if (!Array.isArray(allProjects)) allProjects = [];
+      if (!Array.isArray(allCustomers)) allCustomers = [];
+
+      projectsById = {};
+      allProjects.forEach(function(p) { projectsById[String(p.id)] = p; });
+      customersById = {};
+      allCustomers.forEach(function(c) { customersById[String(c.id)] = c; });
+
+      syncCustomerFromProject();
+      renderCustomerSelect();
+      return renderProjectSelectForCustomer();
     } catch (e) {}
     return [];
   }
@@ -2110,6 +2453,7 @@
     var loading = document.getElementById('loadingOverlay');
     loading.style.display = 'flex';
     closeDetail();
+    selectedImpactNodeId = '';
     clearTidyExpandedForCurrentScope();
     shouldAutoFitOnNextRender = true;
 
@@ -2129,7 +2473,7 @@
       }
       if (!res.ok) { throw new Error('HTTP ' + res.status); }
       lastData = await res.json();
-      syncProjectInUrl(projectId);
+      syncProjectInUrl(projectId, focusState.customer);
       populateLineageFilters(lastData);
       applyDeepLinkFilters(lastData);
       renderGraph(lastData);
@@ -2143,11 +2487,21 @@
   }
 
   document.getElementById('loadBtn').addEventListener('click', loadGraph);
-  document.getElementById('projectSelect').addEventListener('change', function() {
+  document.getElementById('navCustomerSelect').addEventListener('change', function() {
+    focusState.customer = String(this.value || '').trim();
+    renderProjectSelectForCustomer();
+    autoFitPending = false;
+    shouldAutoFitOnNextRender = true;
+    loadGraph();
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function() {
     var projectId = String(this.value || '').trim();
-    var selectedName = this.options && this.selectedIndex >= 0 ? this.options[this.selectedIndex].textContent : '';
-    updateNavProjectContext(projectId, selectedName);
-    syncProjectInUrl(projectId);
+    focusState.project = projectId;
+    syncCustomerFromProject();
+    renderCustomerSelect();
+    applyFocusStatePersistence();
+    updateNavProjectContext(projectId, focusState.customer);
+    syncProjectInUrl(projectId, focusState.customer);
     autoFitPending = false;
     shouldAutoFitOnNextRender = true;
     loadGraph();
@@ -2164,6 +2518,12 @@
     }
   });
   document.getElementById('typeFilter').addEventListener('change', function() {
+    shouldAutoFitOnNextRender = false;
+    maybeRenderLastData();
+  });
+  document.getElementById('lineageLevelFilter').addEventListener('change', function() {
+    var value = String(document.getElementById('lineageLevelFilter').value || 'all').toLowerCase();
+    try { localStorage.setItem(LINEAGE_LEVEL_FILTER_STORAGE_KEY, value); } catch (e) {}
     shouldAutoFitOnNextRender = false;
     maybeRenderLastData();
   });
@@ -2212,7 +2572,7 @@
     svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.4);
   });
 
-  loadProjects().then(function() {
+  loadFocusSelectors().then(function() {
     loadGraph();
   });
 </script>

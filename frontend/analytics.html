@@ -32,20 +32,32 @@
     .nav-link:hover { color: var(--text); background: var(--surface-hover); }
     .nav-link.active { color: var(--accent); background: var(--surface-hover); }
     .nav-project-badge {
+      margin-left: 0.5rem;
+      padding: 0.25rem 0.55rem;
+      border: 1px solid rgba(148,163,184,0.35);
+      border-radius: 999px;
+      background: rgba(30,41,59,0.45);
       display: inline-flex;
       align-items: center;
-      gap: 0.35rem;
-      padding: 0.3rem 0.7rem;
-      border-radius: 999px;
-      border: 1px solid rgba(102,126,234,0.45);
-      background: linear-gradient(135deg, rgba(102,126,234,0.18), rgba(20,184,166,0.18));
-      color: #dbeafe;
-      font-size: 0.74rem;
-      letter-spacing: 0.02em;
-      white-space: nowrap;
+      gap: 0.42rem;
+      min-width: 0;
     }
-    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; }
-    .nav-project-badge .v { color: #fff; font-weight: 600; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-select {
+      height: 28px;
+      min-width: 220px;
+      max-width: 280px;
+      background: rgba(15,23,42,0.82);
+      border: 1px solid rgba(148,163,184,0.35);
+      color: #fff;
+      border-radius: 999px;
+      padding: 0 0.6rem;
+      font-size: 0.76rem;
+      outline: none;
+    }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.28) inset; }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
     .nav-spacer { flex: 1; }
     .nav-user { display: flex; align-items: center; gap: 0.75rem; }
     .nav-user-email { color: var(--muted); font-size: 0.8rem; }
@@ -289,13 +301,20 @@
 <nav>
   <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>Atlas</a>
   <div class="nav-links">
-    <a class="nav-link" href="/">Dashboard</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/">Dashboard</a>
     <a class="nav-link active" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
   </div>
-  <div class="nav-project-badge" id="navProjectBadge"><span class="k">Projektfokus</span><span class="v">wird geladen ...</span></div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
+  </div>
   <div class="nav-spacer"></div>
   <div class="nav-user"><span class="nav-user-email" id="userEmail">-</span><button class="btn-sm" id="logoutBtn">Sign out</button></div>
 </nav>
@@ -310,8 +329,6 @@
   </div>
 
   <div class="toolbar">
-    <label for="projectSelect">Projekt (Pflicht)</label>
-    <select id="projectSelect"><option value="">Projekt wird geladen ...</option></select>
     <label for="daysSelect">Zeitraum</label>
     <select id="daysSelect"><option value="7">7 Tage</option><option value="30" selected>30 Tage</option><option value="90">90 Tage</option><option value="180">180 Tage</option><option value="365">365 Tage</option></select>
     <button class="btn primary" id="reloadBtn">Reload</button>
@@ -419,7 +436,7 @@
           <div class="viz-doc">
             <div class="viz-doc-title">Analyse + Interaktion</div>
             <p><strong>Analyse:</strong> Hierarchische Sicht auf Bereiche und Apps mit relativer Kreisgroesse je Ebene.</p>
-            <p><strong>Daten:</strong> Analytics latest Snapshot je App. Default-Metrik ist statische Modellgroesse, optional umschaltbar auf Komplexitaet.</p>
+            <p><strong>Daten:</strong> Analytics latest Snapshot je App. Default-Metrik ist statische Modellgroesse, optional umschaltbar auf Komplexitaet oder Reload RAM (Peak).</p>
             <p><strong>Interaktion:</strong> Klick auf Bereich/App zoomt in die Ebene; Breadcrumb ermoeglicht die Navigation zurueck.</p>
           </div>
           <div class="dmp-toolbar">
@@ -427,6 +444,7 @@
             <select id="dmpMetricSelect">
               <option value="static_byte_size_latest">Static Byte Size</option>
               <option value="complexity_latest">Complexity (Fields + Tables*8)</option>
+              <option value="reload_meta_peak_memory_bytes_latest">Reload RAM (Peak)</option>
             </select>
             <div class="dmp-meta" id="dataModelPackMeta">Metrik wird geladen ...</div>
           </div>
@@ -454,6 +472,16 @@
       <div><div class="section-title">3) Lineage Risk - Criticality and Blast Radius</div><div class="section-sub">Critical Nodes und Impact Potenzial aus Abhaengigkeiten</div></div>
     </div>
     <div class="section-body">
+      <div class="viz-doc">
+        <div class="viz-doc-title">Score-Definition</div>
+        <p><strong>Criticality Score:</strong> `0.65 * degree_norm + 0.35 * blast_norm`.</p>
+        <p><strong>degree_norm:</strong> Min-Max-Normalisierung von `degree` auf 0-100.</p>
+        <p><strong>blast_norm:</strong> Min-Max-Normalisierung von `blast_radius` auf 0-100.</p>
+        <p><strong>degree:</strong> `in_degree + out_degree`.</p>
+        <p><strong>in_degree:</strong> Anzahl eingehender Kanten auf den Node.</p>
+        <p><strong>out_degree:</strong> Anzahl ausgehender Kanten vom Node.</p>
+        <p><strong>blast_radius:</strong> Downstream-Reichweite per BFS bis Tiefe 4 (mit Sicherheitslimit auf max. Knoten).</p>
+      </div>
       <div class="viz-doc">
         <div class="viz-doc-title">Abbildung: KPI-Uebersicht</div>
         <p><strong>Analyse:</strong> Baseline zur Netzwerkgroesse und Anzahl priorisierter Risikoknoten.</p>
@@ -591,7 +619,7 @@
 
   var MODULE_KEYS = ['portfolio-insights','data-model','lineage-risk','data-quality','governance-ops'];
   var MODULE_ALIASES = { 'performance-capacity': 'data-model' };
-  var DATA_MODEL_METRICS = ['static_byte_size_latest','complexity_latest'];
+  var DATA_MODEL_METRICS = ['static_byte_size_latest','complexity_latest','reload_meta_peak_memory_bytes_latest'];
   function normalizeModule(raw){
     var k=String(raw||'').trim().toLowerCase();
     if(MODULE_ALIASES[k]) k = MODULE_ALIASES[k];
@@ -602,10 +630,12 @@
   function normalizeCvLabels(raw){ return String(raw || '1').trim() !== '0'; }
   function dataModelMetricLabel(metric){
     if(metric === 'complexity_latest') return 'Complexity (Fields + Tables*8)';
+    if(metric === 'reload_meta_peak_memory_bytes_latest') return 'Reload RAM (Peak)';
     return 'Static Byte Size';
   }
   function formatMetricValue(metric, value){
     if(metric === 'complexity_latest') return n(value);
+    if(metric === 'reload_meta_peak_memory_bytes_latest') return bytes(value);
     return bytes(value);
   }
   function truncateCircleLabel(text, maxWidthPx){
@@ -616,10 +646,17 @@
     if(maxChars <= 4) return raw.slice(0, maxChars);
     return raw.slice(0, maxChars - 1) + '...';
   }
+  var FOCUS_PROJECT_STORAGE_KEY = 'atlas_focus_project_id_v1';
+  var FOCUS_CUSTOMER_STORAGE_KEY = 'atlas_focus_customer_id_v1';
   var state=(function(){
     var q=new URLSearchParams(window.location.search);
+    var fromUrl = String(q.get('project') || '').trim();
+    var fromStorage = String(localStorage.getItem(FOCUS_PROJECT_STORAGE_KEY) || '').trim();
+    var fromCustomerUrl = String(q.get('customer') || '').trim();
+    var fromCustomerStorage = String(localStorage.getItem(FOCUS_CUSTOMER_STORAGE_KEY) || '').trim();
     return {
-      project:q.get('project')||'',
+      project:fromUrl || fromStorage,
+      customer:fromCustomerUrl || fromCustomerStorage,
       days:parseInt(q.get('days')||'30',10)||30,
       module:normalizeModule(q.get('module')),
       dataModelMetric:normalizeDataModelMetric(q.get('dm_metric') || 'static_byte_size_latest'),
@@ -630,6 +667,7 @@
   function setUrl(){
     var q=new URLSearchParams();
     if(state.project) q.set('project',state.project);
+    if(state.customer) q.set('customer',state.customer);
     if(state.days) q.set('days',String(state.days));
     if(state.module) q.set('module',state.module);
     if(state.dataModelMetric) q.set('dm_metric',state.dataModelMetric);
@@ -637,16 +675,19 @@
     if(!state.showCvLabels) q.set('cv_labels', '0');
     history.replaceState(null,'', q.toString()?('/analytics.html?'+q.toString()):'/analytics.html');
   }
-  function updateNavProjectContext(projectId, projectName){
+  var allProjects = [];
+  var allCustomers = [];
+  var projectsById = {};
+  var customersById = {};
+  function projectCustomerId(project){
+    if(!project || typeof project !== 'object') return '';
+    if(project.customer_id !== undefined && project.customer_id !== null) return String(project.customer_id);
+    if(project.customer && project.customer.id !== undefined && project.customer.id !== null) return String(project.customer.id);
+    return '';
+  }
+  function updateNavProjectContext(projectId, customerId){
     var pid = String(projectId || '').trim();
-    var pName = String(projectName || '').trim();
-    var badge = document.getElementById('navProjectBadge');
-    if(badge){
-      var valueEl = badge.querySelector('.v');
-      if(valueEl){
-        valueEl.textContent = pName || (pid ? ('Projekt ' + pid) : 'kein Projekt aktiv');
-      }
-    }
+    var cid = String(customerId || '').trim();
     document.querySelectorAll('a.nav-link').forEach(function(link){
       var baseHref = link.getAttribute('data-base-href');
       if(!baseHref){
@@ -654,15 +695,75 @@
         link.setAttribute('data-base-href', baseHref);
       }
       var nextHref = baseHref;
-      if((baseHref === '/analytics.html' || baseHref === '/lineage.html') && pid){
-        nextHref = baseHref + '?project=' + encodeURIComponent(pid);
+      if(baseHref === '/' || baseHref === '/analytics.html' || baseHref === '/lineage.html'){
+        var navQ = new URLSearchParams();
+        if(pid) navQ.set('project', pid);
+        if(cid) navQ.set('customer', cid);
+        var navQs = navQ.toString();
+        nextHref = baseHref + (navQs ? ('?' + navQs) : '');
       }
       link.setAttribute('href', nextHref);
     });
   }
+  function applyFocusStatePersistence(){
+    if(state.project) localStorage.setItem(FOCUS_PROJECT_STORAGE_KEY, String(state.project));
+    else localStorage.removeItem(FOCUS_PROJECT_STORAGE_KEY);
+    if(state.customer) localStorage.setItem(FOCUS_CUSTOMER_STORAGE_KEY, String(state.customer));
+    else localStorage.removeItem(FOCUS_CUSTOMER_STORAGE_KEY);
+  }
+  function syncCustomerFromProject(){
+    if(!state.project) return;
+    var project = projectsById[String(state.project)];
+    var cid = projectCustomerId(project);
+    if(cid) state.customer = String(cid);
+  }
+  function renderCustomerSelect(){
+    var sel = document.getElementById('navCustomerSelect');
+    if(!allCustomers.length){
+      state.customer = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Kunden verfuegbar</option>';
+      return;
+    }
+    sel.disabled = false;
+    if(!state.customer || !customersById[String(state.customer)]){
+      state.customer = String(allCustomers[0].id);
+    }
+    sel.innerHTML = allCustomers.map(function(c){
+      var selected = String(c.id) === String(state.customer) ? ' selected' : '';
+      return '<option value="' + esc(String(c.id)) + '"' + selected + '>' + esc(c.name || ('Kunde ' + c.id)) + '</option>';
+    }).join('');
+    sel.value = String(state.customer);
+  }
+  function renderProjectSelectForCustomer(){
+    var sel = document.getElementById('navProjectSelect');
+    var filtered = allProjects.filter(function(p){ return String(projectCustomerId(p)) === String(state.customer || ''); });
+    if(!filtered.length){
+      state.project = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Projekte fuer Kunden</option>';
+      applyFocusStatePersistence();
+      updateNavProjectContext('', state.customer);
+      setUrl();
+      return filtered;
+    }
+    sel.disabled = false;
+    if(!state.project || !filtered.find(function(p){ return String(p.id)===String(state.project); })){
+      state.project = String(filtered[0].id);
+    }
+    sel.innerHTML = filtered.map(function(p){
+      var s=String(p.id)===String(state.project)?' selected':'';
+      return '<option value="'+esc(String(p.id))+'"'+s+'>'+esc(p.name||('Projekt '+p.id))+'</option>';
+    }).join('');
+    sel.value = String(state.project);
+    applyFocusStatePersistence();
+    updateNavProjectContext(state.project, state.customer);
+    setUrl();
+    return filtered;
+  }
   function requireAnalyticsProject(){
     if(state.project) return true;
-    var msg = 'Analytics ist im Projektfokus aktiv. Bitte zuerst ein Projekt waehlen.';
+    var msg = 'Analytics ist projektgefiltert. Bitte zuerst ein Projekt waehlen.';
     setError(msg);
     showToast(msg);
     document.getElementById('toolbarStatus').textContent = 'Projekt fehlt';
@@ -1830,29 +1931,22 @@
     );
   }
 
-  async function loadProjects(){
-    var list = await apiFetchJson('/api/projects', 'Projekte konnten nicht geladen werden');
-    var projects = Array.isArray(list) ? list : [];
-    var sel = document.getElementById('projectSelect');
-    if(!projects.length){
-      state.project = '';
-      sel.disabled = true;
-      sel.innerHTML = '<option value="">Keine Projekte verfuegbar</option>';
-      updateNavProjectContext('', '');
-      return [];
-    }
-    sel.disabled = false;
-    if(!state.project || !projects.find(function(p){ return String(p.id)===String(state.project); })){
-      state.project = String(projects[0].id);
-    }
-    sel.innerHTML = projects.map(function(p){
-      var s=String(p.id)===String(state.project)?' selected':'';
-      return '<option value="'+esc(String(p.id))+'"'+s+'>'+esc(p.name||('Projekt '+p.id))+'</option>';
-    }).join('');
-    sel.value = String(state.project);
-    var selected = projects.find(function(p){ return String(p.id)===String(state.project); }) || null;
-    updateNavProjectContext(state.project, selected ? (selected.name || ('Projekt ' + selected.id)) : '');
-    return projects;
+  async function loadFocusSelectors(){
+    var results = await Promise.all([
+      apiFetchJson('/api/projects', 'Projekte konnten nicht geladen werden'),
+      apiFetchJson('/api/customers/names', 'Kunden konnten nicht geladen werden')
+    ]);
+    allProjects = Array.isArray(results[0]) ? results[0] : [];
+    allCustomers = Array.isArray(results[1]) ? results[1] : [];
+
+    projectsById = {};
+    allProjects.forEach(function(p){ projectsById[String(p.id)] = p; });
+    customersById = {};
+    allCustomers.forEach(function(c){ customersById[String(c.id)] = c; });
+
+    syncCustomerFromProject();
+    renderCustomerSelect();
+    return renderProjectSelectForCustomer();
   }
 
   async function reloadDataModelPackOnly(){
@@ -1944,10 +2038,17 @@
   document.getElementById('capacityLoadBtn').addEventListener('click', function(){
     loadCapacityDeepDive();
   });
-  document.getElementById('projectSelect').addEventListener('change', function(){
-    state.project=this.value||'';
-    var selectedName = this.options && this.selectedIndex >= 0 ? this.options[this.selectedIndex].textContent : '';
-    updateNavProjectContext(state.project, selectedName);
+  document.getElementById('navCustomerSelect').addEventListener('change', function(){
+    state.customer = String(this.value || '').trim();
+    renderProjectSelectForCustomer();
+    reloadInsights();
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function(){
+    state.project = String(this.value || '').trim();
+    syncCustomerFromProject();
+    renderCustomerSelect();
+    applyFocusStatePersistence();
+    updateNavProjectContext(state.project, state.customer);
     setUrl();
     reloadInsights();
   });
@@ -1969,8 +2070,9 @@
       document.getElementById('daysSelect').value = String(state.days||30);
       document.getElementById('dmpMetricSelect').value = state.dataModelMetric;
       document.getElementById('cvLabelToggle').checked = !!state.showCvLabels;
-      await loadProjects();
-      if(state.project) document.getElementById('projectSelect').value = String(state.project);
+      await loadFocusSelectors();
+      if(state.customer) document.getElementById('navCustomerSelect').value = String(state.customer);
+      if(state.project) document.getElementById('navProjectSelect').value = String(state.project);
       setUrl();
       await reloadInsights();
     } catch (err) {

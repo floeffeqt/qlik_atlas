@@ -1,5 +1,17 @@
 # Build & Startup Issues - FIXED
 
+## [BUGFIX] 2026-03-05 AuthZ depended on JWT role claim without live DB revalidation
+
+- Severity: high
+- Area: backend/auth
+- Source: user-reported
+- Symptoms: role/deactivation changes (`users.role`, `users.is_active`) took effect only after JWT expiry; admin access could remain valid for token lifetime.
+- Root Cause: `get_current_user` and `require_admin` trusted JWT claims directly and did not revalidate user state/role against DB per request.
+- Fix: `get_current_user` now decodes JWT, then resolves user in DB and enforces `is_active`; returned role is DB-derived. `require_admin` continues to check `current_user.role`, now DB-backed.
+- Changed Files: `backend/app/auth/utils.py`, `backend/tests/test_auth_utils.py`
+- Verification: Python compile check passed; added unit tests for DB-role override, deactivated-user block, and admin rejection path.
+- Residual Risk: full pytest run blocked in this session because `pytest` is not installed in local interpreter.
+
 ## [BUGFIX] 2026-03-04 Data-connections API leaked qConnectStatement to UI payloads
 
 - Severity: critical
