@@ -128,6 +128,8 @@
     @media (max-width: 1100px) { .split { grid-template-columns: 1fr; } }
     .panel { border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,0.03); overflow: hidden; }
     .panel-h { padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .panel-h-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.45rem; }
+    .panel-h-actions .btn { height: 26px; padding: 0 0.6rem; font-size: 0.7rem; text-transform: none; letter-spacing: normal; }
     .panel-b { padding: 0.55rem; }
     .dm-legend { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.6rem; }
     .dm-chip {
@@ -208,6 +210,46 @@
 
     .canvas-wrap { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; }
     #costValueCanvas { display: block; width: 100%; height: 300px; background: rgba(6,10,24,0.72); }
+    #costValueModalCanvas { display: block; width: 100%; height: 100%; min-height: 420px; background: rgba(6,10,24,0.88); }
+    .cv-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1200;
+      background: rgba(2,6,16,0.68);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .cv-modal-backdrop.open { display: flex; }
+    .cv-modal {
+      width: min(1280px, calc(100vw - 2rem));
+      height: min(86vh, 860px);
+      border: 1px solid rgba(148,163,184,0.38);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(15,23,42,0.98), rgba(10,16,32,0.97));
+      box-shadow: 0 22px 56px rgba(2,6,23,0.58);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .cv-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.7rem;
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid rgba(148,163,184,0.24);
+      background: rgba(255,255,255,0.04);
+      font-size: 0.77rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #cbd5e1;
+    }
+    .cv-modal-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 0; flex: 1; }
+    .cv-modal-canvas-wrap { flex: 1; min-height: 0; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; }
+    body.cv-modal-open { overflow: hidden; }
     .dmp-toolbar { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.55rem; }
     .dmp-toolbar label { font-size: 0.76rem; color: var(--muted); }
     .dmp-toolbar select { height: 32px; background: rgba(255,255,255,0.08); border: 1px solid var(--border); border-radius: var(--rs); color: var(--text); padding: 0 0.6rem; font-size: 0.8rem; }
@@ -296,6 +338,7 @@
     #toast { position: fixed; right: 1rem; bottom: 1rem; border: 1px solid var(--border); border-radius: var(--rs); background: rgba(30,40,70,0.95); color: var(--text); font-size: 0.84rem; padding: 0.72rem 0.96rem; opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 200; }
     #toast.show { opacity: 1; transform: translateY(0); }
   </style>
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
 <body>
 <nav>
@@ -380,7 +423,17 @@
         <div class="stat"><div class="k">Avg Value Score</div><div class="v" id="cvAvgValue">-</div></div>
       </div>
       <div class="split">
-        <div class="panel"><div class="panel-h">Cost vs Value Scatter</div><div class="panel-b"><div class="viz-doc"><div class="viz-doc-title">Analyse + Daten</div><p><strong>Analyse:</strong> Positioniert jede App nach Kosten (Y) und Nutzen (X), um Handlungscluster zu erkennen.</p><p><strong>Daten:</strong> Je App: `cost_score`, `value_score`, `quadrant`, `value_usage_score`, `value_proxy_score`.</p><p><strong>Hinweis:</strong> Bei gleichen Koordinaten werden Punkte minimal aufgefaechert, damit Ueberlagerungen sichtbar bleiben.</p></div><div class="canvas-wrap"><canvas id="costValueCanvas" width="860" height="300"></canvas></div><div class="legend"><span><i class="dot d-hclv"></i>High-Cost-Low-Value</span><span><i class="dot d-hchv"></i>High-Cost-High-Value</span><span><i class="dot d-ev"></i>Efficient-Value</span><span><i class="dot d-lclv"></i>Low-Cost-Low-Value</span></div></div></div>
+        <div class="panel">
+          <div class="panel-h panel-h-actions">
+            <span>Cost vs Value Scatter</span>
+            <button type="button" class="btn" id="cvExpandBtn">Groesser anzeigen</button>
+          </div>
+          <div class="panel-b">
+            <div class="viz-doc"><div class="viz-doc-title">Analyse + Daten</div><p><strong>Analyse:</strong> Positioniert jede App nach Kosten (Y) und Nutzen (X), um Handlungscluster zu erkennen.</p><p><strong>Daten:</strong> Je App: `cost_score`, `value_score`, `quadrant`, `value_usage_score`, `value_proxy_score`.</p><p><strong>Hinweis:</strong> Bei gleichen Koordinaten werden Punkte minimal aufgefaechert, damit Ueberlagerungen sichtbar bleiben.</p></div>
+            <div class="canvas-wrap"><canvas id="costValueCanvas" width="860" height="300"></canvas></div>
+            <div class="legend"><span><i class="dot d-hclv"></i>High-Cost-Low-Value</span><span><i class="dot d-hchv"></i>High-Cost-High-Value</span><span><i class="dot d-ev"></i>Efficient-Value</span><span><i class="dot d-lclv"></i>Low-Cost-Low-Value</span></div>
+          </div>
+        </div>
         <div class="panel"><div class="panel-h">Top High-Cost-Low-Value</div><div class="panel-b"><div class="viz-doc"><div class="viz-doc-title">Analyse + Spalten</div><p><strong>Analyse:</strong> Priorisierte Liste der kritischsten Kosten/Nutzen-Kandidaten fuer Deep-Dive und Massnahmenplanung.</p><p><strong>Daten:</strong> Gefilterte Apps aus dem Quadranten `high-cost-low-value`.</p><ul><li><strong>App:</strong> Anzeigename der App.</li><li><strong>Bereich:</strong> Zugeordneter Space/Bereich.</li><li><strong>Cost:</strong> Normierter Kosten-Score 0-100.</li><li><strong>Value:</strong> Kombinierter Nutzen-Score 0-100.</li><li><strong>Usage Sig.:</strong> Normiertes Usage-Signal (Opens/Views/Users/Reloads).</li><li><strong>Proxy Sig.:</strong> Normierter technischer Value-Proxy.</li><li><strong>Eff.:</strong> Verhaeltnis Nutzen zu Kosten.</li></ul></div><div id="cvTableWrap"></div></div></div>
       </div>
       <div style="height:0.7rem"></div>
@@ -599,6 +652,20 @@
 </main>
 
 <div id="toast"></div>
+<div class="cv-modal-backdrop" id="cvModalBackdrop" aria-hidden="true">
+  <div class="cv-modal" role="dialog" aria-modal="true" aria-labelledby="cvModalTitle">
+    <div class="cv-modal-head">
+      <span id="cvModalTitle">Cost vs Value Scatter - Grossansicht</span>
+      <button type="button" class="btn" id="cvModalCloseBtn">Schliessen</button>
+    </div>
+    <div class="cv-modal-body">
+      <div class="cv-modal-canvas-wrap">
+        <canvas id="costValueModalCanvas" width="1180" height="650"></canvas>
+      </div>
+      <div class="legend"><span><i class="dot d-hclv"></i>High-Cost-Low-Value</span><span><i class="dot d-hchv"></i>High-Cost-High-Value</span><span><i class="dot d-ev"></i>Efficient-Value</span><span><i class="dot d-lclv"></i>Low-Cost-Low-Value</span></div>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script>
@@ -791,8 +858,8 @@
   }
 
   var payloads = { costValue: null, bloat: null, lineage: null, dataModelPack: null, governance: null };
-  var costScatterState = { points: [], selectedKey: '' };
-  var costScatterBound = false;
+  var costScatterState = { pointsByCanvas: {}, selectedKey: '', modalOpen: false };
+  var costScatterBound = {};
   var tableFilterState = {
     costTop: {},
     apps: {},
@@ -1266,10 +1333,25 @@
     });
   }
 
-  function drawCostValueScatter(rows){
-    var c=document.getElementById('costValueCanvas'); if(!c) return;
+  function resizeCostValueCanvas(canvas){
+    if(!canvas) return;
+    var rect = canvas.getBoundingClientRect();
+    var targetWidth = Math.round(rect.width || canvas.width || 860);
+    var targetHeight = Math.round(rect.height || canvas.height || 300);
+    if(targetWidth < 320) targetWidth = 320;
+    if(targetHeight < 220) targetHeight = 220;
+    if(canvas.width !== targetWidth || canvas.height !== targetHeight){
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
+  }
+
+  function drawCostValueScatterOnCanvas(rows, canvasId){
+    var c = document.getElementById(canvasId);
+    if(!c) return;
+    resizeCostValueCanvas(c);
     var ctx=c.getContext('2d'); var w=c.width,h=c.height,p=34;
-    costScatterState.points = [];
+    var points = [];
     var labels = [];
     ctx.clearRect(0,0,w,h);
     ctx.fillStyle='rgba(8,12,26,0.9)'; ctx.fillRect(0,0,w,h);
@@ -1309,7 +1391,7 @@
         ctx.arc(x,y,7.2,0,Math.PI*2);
         ctx.stroke();
       }
-      costScatterState.points.push({ x:x, y:y, key:pointKey, radius:7.5 });
+      points.push({ x:x, y:y, key:pointKey, radius:7.5 });
     });
     if(state.showCvLabels){
       ctx.font = '10px "Segoe UI", sans-serif';
@@ -1323,6 +1405,14 @@
         ctx.fillStyle = 'rgba(226,232,240,0.95)';
         ctx.fillText(item.text, lx, ly);
       });
+    }
+    costScatterState.pointsByCanvas[canvasId] = points;
+  }
+
+  function drawCostValueScatter(rows){
+    drawCostValueScatterOnCanvas(rows, 'costValueCanvas');
+    if(costScatterState.modalOpen){
+      drawCostValueScatterOnCanvas(rows, 'costValueModalCanvas');
     }
   }
 
@@ -1390,11 +1480,11 @@
     }
   }
 
-  function bindCostValueScatterInteractions(){
-    if(costScatterBound) return;
-    var c=document.getElementById('costValueCanvas');
+  function bindCostValueScatterCanvasInteractions(canvasId){
+    if(costScatterBound[canvasId]) return;
+    var c=document.getElementById(canvasId);
     if(!c) return;
-    costScatterBound = true;
+    costScatterBound[canvasId] = true;
 
     function _hitTest(ev){
       var rect = c.getBoundingClientRect();
@@ -1402,7 +1492,7 @@
       var y = (ev.clientY - rect.top) * (c.height / rect.height);
       var best = null;
       var bestDist = Infinity;
-      (costScatterState.points||[]).forEach(function(pt){
+      (costScatterState.pointsByCanvas[canvasId]||[]).forEach(function(pt){
         var dx = x - pt.x;
         var dy = y - pt.y;
         var d = Math.sqrt((dx*dx) + (dy*dy));
@@ -1423,6 +1513,29 @@
       costScatterState.selectedKey = hit.key;
       renderCostValue();
     });
+  }
+
+  function bindCostValueScatterInteractions(){
+    bindCostValueScatterCanvasInteractions('costValueCanvas');
+    bindCostValueScatterCanvasInteractions('costValueModalCanvas');
+  }
+
+  function getCostValueFilteredApps(){
+    var p = payloads.costValue || {apps:[],summary:{}};
+    return getCostAreaFilteredApps(p.apps || []);
+  }
+
+  function setCostValueModalOpen(open){
+    var show = !!open;
+    var backdrop = document.getElementById('cvModalBackdrop');
+    if(!backdrop) return;
+    costScatterState.modalOpen = show;
+    backdrop.classList.toggle('open', show);
+    backdrop.setAttribute('aria-hidden', show ? 'false' : 'true');
+    document.body.classList.toggle('cv-modal-open', show);
+    if(show){
+      drawCostValueScatter(getCostValueFilteredApps());
+    }
   }
 
   function renderCostValue(){
@@ -2021,6 +2134,22 @@
     state.dataModelMetric = normalizeDataModelMetric(this.value);
     reloadDataModelPackOnly();
   });
+  document.getElementById('cvExpandBtn').addEventListener('click', function(){
+    setCostValueModalOpen(true);
+  });
+  document.getElementById('cvModalCloseBtn').addEventListener('click', function(){
+    setCostValueModalOpen(false);
+  });
+  document.getElementById('cvModalBackdrop').addEventListener('click', function(ev){
+    if(ev.target === ev.currentTarget){
+      setCostValueModalOpen(false);
+    }
+  });
+  document.addEventListener('keydown', function(ev){
+    if(ev.key === 'Escape' && costScatterState.modalOpen){
+      setCostValueModalOpen(false);
+    }
+  });
   document.getElementById('cvAreaSelect').addEventListener('change', function(){
     state.costArea = normalizeCostArea(this.value);
     renderCostValue();
@@ -2055,6 +2184,11 @@
   document.getElementById('daysSelect').addEventListener('change', function(){ state.days=parseInt(this.value||'30',10)||30; reloadInsights(); });
   document.getElementById('reloadBtn').addEventListener('click', reloadInsights);
   window.addEventListener('resize', function(){
+    if(payloads.costValue){
+      window.requestAnimationFrame(function(){
+        drawCostValueScatter(getCostValueFilteredApps());
+      });
+    }
     if(state.module === 'data-model' && payloads.dataModelPack){
       window.requestAnimationFrame(function(){
         renderDataModelPack();

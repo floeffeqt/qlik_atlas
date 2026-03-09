@@ -474,8 +474,9 @@
 
     /* ── ADMIN FAB ── */
   </style>
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
-<body class="theme-neon">
+<body class="lineage-page theme-neon">
 
 <nav>
   <a class="nav-brand" href="/">
@@ -1513,6 +1514,17 @@
       filterDebounceTimer = null;
       maybeRenderLastData();
     }, FILTER_DEBOUNCE_MS);
+  }
+  var graphResizeTimer = null;
+  function scheduleGraphResizeReflow() {
+    if (!lastData) return;
+    if (graphResizeTimer) clearTimeout(graphResizeTimer);
+    graphResizeTimer = setTimeout(function() {
+      graphResizeTimer = null;
+      autoFitPending = false;
+      shouldAutoFitOnNextRender = true;
+      renderGraph(lastData);
+    }, 180);
   }
 
   var svg = d3.select('#graph-svg');
@@ -2571,6 +2583,11 @@
     autoFitPending = false;
     svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.4);
   });
+  window.addEventListener('resize', scheduleGraphResizeReflow);
+  window.addEventListener('orientationchange', scheduleGraphResizeReflow);
+  if (window.visualViewport && typeof window.visualViewport.addEventListener === 'function') {
+    window.visualViewport.addEventListener('resize', scheduleGraphResizeReflow);
+  }
 
   loadFocusSelectors().then(function() {
     loadGraph();
