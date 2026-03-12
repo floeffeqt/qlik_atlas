@@ -6,6 +6,7 @@ from ..database import get_session, apply_rls_context
 from ..models import User, Customer, UserCustomerAccess
 from ..auth.utils import require_admin
 from ..auth.schemas import UserOut, UserUpdate
+from ..serialization import iso_or_empty
 
 router = APIRouter(prefix="/admin/users", tags=["admin"])
 
@@ -44,7 +45,7 @@ async def list_users(
             email=u.email,
             role=u.role,
             is_active=u.is_active,
-            created_at=u.created_at.isoformat() if u.created_at else "",
+            created_at=iso_or_empty(u.created_at),
         )
         for u in users
     ]
@@ -81,7 +82,7 @@ async def update_user(
         email=user.email,
         role=user.role,
         is_active=user.is_active,
-        created_at=user.created_at.isoformat() if user.created_at else "",
+        created_at=iso_or_empty(user.created_at),
     )
 
 

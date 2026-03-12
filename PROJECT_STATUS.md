@@ -13,14 +13,20 @@
 
 ### Authentication System (100%)
 - ✅ User model in PostgreSQL (id, email, password_hash, is_active, created_at)
-- ✅ Password hashing with bcrypt
+- ✅ Password hashing with Argon2id
 - ✅ JWT token generation (HS256, 15-min expiration)
 - ✅ `/auth/register` endpoint
 - ✅ `/auth/login` endpoint
 - ✅ Frontend login page with form
 - ✅ Frontend register page with form
-- ✅ Token storage in localStorage
-- ✅ API fetch wrapper with Authorization header
+- ✅ Access-token transport via `HttpOnly` auth cookie
+- ✅ Refresh-token transport via separate `HttpOnly` cookie
+- ✅ `/auth/refresh` endpoint
+- ✅ `/auth/logout` revokes refresh session state
+- ✅ API fetch wrapper with cookie-based authenticated requests
+- ✅ Frontend auto-refresh on `401` with one retry cycle
+- ✅ Login brute-force protection on `/auth/login` (IP + email, `429` + `Retry-After`)
+- ✅ Legacy `PBKDF2-SHA256` password hashes are rehashed to `Argon2id` on successful login
 - ✅ 401 redirect to login
 - ✅ Test user: **admin@admin.de** / **admin123** (auto-seeded)
 
@@ -107,14 +113,14 @@ docker compose down -v
 
 ### Medium Priority (Completeness)
 6. **Refresh Token Support**
-   - New table: `refresh_tokens`
-   - `/auth/refresh` endpoint
-   - Frontend refresh logic on 401
+   - Implemented: `refresh_tokens` table
+   - Implemented: `/auth/refresh` endpoint
+   - Implemented: frontend refresh logic on 401
 
 7. **Rate Limiting**
-   - Apply to `/auth/register` (5 attempts/hour/IP)
-   - Apply to `/auth/login` (10 attempts/hour/IP)
-   - Return 429 with Retry-After header
+   - Implemented: `/auth/login` rate limit (10 failures/hour/IP, 5 failures/hour/email by default)
+   - Implemented: `429` with `Retry-After` header on login lockout
+   - Open: `/auth/register` rate limit if public self-service registration becomes relevant
 
 8. **API Documentation**
    - Generate OpenAPI/Swagger spec
@@ -219,18 +225,19 @@ Internet
 2. **Wait for health checks**: All services show green
 3. **Open browser**: http://localhost:4001
 4. **Login**: admin@admin.de / admin123
-5. **See token**: Check browser console (should have token in localStorage)
-6. **Test API**: Open DevTools → Network → check Authorization header on requests
+5. **Check session cookie**: Inspect the browser cookie jar and verify the auth cookie is `HttpOnly`
+6. **Test API**: Open DevTools → Network → verify requests are authenticated without exposing a bearer token to page JavaScript
 
 ---
 
 ## ⚠️ Known Limitations (Will Fix)
 
-- [ ] No refresh token support (only access tokens, 15-min expiration)
-- [ ] No token revocation (logout doesn't invalidate token)
+- [ ] Access JWTs remain stateless and are not server-revoked before expiry
+- [ ] Refresh-token replay detection is basic rotation/revoke only (no family-wide incident handling)
 - [ ] No role-based access control (all users are equal)
 - [ ] Customer credential management UX still needs hardening/polish (storage/encryption exists)
-- [ ] No rate limiting (vulnerable to brute force on auth)
+- [ ] Login rate limiter is in-memory per backend instance and resets on restart
+- [ ] Legacy `PBKDF2-SHA256` hashes only migrate after the affected user logs in successfully
 - [ ] Lineage data still in JSON (not persisted to DB)
 - [ ] Frontend only has login/register (no dashboard yet)
 - [ ] No API documentation deployed
@@ -257,8 +264,7 @@ Choose your priority:
 - Modify fetchers
 
 ### D. Production Hardening
-- Add rate limiting
-- Add refresh tokens
+- Expand rate limiting beyond login if needed
 - Add comprehensive validation
 
 ---

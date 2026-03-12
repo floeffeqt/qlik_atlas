@@ -1,5 +1,17 @@
 # Build & Startup Issues - FIXED
 
+## [BUGFIX] 2026-03-12 JWT access token was exposed to page JavaScript via localStorage
+
+- Severity: high
+- Area: frontend/auth, backend/auth
+- Source: proactive bug-hunt
+- Symptoms: authenticated browser sessions kept the bearer token in `localStorage`, so any XSS-capable page script could read and exfiltrate the active JWT.
+- Root Cause: the login flow returned the raw access token in the JSON response and frontend session handling persisted it in `localStorage` and forwarded it via `Authorization` headers.
+- Fix: moved the access token transport to a backend-set `HttpOnly` auth cookie, added `/api/auth/logout` cookie clearing, allowed backend auth dependencies to resolve token from cookie or bearer header, and updated frontend auth helpers/pages to use cookie-based requests plus non-sensitive cached user metadata only.
+- Changed Files: `backend/app/auth/routes.py`, `backend/app/auth/schemas.py`, `backend/app/auth/utils.py`, `backend/tests/test_auth.py`, `backend/tests/test_auth_utils.py`, `frontend/assets/atlas-shared.js`, `frontend/login.html`, `frontend/lineage.html`, `frontend/theme-builder.html`, `README.md`, `PROJECT_STATUS.md`, `REQUIREMENTS.md`
+- Verification: Python compile check passed for changed backend auth files/tests; targeted `python -m pytest backend/tests/test_auth.py backend/tests/test_auth_utils.py` could not run locally because `pytest` is not installed in the host interpreter; container-based verification attempted after runtime refresh.
+- Residual Risk: no refresh-token rotation or server-side token revocation exists yet; logout currently clears the cookie but does not invalidate already issued JWTs.
+
 ## [BUGFIX] 2026-03-05 AuthZ depended on JWT role claim without live DB revalidation
 
 - Severity: high

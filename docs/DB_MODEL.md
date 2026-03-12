@@ -41,6 +41,7 @@ related_docs:
 | Table | Primary Key | Foreign Keys | Zweck |
 |---|---|---|---|
 | `users` | `id` | - | Login/Authentifizierung |
+| `refresh_tokens` | `token_id` | `user_id -> users.id`, `replaced_by_token_id -> refresh_tokens.token_id` | Persistierte Refresh-Token-Rotation fuer Browser-Sessions |
 | `customers` | `id` | - | Kunden/Tenants mit verschluesselten Qlik-Credentials |
 | `projects` | `id` | `customer_id -> customers.id` | Projekt-Scope fuer alle Qlik-/Lineage-Daten |
 | `user_customer_access` | `(user_id, customer_id)` | `user_id -> users.id`, `customer_id -> customers.id` | Kundenzugriff fuer Nicht-Admins |
@@ -136,6 +137,8 @@ related_docs:
 ## Physical FK Relationships (Enforced by DB)
 
 - `projects.customer_id -> customers.id`
+- `refresh_tokens.user_id -> users.id`
+- `refresh_tokens.replaced_by_token_id -> refresh_tokens.token_id`
 - `user_customer_access.user_id -> users.id`
 - `user_customer_access.customer_id -> customers.id`
 - `qlik_apps.project_id -> projects.id`

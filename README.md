@@ -100,11 +100,18 @@ Default seeded admin user:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
 
 Frontend behavior:
 
-- Access token stored in `localStorage` (`auth_access_token`)
-- API calls use `Authorization: Bearer <token>`
+- Access token is stored in an `HttpOnly` auth cookie set by the backend
+- Refresh token is stored in a separate `HttpOnly` refresh cookie
+- Frontend API calls rely on browser cookie transport (`credentials: include` / same-origin)
+- Frontend retries one refresh cycle on `401` before redirecting to login
+- `POST /api/auth/login` is protected against brute-force retries with IP- and email-based lockouts and returns `429` + `Retry-After` when blocked
+- New password hashes use `Argon2id`; legacy `PBKDF2-SHA256` hashes are upgraded automatically on successful login
 
 ### Admin-only areas (high level)
 

@@ -309,9 +309,10 @@
   </div>
 </main>
 <div id="toast"></div>
+<script src="/assets/atlas-shared.js"></script>
 <script>
-  var token = localStorage.getItem("auth_access_token");
-  if (!token) window.location.href = "/login.html";
+  window.AtlasShared.requireAuth({ emailElementId: "userEmail" });
+  window.AtlasShared.bindLogout("logoutBtn");
 
   var showDescriptions = true;
   var renderTimer = null;
@@ -325,16 +326,11 @@
   var uiStyleMode = String(window.__ATLAS_UI_STYLE__ || localStorage.getItem("atlas_theme_builder_style") || "retro").toLowerCase();
   var previewCollapsed = localStorage.getItem("atlas_theme_builder_preview_collapsed")==="1";
   var variableManagerCollapsed = localStorage.getItem("atlas_theme_builder_variables_collapsed")==="1";
-  var FOCUS_PROJECT_STORAGE_KEY = "atlas_focus_project_id_v1";
-  var FOCUS_CUSTOMER_STORAGE_KEY = "atlas_focus_customer_id_v1";
   var focusProjects = [];
   var focusCustomers = [];
   var projectsById = {};
   var customersById = {};
-  var focusState = {
-    project: String(new URLSearchParams(window.location.search).get("project") || localStorage.getItem(FOCUS_PROJECT_STORAGE_KEY) || "").trim(),
-    customer: String(new URLSearchParams(window.location.search).get("customer") || localStorage.getItem(FOCUS_CUSTOMER_STORAGE_KEY) || "").trim()
-  };
+  var focusState = window.AtlasShared.readFocusState(window.location.search);
 
   function applyUiStyleMode(mode){
     var body=document.body;
@@ -363,42 +359,16 @@
     localStorage.setItem("atlas_theme_builder_variables_collapsed",variableManagerCollapsed?"1":"0");
   }
   function projectCustomerId(project){
-    if(!project || typeof project !== "object") return "";
-    if(project.customer_id !== undefined && project.customer_id !== null) return String(project.customer_id);
-    if(project.customer && project.customer.id !== undefined && project.customer.id !== null) return String(project.customer.id);
-    return "";
+    return window.AtlasShared.projectCustomerId(project);
   }
   function applyFocusStatePersistence(){
-    if(focusState.project) localStorage.setItem(FOCUS_PROJECT_STORAGE_KEY, String(focusState.project));
-    else localStorage.removeItem(FOCUS_PROJECT_STORAGE_KEY);
-    if(focusState.customer) localStorage.setItem(FOCUS_CUSTOMER_STORAGE_KEY, String(focusState.customer));
-    else localStorage.removeItem(FOCUS_CUSTOMER_STORAGE_KEY);
+    window.AtlasShared.persistFocusState(focusState);
   }
   function syncCustomerFromProject(){
-    if(!focusState.project) return;
-    var project = projectsById[String(focusState.project)];
-    var cid = projectCustomerId(project);
-    if(cid) focusState.customer = String(cid);
+    window.AtlasShared.syncCustomerFromProject(focusState, projectsById);
   }
   function updateFocusNavLinks(projectId, customerId){
-    var pid=String(projectId||"").trim();
-    var cid=String(customerId||"").trim();
-    document.querySelectorAll("a.nav-link").forEach(function(link){
-      var baseHref=link.getAttribute("data-base-href");
-      if(!baseHref){
-        baseHref=String(link.getAttribute("href")||"").split("?")[0];
-        link.setAttribute("data-base-href",baseHref);
-      }
-      var nextHref=baseHref;
-      if(baseHref==="/" || baseHref==="/analytics.html" || baseHref==="/lineage.html"){
-        var navQ = new URLSearchParams();
-        if(pid) navQ.set("project", pid);
-        if(cid) navQ.set("customer", cid);
-        var navQs = navQ.toString();
-        nextHref = baseHref + (navQs ? ("?" + navQs) : "");
-      }
-      link.setAttribute("href",nextHref);
-    });
+    window.AtlasShared.updateNavProjectContext(projectId, customerId, "a.nav-link");
   }
   function syncFocusProjectInUrl(projectId, customerId){
     var pid=String(projectId||"").trim();
@@ -1403,9 +1373,8 @@
     }
   }
 
-  function showToast(msg, duration){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(function(){t.classList.remove("show")},duration||3200)}
-  function parseTokenPayload(raw){try{return JSON.parse(atob(raw.split(".")[1]))}catch(e){return {}}}
-  function authHeaders(extra){return Object.assign({"Authorization":"Bearer "+token},extra||{})}
+  function showToast(msg, duration){window.AtlasShared.showToast(msg,duration||3200,"toast")}
+  function authHeaders(extra){return window.AtlasShared.authHeaders(extra)}
   async function loadFocusProjects(){
     var projectSel=document.getElementById("navProjectSelect");
     var customerSel=document.getElementById("navCustomerSelect");
@@ -1413,14 +1382,10 @@
     if(customerSel) customerSel.disabled=true;
     try{
       var responses=await Promise.all([
-        fetch("/api/projects",{headers:authHeaders()}),
-        fetch("/api/customers/names",{headers:authHeaders()})
+        window.AtlasShared.apiFetch("/api/projects"),
+        window.AtlasShared.apiFetch("/api/customers/names")
       ]);
-      if(responses[0].status===401 || responses[1].status===401){
-        localStorage.removeItem("auth_access_token");
-        window.location.href="/login.html";
-        return;
-      }
+      if(responses[0].status===401 || responses[1].status===401) return;
       if(!responses[0].ok || !responses[1].ok) throw new Error("HTTP "+responses[0].status+"/"+responses[1].status);
       var projectsData=await responses[0].json().catch(function(){return []});
       var customersData=await responses[1].json().catch(function(){return []});
@@ -2308,8 +2273,8 @@
   function buildPayload(){return{theme_name:document.getElementById("themeName").value.trim(),file_basename:document.getElementById("fileBasename").value.trim(),qext:{name:document.getElementById("qextName").value.trim()||null,description:document.getElementById("qextDescription").value.trim()||null,version:document.getElementById("qextVersion").value.trim()||null,author:document.getElementById("qextAuthor").value.trim()||null,homepage:document.getElementById("qextHomepage").value.trim()||null,icon:document.getElementById("qextIcon").value.trim()||null,preview:document.getElementById("qextPreview").value.trim()||null,keywords:parseKeywords(document.getElementById("qextKeywords").value)},theme_json:parseThemeJsonFromEditor()}}
   function mergeSnippet(name){var snippets={variables:{"_variables":{"@primaryColor":"#667eea","@text":"13px"}},dataColors:{"dataColors":{"primaryColor":"@primaryColor","othersColor":"#9ca3af","nullColor":"#d1d5db"}},object:{"object":{"title":{"main":{"color":"@primaryColor"}},"axis":{"title":{"fontSize":"@text"}}}},palettes:{"palettes":{"data":[{"name":"Custom","type":"row","scale":["#1d4ed8","#14b8a6","#f59e0b"]}]}},scales:{"scales":[{"name":"Custom gradient","type":"gradient","propertyValue":"sg","scale":["#1d4ed8","#dbeafe"]}]}};try{var cur=parseThemeJsonFromEditor(),sn=snippets[name];if(!sn)return;Object.keys(sn).forEach(function(k){cur[k]=sn[k]});setEditorJson(cur);showToast("Snippet eingefuegt: "+name,1800)}catch(err){showToast("Snippet konnte nicht eingefuegt werden: "+err.message,3800)}}
 
-  async function downloadZip(evt){evt.preventDefault();var btn=document.getElementById("downloadBtn");if(!updateJsonStatus()){showToast("JSON vor dem Download korrigieren.",3200);return}btn.disabled=true;btn.textContent="Baue ZIP...";try{var payload=buildPayload();var res=await fetch("/api/themes/build",{method:"POST",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify(payload)});if(res.status===401){localStorage.removeItem("auth_access_token");window.location.href="/login.html";return}if(!res.ok){var err=await res.json().catch(function(){return {}});throw new Error(err.detail||("HTTP "+res.status))}var blob=await res.blob();var cd=res.headers.get("content-disposition")||"";var m=cd.match(/filename=\"([^\"]+)\"/i);var filename=m?m[1]:"theme.zip";var href=URL.createObjectURL(blob);var a=document.createElement("a");a.href=href;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(href);showToast("Produktions-ZIP erstellt: "+filename)}catch(err){showToast("Build fehlgeschlagen: "+err.message,4200)}btn.disabled=false;btn.textContent="ZIP bauen & downloaden"}
-  async function runUploadStub(){var btn=document.getElementById("uploadStubBtn");btn.disabled=true;btn.textContent="Pruefe Stub...";try{var res=await fetch("/api/themes/upload",{method:"POST",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({target:"qlik-cloud"})});var payload=await res.json().catch(function(){return {}});if(res.status===401){localStorage.removeItem("auth_access_token");window.location.href="/login.html";return}if(res.status===501)showToast(payload.detail||"Upload ist noch nicht implementiert.");else showToast("Unerwartete Antwort: HTTP "+res.status)}catch(err){showToast("Stub-Call fehlgeschlagen: "+err.message,4200)}btn.disabled=false;btn.textContent="Upload Stub testen"}
+  async function downloadZip(evt){evt.preventDefault();var btn=document.getElementById("downloadBtn");if(!updateJsonStatus()){showToast("JSON vor dem Download korrigieren.",3200);return}btn.disabled=true;btn.textContent="Baue ZIP...";try{var payload=buildPayload();var res=await fetch("/api/themes/build",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify(payload)});if(res.status===401)return;if(!res.ok){var err=await res.json().catch(function(){return {}});throw new Error(err.detail||("HTTP "+res.status))}var blob=await res.blob();var cd=res.headers.get("content-disposition")||"";var m=cd.match(/filename=\"([^\"]+)\"/i);var filename=m?m[1]:"theme.zip";var href=URL.createObjectURL(blob);var a=document.createElement("a");a.href=href;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(href);showToast("Produktions-ZIP erstellt: "+filename)}catch(err){showToast("Build fehlgeschlagen: "+err.message,4200)}btn.disabled=false;btn.textContent="ZIP bauen & downloaden"}
+  async function runUploadStub(){var btn=document.getElementById("uploadStubBtn");btn.disabled=true;btn.textContent="Pruefe Stub...";try{var res=await fetch("/api/themes/upload",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({target:"qlik-cloud"})});var payload=await res.json().catch(function(){return {}});if(res.status===401)return;if(res.status===501)showToast(payload.detail||"Upload ist noch nicht implementiert.");else showToast("Unerwartete Antwort: HTTP "+res.status)}catch(err){showToast("Stub-Call fehlgeschlagen: "+err.message,4200)}btn.disabled=false;btn.textContent="Upload Stub testen"}
 
   function loadExampleTheme(){insertedObjectRoots={};activeObjectRoot="";activeEditedPath="";setEditorJson(JSON.parse(JSON.stringify(EXAMPLE_THEME_JSON)));showToast("Beispiel-Theme geladen.")}
   function resetTheme(){insertedObjectRoots={};activeObjectRoot="";activeEditedPath="";setEditorJson(JSON.parse(JSON.stringify(DEFAULT_THEME_JSON)));showToast("Theme auf Default zurueckgesetzt.")}
@@ -2397,15 +2362,11 @@
     updateFocusNavLinks(selected, focusState.customer);
     syncFocusProjectInUrl(selected, focusState.customer);
   });
-  document.getElementById("logoutBtn").addEventListener("click",function(){localStorage.removeItem("auth_access_token");window.location.href="/login.html"});
-
   updateFocusNavLinks(focusState.project, focusState.customer);
   loadFocusProjects();
   applyUiStyleMode(uiStyleMode);
   applyPreviewCollapsedState(previewCollapsed);
   applyVariableManagerCollapsedState(variableManagerCollapsed);
-  var jwt=parseTokenPayload(token);
-  document.getElementById("userEmail").textContent=jwt.email||("User #"+(jwt.sub||"-"));
   catalogTemplates=buildCatalogTemplatesFromTheme(EXAMPLE_THEME_JSON);
   initColorLab();
   setEditorJson(JSON.parse(JSON.stringify(DEFAULT_THEME_JSON)));

@@ -233,7 +233,12 @@
         }
 
         const payload = await res.json();
-        localStorage.setItem('auth_access_token', payload.access_token);
+        if (payload && payload.user) {
+          localStorage.setItem('atlas_auth_user_v1', JSON.stringify(payload.user));
+        } else {
+          localStorage.removeItem('atlas_auth_user_v1');
+        }
+        localStorage.removeItem('auth_access_token');
         window.location.href = '/';
       } catch (err) {
         errorMsg.textContent = err.message;

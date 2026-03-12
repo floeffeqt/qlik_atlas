@@ -7,6 +7,7 @@ from typing import Optional
 from ..database import get_session, apply_rls_context
 from ..models import Customer
 from ..auth.utils import get_current_user, require_admin
+from ..serialization import iso_or_empty
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -57,7 +58,6 @@ class CustomerNameOut(BaseModel):
     id: int
     name: str
 
-
 def _mask_key(api_key: str) -> str:
     return ("••••••••" + api_key[-4:]) if len(api_key) > 4 else "••••"
 
@@ -69,8 +69,8 @@ def _to_out(c: Customer) -> CustomerOut:
         tenant_url=c.tenant_url,
         api_key_preview=_mask_key(c.api_key),
         notes=c.notes,
-        created_at=c.created_at.isoformat() if c.created_at else "",
-        updated_at=c.updated_at.isoformat() if c.updated_at else "",
+        created_at=iso_or_empty(c.created_at),
+        updated_at=iso_or_empty(c.updated_at),
     )
 
 
@@ -89,7 +89,7 @@ async def list_customer_names(
 
 @router.get("", response_model=list[CustomerOut])
 async def list_customers(
-    session: AsyncSession = Depends(_user_scoped_session),
+    session: AsyncSession = Depends(_admin_scoped_session),
 ):
     result = await session.execute(select(Customer).order_by(Customer.name))
     return [_to_out(c) for c in result.scalars()]
@@ -122,7 +122,7 @@ async def create_customer(
 @router.get("/{customer_id}", response_model=CustomerOut)
 async def get_customer(
     customer_id: int,
-    session: AsyncSession = Depends(_user_scoped_session),
+    session: AsyncSession = Depends(_admin_scoped_session),
 ):
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     customer = result.scalar_one_or_none()

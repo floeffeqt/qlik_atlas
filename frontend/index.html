@@ -533,28 +533,18 @@
 <a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
 <div id="toast"></div>
 
+<script src="/assets/atlas-shared.js"></script>
 <script>
-  // ── Auth guard ──
-  const token = localStorage.getItem('auth_access_token');
-  if (!token) { window.location.href = '/login.html'; }
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
+  window.AtlasShared.bindLogout('logoutBtn');
 
   // ── Helpers ──
   function showToast(msg, duration) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
+    window.AtlasShared.showToast(msg, duration, 'toast');
   }
 
   async function apiFetch(path) {
-    var res = await fetch(path, {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (res.status === 401) {
-      localStorage.removeItem('auth_access_token');
-      window.location.href = '/login.html';
-    }
-    return res;
+    return window.AtlasShared.apiFetch(path);
   }
 
   function statusBadge(status) {
@@ -571,26 +561,11 @@
   }
 
   function escHtml(value) {
-    return String(value || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    return window.AtlasShared.escapeHtml(value);
   }
 
-  var FOCUS_PROJECT_STORAGE_KEY = 'atlas_focus_project_id_v1';
-  var FOCUS_CUSTOMER_STORAGE_KEY = 'atlas_focus_customer_id_v1';
   var state = (function() {
-    var q = new URLSearchParams(window.location.search);
-    var fromProjectUrl = String(q.get('project') || '').trim();
-    var fromProjectStorage = String(localStorage.getItem(FOCUS_PROJECT_STORAGE_KEY) || '').trim();
-    var fromCustomerUrl = String(q.get('customer') || '').trim();
-    var fromCustomerStorage = String(localStorage.getItem(FOCUS_CUSTOMER_STORAGE_KEY) || '').trim();
-    return {
-      project: fromProjectUrl || fromProjectStorage,
-      customer: fromCustomerUrl || fromCustomerStorage
-    };
+    return window.AtlasShared.readFocusState(window.location.search);
   })();
   var projectsById = {};
   var customersById = {};
@@ -598,10 +573,7 @@
   var allCustomers = [];
 
   function projectCustomerId(project) {
-    if (!project || typeof project !== 'object') return '';
-    if (project.customer_id !== undefined && project.customer_id !== null) return String(project.customer_id);
-    if (project.customer && project.customer.id !== undefined && project.customer.id !== null) return String(project.customer.id);
-    return '';
+    return window.AtlasShared.projectCustomerId(project);
   }
 
   function setUrl() {
@@ -615,31 +587,11 @@
   }
 
   function updateNavProjectContext(projectId, customerId) {
-    var pid = String(projectId || '').trim();
-    var cid = String(customerId || '').trim();
-    document.querySelectorAll('a.nav-link').forEach(function(link) {
-      var baseHref = link.getAttribute('data-base-href');
-      if (!baseHref) {
-        baseHref = String(link.getAttribute('href') || '').split('?')[0];
-        link.setAttribute('data-base-href', baseHref);
-      }
-      var nextHref = baseHref;
-      if (baseHref === '/' || baseHref === '/analytics.html' || baseHref === '/lineage.html') {
-        var navQ = new URLSearchParams();
-        if (pid) navQ.set('project', pid);
-        if (cid) navQ.set('customer', cid);
-        var navQs = navQ.toString();
-        nextHref = baseHref + (navQs ? ('?' + navQs) : '');
-      }
-      link.setAttribute('href', nextHref);
-    });
+    window.AtlasShared.updateNavProjectContext(projectId, customerId, 'a.nav-link');
   }
 
   function applyFocusStatePersistence() {
-    if (state.project) localStorage.setItem(FOCUS_PROJECT_STORAGE_KEY, String(state.project));
-    else localStorage.removeItem(FOCUS_PROJECT_STORAGE_KEY);
-    if (state.customer) localStorage.setItem(FOCUS_CUSTOMER_STORAGE_KEY, String(state.customer));
-    else localStorage.removeItem(FOCUS_CUSTOMER_STORAGE_KEY);
+    window.AtlasShared.persistFocusState(state);
   }
 
   function renderCustomerSelect() {
@@ -961,12 +913,6 @@
     } catch(e) {}
   }
 
-  // ── Logout ──
-  document.getElementById('logoutBtn').addEventListener('click', function() {
-    localStorage.removeItem('auth_access_token');
-    window.location.href = '/login.html';
-  });
-
   // ── Refresh jobs ──
   document.getElementById('refreshJobsBtn').addEventListener('click', function() {
     loadHealth(); loadJobs(); loadFetchStatus();
@@ -993,16 +939,6 @@
     loadFetchStatus();
   });
   document.getElementById('jobLogCloseBtn').addEventListener('click', closeJobLog);
-
-  // ── User email & admin FAB from token ──
-  try {
-    var payload = JSON.parse(atob(token.split('.')[1]));
-    document.getElementById('userEmail').textContent = payload.email || 'User #' + (payload.sub || '—');
-    if (payload.role === 'admin') {
-      document.getElementById('adminFab').style.display = 'inline-block';
-    }
-  } catch(e) {}
-
   // ── Init ──
   async function init() {
     try {

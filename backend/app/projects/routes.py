@@ -7,6 +7,7 @@ from typing import Optional
 from ..database import get_session, apply_rls_context
 from ..models import Customer, Project
 from ..auth.utils import get_current_user
+from ..serialization import iso_or_empty
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -36,7 +37,6 @@ class ProjectUpdate(BaseModel):
 class CustomerRef(BaseModel):
     id: int
     name: str
-    tenant_url: str
 
 
 class ProjectOut(BaseModel):
@@ -48,23 +48,22 @@ class ProjectOut(BaseModel):
     created_at: str
     updated_at: str
 
-
 def _to_out(p: Project, customer: Optional[Customer] = None) -> ProjectOut:
-    cref = CustomerRef(id=customer.id, name=customer.name, tenant_url=customer.tenant_url) if customer else None
+    cref = CustomerRef(id=customer.id, name=customer.name) if customer else None
     return ProjectOut(
         id=p.id,
         name=p.name,
         description=p.description,
         customer_id=p.customer_id,
         customer=cref,
-        created_at=p.created_at.isoformat() if p.created_at else "",
-        updated_at=p.updated_at.isoformat() if p.updated_at else "",
+        created_at=iso_or_empty(p.created_at),
+        updated_at=iso_or_empty(p.updated_at),
     )
 
 
 async def _get_project_with_customer(
     project_id: int, session: AsyncSession
-) -> tuple[Project, Customer]:
+) -> tuple[Project, Customer | None]:
     result = await session.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:

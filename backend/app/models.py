@@ -83,6 +83,19 @@ class UserCustomerAccess(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+    __table_args__ = (UniqueConstraint("token_hash", name="uq_refresh_tokens_hash"),)
+    token_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    replaced_by_token_id = Column(BigInteger, ForeignKey("refresh_tokens.token_id", ondelete="SET NULL"), nullable=True)
+
+
 class QlikApp(Base):
     """Qlik app metadata scoped to a project (composite PK)."""
     __tablename__ = "qlik_apps"

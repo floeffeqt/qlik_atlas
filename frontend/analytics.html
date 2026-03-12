@@ -668,21 +668,20 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="/assets/atlas-shared.js"></script>
 <script>
-  var token = localStorage.getItem('auth_access_token');
-  if (!token) window.location.href = '/login.html';
-  try { var jp = JSON.parse(atob(token.split('.')[1])); document.getElementById('userEmail').textContent = jp.email || ('User #' + (jp.sub || '-')); } catch (e) {}
-  document.getElementById('logoutBtn').addEventListener('click', function(){ localStorage.removeItem('auth_access_token'); window.location.href = '/login.html'; });
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail' });
+  window.AtlasShared.bindLogout('logoutBtn');
 
-  function showToast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(function(){ t.classList.remove('show'); }, 2600); }
+  function showToast(msg){ window.AtlasShared.showToast(msg, 2600, 'toast'); }
   function setError(message){ var e=document.getElementById('errorBanner'); if(!message){ e.style.display='none'; e.textContent=''; return; } e.textContent=message; e.style.display='block'; }
-  function esc(v){ return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function esc(v){ return window.AtlasShared.escapeHtml(v); }
   function n(v){ var x=Number(v||0); if(!isFinite(x)) x=0; return x.toLocaleString(); }
   function pct(v){ var x=Number(v||0); if(!isFinite(x)) x=0; return x.toFixed(1); }
   function bytes(v){ var x=Number(v||0); if(!isFinite(x)||x<=0) return '0 B'; var u=['B','KB','MB','GB','TB']; var i=Math.min(u.length-1,Math.floor(Math.log(x)/Math.log(1024))); var y=x/Math.pow(1024,i); return y.toFixed(y>=100||i===0?0:1)+' '+u[i]; }
 
-  async function apiFetch(path){ var r=await fetch(path,{headers:{'Authorization':'Bearer '+token}}); if(r.status===401){ localStorage.removeItem('auth_access_token'); window.location.href='/login.html'; } return r; }
-  async function apiFetchJson(path, fallback){ var r=await apiFetch(path); if(r.ok) return await r.json(); var msg=fallback||'Backend request failed'; try{ var p=await r.json(); if(p && p.detail){ if(typeof p.detail==='string') msg=p.detail; else if(p.detail.message) msg=p.detail.message; } } catch(_e){} var err=new Error(msg); err.status=r.status; throw err; }
+  async function apiFetch(path){ return window.AtlasShared.apiFetch(path); }
+  async function apiFetchJson(path, fallback){ return window.AtlasShared.apiFetchJson(path, fallback); }
 
   var MODULE_KEYS = ['portfolio-insights','data-model','lineage-risk','data-quality','governance-ops'];
   var MODULE_ALIASES = { 'performance-capacity': 'data-model' };
@@ -713,17 +712,12 @@
     if(maxChars <= 4) return raw.slice(0, maxChars);
     return raw.slice(0, maxChars - 1) + '...';
   }
-  var FOCUS_PROJECT_STORAGE_KEY = 'atlas_focus_project_id_v1';
-  var FOCUS_CUSTOMER_STORAGE_KEY = 'atlas_focus_customer_id_v1';
   var state=(function(){
     var q=new URLSearchParams(window.location.search);
-    var fromUrl = String(q.get('project') || '').trim();
-    var fromStorage = String(localStorage.getItem(FOCUS_PROJECT_STORAGE_KEY) || '').trim();
-    var fromCustomerUrl = String(q.get('customer') || '').trim();
-    var fromCustomerStorage = String(localStorage.getItem(FOCUS_CUSTOMER_STORAGE_KEY) || '').trim();
+    var focus = window.AtlasShared.readFocusState(window.location.search);
     return {
-      project:fromUrl || fromStorage,
-      customer:fromCustomerUrl || fromCustomerStorage,
+      project:focus.project,
+      customer:focus.customer,
       days:parseInt(q.get('days')||'30',10)||30,
       module:normalizeModule(q.get('module')),
       dataModelMetric:normalizeDataModelMetric(q.get('dm_metric') || 'static_byte_size_latest'),
@@ -747,42 +741,16 @@
   var projectsById = {};
   var customersById = {};
   function projectCustomerId(project){
-    if(!project || typeof project !== 'object') return '';
-    if(project.customer_id !== undefined && project.customer_id !== null) return String(project.customer_id);
-    if(project.customer && project.customer.id !== undefined && project.customer.id !== null) return String(project.customer.id);
-    return '';
+    return window.AtlasShared.projectCustomerId(project);
   }
   function updateNavProjectContext(projectId, customerId){
-    var pid = String(projectId || '').trim();
-    var cid = String(customerId || '').trim();
-    document.querySelectorAll('a.nav-link').forEach(function(link){
-      var baseHref = link.getAttribute('data-base-href');
-      if(!baseHref){
-        baseHref = String(link.getAttribute('href') || '').split('?')[0];
-        link.setAttribute('data-base-href', baseHref);
-      }
-      var nextHref = baseHref;
-      if(baseHref === '/' || baseHref === '/analytics.html' || baseHref === '/lineage.html'){
-        var navQ = new URLSearchParams();
-        if(pid) navQ.set('project', pid);
-        if(cid) navQ.set('customer', cid);
-        var navQs = navQ.toString();
-        nextHref = baseHref + (navQs ? ('?' + navQs) : '');
-      }
-      link.setAttribute('href', nextHref);
-    });
+    window.AtlasShared.updateNavProjectContext(projectId, customerId, 'a.nav-link');
   }
   function applyFocusStatePersistence(){
-    if(state.project) localStorage.setItem(FOCUS_PROJECT_STORAGE_KEY, String(state.project));
-    else localStorage.removeItem(FOCUS_PROJECT_STORAGE_KEY);
-    if(state.customer) localStorage.setItem(FOCUS_CUSTOMER_STORAGE_KEY, String(state.customer));
-    else localStorage.removeItem(FOCUS_CUSTOMER_STORAGE_KEY);
+    window.AtlasShared.persistFocusState(state);
   }
   function syncCustomerFromProject(){
-    if(!state.project) return;
-    var project = projectsById[String(state.project)];
-    var cid = projectCustomerId(project);
-    if(cid) state.customer = String(cid);
+    window.AtlasShared.syncCustomerFromProject(state, projectsById);
   }
   function renderCustomerSelect(){
     var sel = document.getElementById('navCustomerSelect');

@@ -460,79 +460,38 @@
 <a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
 <div id="toast"></div>
 
+<script src="/assets/atlas-shared.js"></script>
 <script>
-  var token = localStorage.getItem('auth_access_token');
-  if (!token) { window.location.href = '/login.html'; }
-
-  try {
-    var jp = JSON.parse(atob(token.split('.')[1]));
-    document.getElementById('userEmail').textContent = jp.email || 'User #' + (jp.sub || '—');
-    if (jp.role === 'admin') {
-      document.getElementById('adminFab').style.display = 'inline-block';
-    }
-  } catch(e) {}
-
-  document.getElementById('logoutBtn').addEventListener('click', function() {
-    localStorage.removeItem('auth_access_token');
-    window.location.href = '/login.html';
-  });
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
+  window.AtlasShared.bindLogout('logoutBtn');
 
   function showToast(msg, dur) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, dur || 3000);
+    window.AtlasShared.showToast(msg, dur, 'toast');
   }
 
   async function apiFetch(path, opts) {
-    var headers = Object.assign({'Authorization': 'Bearer ' + token}, (opts && opts.headers) || {});
-    var res = await fetch(path, Object.assign({}, opts || {}, {headers: headers}));
-    if (res.status === 401) { localStorage.removeItem('auth_access_token'); window.location.href = '/login.html'; }
-    return res;
+    return window.AtlasShared.apiFetch(path, opts);
   }
-  var FOCUS_PROJECT_STORAGE_KEY = 'atlas_focus_project_id_v1';
-  var FOCUS_CUSTOMER_STORAGE_KEY = 'atlas_focus_customer_id_v1';
+  var initialFocusState = window.AtlasShared.readFocusState(window.location.search);
   var focusState = {
-    project: String(new URLSearchParams(window.location.search).get('project') || localStorage.getItem(FOCUS_PROJECT_STORAGE_KEY) || '').trim(),
-    customer: String(new URLSearchParams(window.location.search).get('customer') || localStorage.getItem(FOCUS_CUSTOMER_STORAGE_KEY) || '').trim()
+    project: initialFocusState.project,
+    customer: initialFocusState.customer
   };
   function projectCustomerId(project) {
-    if (!project || typeof project !== 'object') return '';
-    if (project.customer_id !== undefined && project.customer_id !== null) return String(project.customer_id);
-    if (project.customer && project.customer.id !== undefined && project.customer.id !== null) return String(project.customer.id);
-    return '';
+    return window.AtlasShared.projectCustomerId(project);
   }
   function applyFocusPersistence() {
-    if (focusState.project) localStorage.setItem(FOCUS_PROJECT_STORAGE_KEY, focusState.project);
-    else localStorage.removeItem(FOCUS_PROJECT_STORAGE_KEY);
-    if (focusState.customer) localStorage.setItem(FOCUS_CUSTOMER_STORAGE_KEY, focusState.customer);
-    else localStorage.removeItem(FOCUS_CUSTOMER_STORAGE_KEY);
+    window.AtlasShared.persistFocusState(focusState);
   }
   function syncCustomerFromProject() {
-    if (!focusState.project) return;
-    var selected = (Array.isArray(projects) ? projects : []).find(function(p) { return String(p.id) === String(focusState.project); });
-    var cid = projectCustomerId(selected);
-    if (cid) focusState.customer = String(cid);
+    var projectMap = {};
+    (Array.isArray(projects) ? projects : []).forEach(function(p) {
+      if (p && p.id !== undefined && p.id !== null) projectMap[String(p.id)] = p;
+    });
+    window.AtlasShared.syncCustomerFromProject(focusState, projectMap);
   }
   function updateFocusNavLinks(projectId, customerId) {
-    var pid = String(projectId || '').trim();
-    var cid = String(customerId || '').trim();
-    document.querySelectorAll('a.nav-link').forEach(function(link) {
-      var baseHref = link.getAttribute('data-base-href');
-      if (!baseHref) {
-        baseHref = String(link.getAttribute('href') || '').split('?')[0];
-        link.setAttribute('data-base-href', baseHref);
-      }
-      var nextHref = baseHref;
-      if (baseHref === '/' || baseHref === '/analytics.html' || baseHref === '/lineage.html') {
-        var navQ = new URLSearchParams();
-        if (pid) navQ.set('project', pid);
-        if (cid) navQ.set('customer', cid);
-        var navQs = navQ.toString();
-        nextHref = baseHref + (navQs ? ('?' + navQs) : '');
-      }
-      link.setAttribute('href', nextHref);
-    });
+    window.AtlasShared.updateNavProjectContext(projectId, customerId, 'a.nav-link');
   }
   function syncFocusInUrl(projectId, customerId) {
     var q = new URLSearchParams(window.location.search);
@@ -641,7 +600,7 @@
       var jobInfo = projectJobStatus[p.id] || {};
       var lastStatus = jobInfo.status ? statusBadge(jobInfo.status) : statusBadge('');
       var custName = p.customer ? escHtml(p.customer.name) : '—';
-      var custUrl = p.customer ? escHtml(p.customer.tenant_url) : '—';
+      var projectIdLabel = p.id !== undefined && p.id !== null ? escHtml(String(p.id)) : '—';
       var isBusy = jobInfo.status === 'running' || jobInfo.status === 'queued';
       return '<div class="project-card">'
         + '<div class="project-card-header">'
@@ -651,7 +610,7 @@
         + (p.description ? '<div class="project-desc">' + escHtml(p.description) + '</div>' : '')
         + '<div class="project-meta">'
         + '<div class="meta-row"><span class="meta-key">Kunde</span><span class="meta-val">' + custName + '</span></div>'
-        + '<div class="meta-row"><span class="meta-key">Tenant</span><span class="meta-val" title="' + custUrl + '">' + custUrl.replace(/^https?:\/\//, '') + '</span></div>'
+        + '<div class="meta-row"><span class="meta-key">Projekt</span><span class="meta-val">' + projectIdLabel + '</span></div>'
         + '<div class="meta-row"><span class="meta-key">Erstellt</span><span class="meta-val">' + fmtDate(p.created_at) + '</span></div>'
         + '</div>'
         + '<div class="project-actions">'

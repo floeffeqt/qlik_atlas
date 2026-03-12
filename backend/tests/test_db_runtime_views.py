@@ -7,14 +7,17 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
+import app.db_runtime_views as drv  # type: ignore
 from app.db_runtime_views import (  # type: ignore
     _build_snapshot_from_rows,
     _connection_group_candidates,
     _connection_node_id,
     _qri_prefix_before_hash,
     load_data_connections_payload,
+    load_node_subgraph,
 )
 from app.models import LineageNode, QlikDataConnection  # type: ignore
+from shared.models import GraphSnapshot  # type: ignore
 
 
 def test_qri_prefix_before_hash_extracts_normalized_prefix():
@@ -331,11 +334,14 @@ def test_connection_qri_db_prefix_match_restores_precise_mapping():
     assert not has_wrong_edge
 
 
-class _FakeScalarsResult:
+class _FakeResult:
     def __init__(self, rows):
         self._rows = list(rows)
 
     def scalars(self):
+        return self
+
+    def mappings(self):
         return self
 
     def all(self):
@@ -347,24 +353,23 @@ class _FakeAsyncSession:
         self._rows = list(rows)
 
     async def execute(self, _stmt):
-        return _FakeScalarsResult(self._rows)
+        return _FakeResult(self._rows)
 
 
 @pytest.mark.asyncio
 async def test_load_data_connections_payload_excludes_q_connect_statement():
-    row = QlikDataConnection(
-        project_id=1,
-        connection_id="conn-1",
-        q_name="ERP SQL",
-        q_type="QvOdbcConnectorPackage.exe",
-        q_connect_statement='CUSTOM CONNECT TO "provider=QvOdbcConnectorPackage.exe;driver=mysql;host=db";',
-        data={
+    row = {
+        "project_id": 1,
+        "connection_id": "conn-1",
+        "q_name": "ERP SQL",
+        "q_type": "QvOdbcConnectorPackage.exe",
+        "data": {
             "id": "conn-1",
             "qName": "ERP SQL",
             "qType": "QvOdbcConnectorPackage.exe",
             "qConnectStatement": 'CUSTOM CONNECT TO "provider=QvOdbcConnectorPackage.exe;driver=mysql;host=db";',
         },
-    )
+    }
     session = _FakeAsyncSession([row])
 
     payload = await load_data_connections_payload(session)
@@ -373,3 +378,44 @@ async def test_load_data_connections_payload_excludes_q_connect_statement():
     assert item["id"] == "conn-1"
     assert item["qName"] == "ERP SQL"
     assert "qConnectStatement" not in item
+
+
+@pytest.mark.asyncio
+async def test_load_node_subgraph_scopes_lookup_to_matching_projects(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def _fake_fetch_related_project_ids_for_node(_session, *, node_id: str):
+        assert node_id == "node-1"
+        return [7]
+
+    async def _fake_load_graph_snapshot(_session, *, project_id=None, project_ids=None):
+        captured["project_id"] = project_id
+        captured["project_ids"] = list(project_ids or [])
+        return GraphSnapshot(
+            nodes={
+                "node-1": {"id": "node-1", "label": "Node 1", "type": "app", "layer": "app"},
+                "node-2": {"id": "node-2", "label": "Node 2", "type": "table", "layer": "data"},
+            },
+            edges={
+                "edge-1": {
+                    "id": "edge-1",
+                    "source": "node-1",
+                    "target": "node-2",
+                    "relation": "DEPENDS",
+                }
+            },
+            out_adj={"node-1": {"edge-1"}},
+            in_adj={"node-2": {"edge-1"}},
+            apps={},
+            files_loaded=0,
+        )
+
+    monkeypatch.setattr(drv, "fetch_related_project_ids_for_node", _fake_fetch_related_project_ids_for_node)
+    monkeypatch.setattr(drv, "load_graph_snapshot", _fake_load_graph_snapshot)
+
+    response = await load_node_subgraph(_FakeAsyncSession([]), "node-1", direction="down", depth=1)
+
+    assert captured["project_id"] is None
+    assert captured["project_ids"] == [7]
+    assert [node.id for node in response.nodes] == ["node-1", "node-2"]
+    assert [edge.id for edge in response.edges] == ["edge-1"]

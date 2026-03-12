@@ -64,6 +64,15 @@ class UserOut(BaseModel):
     created_at: str
 
 
+class AuthSessionResponse(BaseModel):
+    token_type: str = "cookie"
+    user: UserOut
+
+
+class LogoutResponse(BaseModel):
+    ok: bool = True
+
+
 class UserUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None

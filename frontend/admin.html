@@ -286,34 +286,23 @@
 
 <div id="toast"></div>
 
+<script src="/assets/atlas-shared.js"></script>
 <script>
-  var token = localStorage.getItem('auth_access_token');
-  if (!token) { window.location.href = '/login.html'; }
-
-  // Check admin role
-  var currentRole = 'user';
-  try {
-    var jp = JSON.parse(atob(token.split('.')[1]));
-    currentRole = jp.role || 'user';
-    document.getElementById('adminEmail').textContent = jp.email || 'User #' + (jp.sub || '');
-  } catch(e) {}
-  if (currentRole !== 'admin') { window.location.href = '/'; }
+  window.AtlasShared.requireAuth({
+    emailElementId: 'adminEmail',
+    requiredRole: 'admin',
+    onRoleMismatchRedirect: '/'
+  });
 
   function showToast(msg, dur) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, dur || 3000);
+    window.AtlasShared.showToast(msg, dur, 'toast');
   }
 
   async function apiFetch(path, opts) {
-    var headers = Object.assign({'Authorization': 'Bearer ' + token}, (opts && opts.headers) || {});
-    var res = await fetch(path, Object.assign({}, opts || {}, {headers: headers}));
-    if (res.status === 401) { localStorage.removeItem('auth_access_token'); window.location.href = '/login.html'; }
-    return res;
+    return window.AtlasShared.apiFetch(path, opts);
   }
 
-  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function escHtml(s) { return window.AtlasShared.escapeHtml(s); }
   function openModal(id) { document.getElementById(id).classList.add('open'); }
   function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 

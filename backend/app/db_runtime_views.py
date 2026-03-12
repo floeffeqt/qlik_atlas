@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
 import hashlib
 import re
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Iterable
 
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,21 +11,23 @@ from app.models import (
     LineageEdge,
     LineageNode,
     QlikApp,
-    QlikAppScript,
-    QlikAppUsage,
     QlikDataConnection,
     QlikSpace,
+)
+from app.runtime_query_rows import (
+    fetch_data_connection_rows,
+    fetch_graph_context_rows,
+    fetch_graph_rows,
+    fetch_inventory_rows,
+    fetch_latest_app_row,
+    fetch_latest_app_script_row,
+    fetch_latest_app_usage_row,
+    fetch_related_project_ids_for_node,
+    fetch_space_rows,
 )
 from fetchers.heuristics import dead_ends, never_referenced, orphan_outputs
 from fetchers.subgraph import bfs_subgraph
 from shared.models import Edge, GraphResponse, GraphSnapshot, InventoryResponse, Node, OrphansReport
-
-
-def _dt_key(value: Optional[datetime]) -> tuple[int, str]:
-    if not value:
-        return (0, "")
-    return (1, value.isoformat())
-
 
 def _safe_dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
@@ -636,19 +637,18 @@ def _graph_response_from_snapshot(snapshot: GraphSnapshot) -> GraphResponse:
     return GraphResponse(nodes=nodes, edges=edges)
 
 
-async def load_graph_snapshot(session: AsyncSession, *, project_id: int | None = None) -> GraphSnapshot:
-    node_stmt = select(LineageNode)
-    edge_stmt = select(LineageEdge)
-    data_conn_stmt = select(QlikDataConnection)
-    if project_id is not None:
-        node_stmt = node_stmt.where(LineageNode.project_id == project_id)
-        edge_stmt = edge_stmt.where(LineageEdge.project_id == project_id)
-        data_conn_stmt = data_conn_stmt.where(QlikDataConnection.project_id == project_id)
-
-    node_rows = (await session.execute(node_stmt)).scalars().all()
-    edge_rows = (await session.execute(edge_stmt)).scalars().all()
-    data_connection_rows = (await session.execute(data_conn_stmt)).scalars().all()
-    project_ids = sorted(
+async def load_graph_snapshot(
+    session: AsyncSession,
+    *,
+    project_id: int | None = None,
+    project_ids: Iterable[int] | None = None,
+) -> GraphSnapshot:
+    node_rows, edge_rows, data_connection_rows = await fetch_graph_rows(
+        session,
+        project_id=project_id,
+        project_ids=project_ids,
+    )
+    resolved_project_ids = sorted(
         {int(r.project_id) for r in node_rows}
         | {int(r.project_id) for r in edge_rows}
         | {int(r.project_id) for r in data_connection_rows}
@@ -656,13 +656,8 @@ async def load_graph_snapshot(session: AsyncSession, *, project_id: int | None =
 
     app_info_by_project_and_app: dict[tuple[int, str], dict[str, Any]] = {}
     app_roots_by_project_and_qri_prefix: dict[tuple[int, str], list[dict[str, Any]]] = {}
-    if project_ids:
-        apps_rows = (
-            await session.execute(select(QlikApp).where(QlikApp.project_id.in_(project_ids)))
-        ).scalars().all()
-        spaces_rows = (
-            await session.execute(select(QlikSpace).where(QlikSpace.project_id.in_(project_ids)))
-        ).scalars().all()
+    if resolved_project_ids:
+        apps_rows, spaces_rows = await fetch_graph_context_rows(session, project_ids=resolved_project_ids)
         space_name_by_project_and_space: dict[tuple[int, str], str] = {}
         for row in spaces_rows:
             space_id_val = _space_id_from_row(row)
@@ -733,8 +728,7 @@ async def load_graph_response(session: AsyncSession, *, project_id: int | None =
 
 
 async def load_inventory(session: AsyncSession) -> InventoryResponse:
-    apps_rows = (await session.execute(select(QlikApp))).scalars().all()
-    spaces_rows = (await session.execute(select(QlikSpace))).scalars().all()
+    apps_rows, spaces_rows = await fetch_inventory_rows(session)
     nodes_count = int((await session.execute(select(sa_func.count()).select_from(LineageNode))).scalar() or 0)
     edges_count = int((await session.execute(select(sa_func.count()).select_from(LineageEdge))).scalar() or 0)
 
@@ -784,7 +778,7 @@ async def load_inventory(session: AsyncSession) -> InventoryResponse:
 
 
 async def load_spaces_payload(session: AsyncSession) -> dict[str, Any]:
-    rows = (await session.execute(select(QlikSpace))).scalars().all()
+    rows = await fetch_space_rows(session)
     seen: set[tuple[int, str]] = set()
     spaces: list[dict[str, Any]] = []
     for row in rows:
@@ -815,7 +809,7 @@ async def load_spaces_payload(session: AsyncSession) -> dict[str, Any]:
 
 
 async def load_data_connections_payload(session: AsyncSession) -> dict[str, Any]:
-    rows = (await session.execute(select(QlikDataConnection))).scalars().all()
+    rows = await fetch_data_connection_rows(session)
     data: list[dict[str, Any]] = []
     for row in rows:
         payload = _safe_dict(row.data)
@@ -865,20 +859,8 @@ async def load_data_connections_payload(session: AsyncSession) -> dict[str, Any]
     data.sort(key=lambda x: (str(x.get("qName") or x.get("name") or "").lower(), str(x.get("id") or "")))
     return {"count": len(data), "data": data}
 
-
-def _pick_latest_row(rows: list[Any], *, attr_names: tuple[str, ...] = ("generated_at", "fetched_at")) -> Any | None:
-    if not rows:
-        return None
-
-    def key(row: Any) -> tuple[tuple[int, str], ...]:
-        return tuple(_dt_key(getattr(row, attr, None)) for attr in attr_names)
-
-    return max(rows, key=key)
-
-
 async def load_app_usage_payload(session: AsyncSession, app_id: str) -> dict[str, Any]:
-    rows = (await session.execute(select(QlikAppUsage).where(QlikAppUsage.app_id == app_id))).scalars().all()
-    row = _pick_latest_row(rows, attr_names=("generated_at",))
+    row = await fetch_latest_app_usage_row(session, app_id=app_id)
     if not row:
         raise KeyError("app usage not found")
     payload = _safe_dict(row.data)
@@ -919,8 +901,7 @@ async def load_app_usage_payload(session: AsyncSession, app_id: str) -> dict[str
 
 
 async def load_app_script_payload(session: AsyncSession, app_id: str) -> dict[str, Any]:
-    rows = (await session.execute(select(QlikAppScript).where(QlikAppScript.app_id == app_id))).scalars().all()
-    row = _pick_latest_row(rows, attr_names=("fetched_at",))
+    row = await fetch_latest_app_script_row(session, app_id=app_id)
     if not row:
         raise KeyError("app script not found")
     payload = _safe_dict(row.data)
@@ -965,8 +946,7 @@ def _detect_app_root(snapshot: GraphSnapshot, *, app_id: str, app_name: str | No
 
 
 async def load_app_subgraph(session: AsyncSession, app_id: str, *, depth: int) -> GraphResponse:
-    app_rows = (await session.execute(select(QlikApp).where(QlikApp.app_id == app_id))).scalars().all()
-    app_row = _pick_latest_row(app_rows, attr_names=("fetched_at",))
+    app_row = await fetch_latest_app_row(session, app_id=app_id)
     if not app_row:
         raise KeyError("app not found")
 
@@ -995,7 +975,8 @@ async def load_app_subgraph(session: AsyncSession, app_id: str, *, depth: int) -
 
 
 async def load_node_subgraph(session: AsyncSession, node_id: str, *, direction: str, depth: int) -> GraphResponse:
-    snapshot = await load_graph_snapshot(session)
+    project_ids = await fetch_related_project_ids_for_node(session, node_id=node_id)
+    snapshot = await load_graph_snapshot(session, project_ids=project_ids)
     node_ids, edge_ids = bfs_subgraph(snapshot, node_id, direction, depth)
     sub_snapshot = GraphSnapshot(
         nodes={nid: snapshot.nodes[nid] for nid in node_ids if nid in snapshot.nodes},

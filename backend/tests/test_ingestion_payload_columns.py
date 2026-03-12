@@ -5,21 +5,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from main import (  # type: ignore
-    FetchJobRequest,
+from app.fetch_jobs.contracts import (  # type: ignore
     FETCH_STEP_ALL_ORDER,
-    _app_payload_columns,
+    FetchJobRequest,
+    _normalize_steps,
+)
+from app.fetch_jobs.runtime import _select_apps_for_app_edges  # type: ignore
+from app.fetch_jobs.store import (  # type: ignore
     _app_data_metadata_snapshot_columns,
+    _app_payload_columns,
     _audit_payload_columns,
+    _chunk_rows,
     _dedupe_app_data_metadata_field_rows,
     _dedupe_rows_by_key,
     _license_consumption_payload_columns,
     _license_status_payload_columns,
-    _normalize_steps,
     _reload_payload_columns,
     _sanitize_data_connection_payload_for_storage,
-    _select_apps_for_app_edges,
+    _to_db_column_value_map,
 )
+from app.models import QlikApp  # type: ignore
 
 
 def test_app_payload_columns_maps_flat_item_fields():
@@ -271,6 +276,28 @@ def test_dedupe_rows_by_key_keeps_latest_entry_per_unique_key():
     assert len(deduped) == 2
     assert deduped_by_name["A"]["value"] == 2
     assert deduped_by_name["B"]["value"] == 3
+
+
+def test_chunk_rows_splits_batches_predictably():
+    rows = [{"id": idx} for idx in range(5)]
+    batches = _chunk_rows(rows, batch_size=2)
+    assert [len(batch) for batch in batches] == [2, 2, 1]
+    assert batches[0][0]["id"] == 0
+    assert batches[-1][0]["id"] == 4
+
+
+def test_to_db_column_value_map_uses_model_column_names():
+    mapped = _to_db_column_value_map(
+        QlikApp,
+        {
+            "name_value": "Sales App",
+            "app_name": "Sales App",
+            "space_id_payload": "space-1",
+        },
+    )
+    assert mapped["name"] == "Sales App"
+    assert mapped["appName"] == "Sales App"
+    assert mapped["spaceId"] == "space-1"
 
 
 def test_normalize_steps_defaults_to_all_steps():
