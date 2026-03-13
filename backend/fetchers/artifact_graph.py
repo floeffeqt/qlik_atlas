@@ -1,7 +1,10 @@
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 import json
+
+logger = logging.getLogger("atlas.graph")
 
 from shared.models import AppInfoRecord, EdgeRecord, GraphSnapshot, NodeRecord
 
@@ -25,6 +28,7 @@ class LineageArtifactLoader:
             try:
                 records.append(normalize_file(path))
             except Exception as exc:
+                logger.warning("Skipping lineage file %s: %s", path.name, exc)
                 self.skipped_files[path.name] = str(exc)
         return records
 
@@ -251,6 +255,7 @@ def build_snapshot_from_payloads(payloads: list[dict[str, Any]]) -> tuple[GraphS
         try:
             records.append(normalize_payload(payload, file_name=file_name))
         except Exception as exc:
+            logger.warning("Skipping payload %s: %s", file_name, exc)
             skipped[file_name] = str(exc)
     snapshot = GraphBuilder().build(records, files_loaded=0)
     return snapshot, skipped

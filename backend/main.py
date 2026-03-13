@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
+
+logger = logging.getLogger("atlas.api")
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,8 +100,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(set(origins)),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -370,6 +373,7 @@ async def _execute_fetch_job(
         await _append_log(job_id, "✓ Job erfolgreich abgeschlossen")
         await _update_job(job_id, status="completed", finishedAt=_utc_now_iso(), currentStep=None, dbStore=db_result)
     except Exception as exc:
+        logger.exception("Fetch job %s failed", job_id)
         await _append_log(job_id, f"✗ Fehler: {exc}")
         await _update_job(
             job_id,
@@ -397,7 +401,7 @@ async def _load_project_creds_to_env(project_id: int, *, actor_user_id: int, act
             raise RuntimeError(f"customer {project.customer_id} not found for project {project_id}")
         os.environ["QLIK_TENANT_URL"] = customer.tenant_url
         os.environ["QLIK_API_KEY"] = customer.api_key
-        print(f"Loaded credentials for project {project_id} from customer '{customer.name}'")
+        logger.info("Loaded credentials for project %s from customer '%s'", project_id, customer.name)
 
 
 
@@ -468,6 +472,7 @@ async def data_connections(session: AsyncSession = Depends(_session_with_rls_con
     try:
         return await load_data_connections_payload(session)
     except Exception:
+        logger.exception("data connections query failed")
         raise HTTPException(status_code=500, detail="data connections query failed")
 
 
@@ -489,6 +494,7 @@ async def analytics_areas(
     try:
         payload = await load_analytics_areas(session, project_id=project_id, days=days)
     except Exception as exc:
+        logger.exception("analytics areas query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -519,6 +525,7 @@ async def analytics_area_apps(
             detail=_analytics_error_detail("invalid_area_key", str(exc)),
         )
     except Exception as exc:
+        logger.exception("analytics area apps query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -557,6 +564,7 @@ async def analytics_app_fields(
             detail=_analytics_error_detail("app_not_found", "App nicht gefunden."),
         )
     except Exception as exc:
+        logger.exception("analytics app fields query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -587,6 +595,7 @@ async def analytics_app_trend(
             detail=_analytics_error_detail("app_not_found", "App nicht gefunden."),
         )
     except Exception as exc:
+        logger.exception("analytics app trend query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -606,6 +615,7 @@ async def analytics_insight_cost_value(
     try:
         payload = await load_cost_value_map(session, project_id=project_id, days=days)
     except Exception as exc:
+        logger.exception("analytics cost-value query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -631,6 +641,7 @@ async def analytics_insight_bloat(
             limit=limit,
         )
     except Exception as exc:
+        logger.exception("analytics bloat query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -654,6 +665,7 @@ async def analytics_insight_data_model_pack(
             metric=metric,
         )
     except Exception as exc:
+        logger.exception("analytics data-model-pack query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -677,6 +689,7 @@ async def analytics_insight_lineage_criticality(
             limit=limit,
         )
     except Exception as exc:
+        logger.exception("analytics lineage-criticality query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -700,6 +713,7 @@ async def analytics_insight_governance_ops(
             limit=limit,
         )
     except Exception as exc:
+        logger.exception("analytics governance-ops query failed")
         raise HTTPException(
             status_code=500,
             detail=_analytics_error_detail(
@@ -763,6 +777,7 @@ async def app_usage(app_id: str, session: AsyncSession = Depends(_session_with_r
     except KeyError:
         raise HTTPException(status_code=404, detail="usage not found")
     except Exception:
+        logger.exception("app usage query failed for %s", app_id)
         raise HTTPException(status_code=500, detail="usage query failed")
 
 
@@ -773,6 +788,7 @@ async def app_script(app_id: str, session: AsyncSession = Depends(_session_with_
     except KeyError:
         raise HTTPException(status_code=404, detail="script not found")
     except Exception:
+        logger.exception("app script query failed for %s", app_id)
         raise HTTPException(status_code=500, detail="script query failed")
 
 

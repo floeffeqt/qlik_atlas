@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from typing import Any, Iterable
+
+logger = logging.getLogger("atlas.runtime")
 
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -627,12 +630,14 @@ def _graph_response_from_snapshot(snapshot: GraphSnapshot) -> GraphResponse:
         try:
             nodes.append(Node(**payload))
         except Exception:
+            logger.warning("Skipping malformed graph node %s: %s", payload.get("id", "?"), payload, exc_info=True)
             continue
     edges: list[Edge] = []
     for payload in snapshot.edges.values():
         try:
             edges.append(Edge(**payload))
         except Exception:
+            logger.warning("Skipping malformed graph edge %s: %s", payload.get("id", "?"), payload, exc_info=True)
             continue
     return GraphResponse(nodes=nodes, edges=edges)
 
@@ -754,6 +759,7 @@ async def load_inventory(session: AsyncSession) -> InventoryResponse:
         try:
             status_val = int(status_raw) if status_raw is not None else None
         except Exception:
+            logger.warning("Invalid status value %r for app %s, defaulting to None", status_raw, app_id)
             status_val = None
 
         item = {
@@ -999,6 +1005,7 @@ async def load_orphans_report(session: AsyncSession) -> OrphansReport:
             try:
                 out.append(Node(**snapshot.nodes[nid]))
             except Exception:
+                logger.warning("Skipping malformed node %s in orphan report", nid, exc_info=True)
                 continue
         return out
 

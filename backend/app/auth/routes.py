@@ -20,6 +20,7 @@ from .utils import (
     hash_password,
     hash_refresh_token,
     refresh_token_expiry,
+    refresh_token_hashes,
     require_admin,
     set_access_cookie,
     set_refresh_cookie,
@@ -207,7 +208,7 @@ async def refresh_session(
         clear_refresh_cookie(response)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
 
-    q = await session.execute(select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(refresh_plain)))
+    q = await session.execute(select(RefreshToken).where(RefreshToken.token_hash.in_(refresh_token_hashes(refresh_plain))))
     stored = q.scalar_one_or_none()
     now = _utc_now()
     if not stored or stored.revoked_at is not None or stored.expires_at <= now:
@@ -249,7 +250,7 @@ async def logout(
 ):
     refresh_plain = get_refresh_cookie_token(request)
     if refresh_plain:
-        q = await session.execute(select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(refresh_plain)))
+        q = await session.execute(select(RefreshToken).where(RefreshToken.token_hash.in_(refresh_token_hashes(refresh_plain))))
         stored = q.scalar_one_or_none()
         if stored and stored.revoked_at is None:
             stored.revoked_at = _utc_now()

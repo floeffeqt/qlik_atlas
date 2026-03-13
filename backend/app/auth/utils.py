@@ -1,5 +1,6 @@
 import os
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, Request, Response, status
@@ -20,6 +21,7 @@ pwd_context = CryptContext(
     deprecated=["pbkdf2_sha256"],
 )
 JWT_SECRET = os.getenv("JWT_SECRET", "replace_this_with_secure_value_in_production")
+REFRESH_TOKEN_HMAC_KEY = (os.getenv("REFRESH_TOKEN_HMAC_KEY", "") or JWT_SECRET)
 ALGORITHM = "HS256"
 ACCESS_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 REFRESH_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -64,7 +66,19 @@ def create_refresh_token() -> str:
 
 
 def hash_refresh_token(token: str) -> str:
+    return hmac.new(
+        REFRESH_TOKEN_HMAC_KEY.encode(), token.encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def _legacy_sha256(token: str) -> str:
+    """Plain SHA256 used before HMAC migration. Remove after transition (REFRESH_EXPIRE_DAYS)."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def refresh_token_hashes(token: str) -> list[str]:
+    """Return [hmac_hash, legacy_sha256_hash] for transition-period DB lookups."""
+    return [hash_refresh_token(token), _legacy_sha256(token)]
 
 
 def refresh_token_expiry() -> datetime:
