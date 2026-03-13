@@ -294,6 +294,9 @@
     }
     .table-filter select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.25) inset; }
     .table-filter select option { background: #1a1a2e; color: #fff; }
+    .table-filter-actions { display: flex; align-items: flex-end; }
+    .table-filter-reset { width: 100%; min-height: 30px; }
+    .table-filter-reset:disabled { opacity: 0.45; cursor: default; }
     .table-filter-meta { margin: 0 0 0.35rem; font-size: 0.72rem; color: var(--dim); }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; color: #c7d2fe; }
     .empty { border: 1px dashed rgba(255,255,255,0.18); border-radius: 10px; padding: 0.7rem; color: var(--dim); font-size: 0.78rem; }
@@ -1197,33 +1200,46 @@
     return h;
   }
 
-  function getFilterCellDisplay(column, row){
-    var raw = '';
-    if(column && typeof column.filterLabel === 'function'){
-      raw = column.filterLabel(row);
-    } else if(column && typeof column.filter === 'function'){
-      raw = column.filter(row);
-    } else if(column && typeof column.f === 'function'){
-      raw = column.f(row);
-    }
+  function getFilterCellText(raw){
     if(raw === null || raw === undefined || String(raw).trim() === '') return '-';
     return String(raw).trim();
   }
 
-  function getFilterCellValue(column, row){
-    return getFilterCellDisplay(column, row).toLowerCase();
+  function getFilterCellDisplay(column, row){
+    var raw = '';
+    if(column && typeof column.filterLabel === 'function'){
+      raw = column.filterLabel(row);
+    } else if(column && column.raw && typeof column.filter === 'function'){
+      raw = column.filter(row);
+    } else if(column && typeof column.f === 'function'){
+      raw = column.f(row);
+    } else if(column && typeof column.filter === 'function'){
+      raw = column.filter(row);
+    }
+    return getFilterCellText(raw);
   }
 
-  function getColumnFilterOptions(rows, columns){
-    var optsByCol = columns.map(function(){ return {}; });
-    (rows || []).forEach(function(row){
-      columns.forEach(function(column, idx){
+  function getFilterCellValue(column, row){
+    var raw = '';
+    if(column && typeof column.filter === 'function'){
+      raw = column.filter(row);
+    } else if(column && typeof column.filterLabel === 'function'){
+      raw = column.filterLabel(row);
+    } else if(column && typeof column.f === 'function'){
+      raw = column.f(row);
+    }
+    return getFilterCellText(raw).toLowerCase();
+  }
+
+  function getColumnFilterOptions(rows, columns, filters){
+    return columns.map(function(column, idx){
+      var mapObj = {};
+      var scopedRows = applyColumnFilters(rows, columns, filters, idx);
+      scopedRows.forEach(function(row){
         var value = getFilterCellValue(column, row);
         var label = getFilterCellDisplay(column, row);
-        if(!optsByCol[idx][value]) optsByCol[idx][value] = label;
+        if(!mapObj[value]) mapObj[value] = label;
       });
-    });
-    return optsByCol.map(function(mapObj){
       var options = Object.keys(mapObj).map(function(value){
         return { value: value, label: mapObj[value] };
       });
@@ -1234,12 +1250,13 @@
     });
   }
 
-  function applyColumnFilters(rows, columns, filters){
+  function applyColumnFilters(rows, columns, filters, skipIdx){
     var list = Array.isArray(rows) ? rows : [];
     if(!list.length) return [];
     return list.filter(function(row){
       return columns.every(function(column, idx){
         if(column && column.filterable === false) return true;
+        if(idx === skipIdx) return true;
         var selected = String(filters[String(idx)] || '').trim().toLowerCase();
         if(!selected) return true;
         return getFilterCellValue(column, row) === selected;
@@ -1247,7 +1264,7 @@
     });
   }
 
-  function renderFilterableTable(containerId, tableKey, columns, rows){
+  function renderFilterableTable(containerId, tableKey, columns, rows, config){
     var host = document.getElementById(containerId);
     if(!host) return;
     var list = Array.isArray(rows) ? rows : [];
@@ -1255,9 +1272,10 @@
       host.innerHTML = renderSimpleTable(columns, list);
       return;
     }
+    var cfg = config && typeof config === 'object' ? config : {};
     var filters = tableFilterState[tableKey] || {};
     tableFilterState[tableKey] = filters;
-    var optionSets = getColumnFilterOptions(list, columns);
+    var optionSets = getColumnFilterOptions(list, columns, filters);
     var filterableColumns = [];
     columns.forEach(function(column, idx){
       if(column && column.filterable === false){
@@ -1273,6 +1291,9 @@
       if(!exists) filters[key] = '';
     });
     var filtered = applyColumnFilters(list, columns, filters);
+    var hasActiveFilters = filterableColumns.some(function(item){
+      return !!String(filters[String(item.idx)] || '').trim();
+    });
     var filterHtml = filterableColumns.length ? ('<div class="table-filter-grid">' + filterableColumns.map(function(item){
       var column = item.column;
       var idx = item.idx;
@@ -1289,14 +1310,24 @@
           }).join('') +
         '</select>' +
       '</label>';
-    }).join('') + '</div>') : '';
+    }).join('') + (cfg.showReset ? (
+      '<div class="table-filter-actions">' +
+        '<button type="button" class="btn table-filter-reset" data-filter-reset="' + esc(tableKey) + '"' + (hasActiveFilters ? '' : ' disabled') + '>Filter aufheben</button>' +
+      '</div>'
+    ) : '') + '</div>') : '';
     var metaHtml = '<div class="table-filter-meta">Treffer: ' + n(filtered.length) + ' / ' + n(list.length) + '</div>';
     host.innerHTML = filterHtml + metaHtml + renderSimpleTable(columns, filtered);
     host.querySelectorAll('select[data-filter-table]').forEach(function(select){
       select.addEventListener('change', function(){
         var colKey = String(select.getAttribute('data-filter-col') || '');
         filters[colKey] = String(select.value || '').toLowerCase();
-        renderFilterableTable(containerId, tableKey, columns, list);
+        renderFilterableTable(containerId, tableKey, columns, list, cfg);
+      });
+    });
+    host.querySelectorAll('button[data-filter-reset]').forEach(function(button){
+      button.addEventListener('click', function(){
+        tableFilterState[tableKey] = {};
+        renderFilterableTable(containerId, tableKey, columns, list, cfg);
       });
     });
   }
@@ -1554,52 +1585,55 @@
       'bloatAppsWrap',
       'apps',
       [
-        {h:'App',f:function(r){return r.app_name||r.app_id;}},
-        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}, filterable:false},
+        {h:'App',f:function(r){return r.app_name||r.app_id;}, filter:function(r){return r.app_id||r.app_name;}, filterLabel:function(r){return r.app_name||r.app_id;}},
+        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}},
         {h:'Size',f:function(r){return bytes(r.static_byte_size_latest);}},
         {h:'Fields',f:function(r){return n(r.fields_count_latest);}},
         {h:'Tables',f:function(r){return n(r.tables_count_latest);}},
         {h:'Drift',f:function(r){return n(r.schema_drift_count_in_window);}}
       ],
-      (p.top_apps||[]).slice(0,20)
+      (p.top_apps||[]),
+      { showReset: true }
     );
     renderFilterableTable(
       'bloatTablesWrap',
       'tables',
       [
         {h:'Table',f:function(r){return r.table_name;}},
-        {h:'App',f:function(r){return r.app_name||r.app_id;}},
-        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}, filterable:false},
+        {h:'App',f:function(r){return r.app_name||r.app_id;}, filter:function(r){return r.app_id||r.app_name;}, filterLabel:function(r){return r.app_name||r.app_id;}},
+        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}},
         {h:'Byte Size',f:function(r){return bytes(r.byte_size);}},
         {h:'Rows',f:function(r){return n(r.no_of_rows);}},
         {h:'Fields',f:function(r){return n(r.no_of_fields);}},
         {h:'Keys',f:function(r){return n(r.no_of_key_fields);}}
       ],
-      (p.top_tables||[]).slice(0,20)
+      (p.top_tables||[]),
+      { showReset: true }
     );
     renderFilterableTable(
       'bloatFieldsWrap',
       'fields',
       [
         {h:'Field',f:function(r){return r.name||r.field_hash;}},
-        {h:'App',f:function(r){return r.app_name||r.app_id;}},
-        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}, filterable:false},
+        {h:'App',f:function(r){return r.app_name||r.app_id;}, filter:function(r){return r.app_id||r.app_name;}, filterLabel:function(r){return r.app_name||r.app_id;}},
+        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}},
         {h:'Byte Size',f:function(r){return bytes(r.byte_size);}},
         {h:'Cardinal',f:function(r){return n(r.cardinal);}},
         {h:'Total',f:function(r){return n(r.total_count);}}
       ],
-      (p.top_fields||[]).slice(0,20)
+      (p.top_fields||[]),
+      { showReset: true }
     );
     renderFilterableTable(
       'bloatDriftWrap',
       'drift',
       [
-        {h:'App',f:function(r){return r.app_name||r.app_id;}},
+        {h:'App',f:function(r){return r.app_name||r.app_id;}, filter:function(r){return r.app_id||r.app_name;}, filterLabel:function(r){return r.app_name||r.app_id;}},
         {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}, filterable:false},
         {h:'Drift',f:function(r){return n(r.schema_drift_count_in_window);}},
         {h:'Size',f:function(r){return bytes(r.static_byte_size_latest);}}
       ],
-      (p.schema_drift_apps||[]).slice(0,20)
+      (p.schema_drift_apps||[])
     );
   }
 
@@ -2062,7 +2096,7 @@
       var qGov = '?project_id=' + encodeURIComponent(String(state.project)) + '&limit=40';
       var results = await Promise.all([
         apiFetchJson('/api/analytics/insights/cost-value' + q, 'Cost-vs-Value konnte nicht geladen werden'),
-        apiFetchJson('/api/analytics/insights/bloat' + q + '&limit=25', 'Bloat-Explorer konnte nicht geladen werden'),
+        apiFetchJson('/api/analytics/insights/bloat' + q + '&limit=200', 'Bloat-Explorer konnte nicht geladen werden'),
         apiFetchJson('/api/analytics/insights/lineage-criticality' + qLin, 'Lineage-Kritikalitaet konnte nicht geladen werden'),
         apiFetchJson('/api/analytics/insights/data-model-pack' + qPack, 'Data-Model-Pack konnte nicht geladen werden'),
         apiFetchJson('/api/analytics/insights/governance-ops' + qGov, 'Governance-Operations konnte nicht geladen werden')

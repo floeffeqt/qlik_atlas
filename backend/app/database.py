@@ -5,7 +5,19 @@ import os
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://atlas:atlas@db:5432/atlas_db")
 
-engine = create_async_engine(DATABASE_URL, echo=False, future=True, pool_pre_ping=True)
+_pool_size = int(os.getenv("DB_POOL_SIZE", "20"))
+_max_overflow = int(os.getenv("DB_POOL_MAX_OVERFLOW", "10"))
+_pool_recycle = int(os.getenv("DB_POOL_RECYCLE_SECONDS", "1800"))
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    future=True,
+    pool_pre_ping=True,
+    pool_size=_pool_size,
+    max_overflow=_max_overflow,
+    pool_recycle=_pool_recycle,
+)
 AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
