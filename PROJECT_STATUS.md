@@ -389,3 +389,41 @@ docker compose --profile test run --rm test pytest tests/test_auth.py::test_heal
 - Navigation: "Script Sync" Link auf allen 6 Seiten hinzugefuegt
 - `atlas-shared.js`: `updateNavProjectContext()` um script-sync.html erweitert
 - Spec-Compliance: QLIK-PS-006 (Frontend-Impact geprueft), QLIK-PS-009 (n/a, keine Runtime-Aenderung)
+
+---
+
+## Update (2026-03-17): M3 - Graph Pagination
+
+### Completed
+- Cursor-basierte Pagination fuer Lineage-Graph-Endpoints
+- Keyset-Cursor auf `node_id` (ASC), konfigurierbare `page_size` (10-5000)
+- Edges werden pro Seite mitgeliefert (alle Edges, die mindestens einen Knoten der Seite referenzieren)
+- Rueckwaertskompatibel: ohne `page_size` Parameter bleibt Verhalten unveraendert
+
+### Betroffene Dateien
+- `backend/shared/models.py`: Neues `PaginatedGraphResponse` Schema
+- `backend/app/runtime_query_rows.py`: `fetch_graph_counts()`, `fetch_graph_rows_paginated()`
+- `backend/app/db_runtime_views.py`: `load_graph_response_paginated()`, `_build_snapshot_from_rows(create_edge_stub_nodes=False)`
+- `backend/main.py`: Endpoints `/api/graph/project/{id}`, `/api/graph/all`, `/api/graph/db` mit `page_size` + `after` Query-Params
+- `frontend/lineage.html`: Auto-Pagination (nodeMap Deduplizierung, edgeMap Deduplizierung, Ladefortschritt)
+
+### API
+- `GET /api/graph/project/{id}?page_size=500` - erste Seite
+- `GET /api/graph/project/{id}?page_size=500&after=<node_id>` - naechste Seite
+- Response: `{ nodes, edges, next_cursor, total_nodes, total_edges, page_size }`
+- `next_cursor: null` = letzte Seite
+
+### Spec-Compliance
+- QLIK-PS-003: RLS wird ueber bestehende Session-Context-Middleware angewendet (keine neue Tabelle)
+- QLIK-PS-006: Frontend-Aenderung nur in `lineage.html` (loadGraph Funktion)
+- QLIK-PS-008: Keine Migration erforderlich (keine Schema-Aenderung)
+
+## Update (2026-03-17): Test-Fixes (10 Failures behoben)
+
+### Behoben
+- `test_auth.py`: Health-Endpoint-Pfad `/health` -> `/api/health`, Engine-Scope session -> function, Passwort-Laenge >= 8
+- `test_theme_generator.py`: Auth-Dependency per `autouse` Fixture gemockt statt DB-Lookup
+- `test_db_runtime_views.py`: `layer="data"` -> `"db"`, Listen- vs. Set-Vergleich fuer Node-Reihenfolge
+- `test_ingestion_payload_columns.py`: Test-Payload an Qlik API camelCase-Format angepasst
+- `tests/conftest.py`: SQLAlchemy Load-Listener fuer SQLite Timezone-Fix (RefreshToken)
+- Ergebnis: **86/86 Tests bestanden**

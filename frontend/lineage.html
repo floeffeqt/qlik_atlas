@@ -2421,6 +2421,8 @@
     return [];
   }
 
+  var GRAPH_PAGE_SIZE = 500;
+
   async function loadGraph() {
     var loading = document.getElementById('loadingOverlay');
     loading.style.display = 'flex';
@@ -2434,18 +2436,43 @@
       loading.style.display = 'none';
       return;
     }
-    var url = '/api/graph/project/' + encodeURIComponent(projectId);
 
     try {
-      var res = await window.AtlasShared.apiFetch(url);
-      if (res.status === 401) return;
-      if (!res.ok) { throw new Error('HTTP ' + res.status); }
-      lastData = await res.json();
+      var nodeMap = {};
+      var edgeMap = {};
+      var cursor = null;
+      var pageCount = 0;
+
+      do {
+        var url = '/api/graph/project/' + encodeURIComponent(projectId)
+          + '?page_size=' + GRAPH_PAGE_SIZE;
+        if (cursor) url += '&after=' + encodeURIComponent(cursor);
+
+        var res = await window.AtlasShared.apiFetch(url);
+        if (res.status === 401) return;
+        if (!res.ok) { throw new Error('HTTP ' + res.status); }
+
+        var page = await res.json();
+        pageCount++;
+
+        (page.nodes || []).forEach(function(n) { nodeMap[n.id] = n; });
+        (page.edges || []).forEach(function(e) { edgeMap[e.id] = e; });
+        cursor = page.next_cursor || null;
+
+        if (cursor) {
+          showToast('Lade Seite ' + pageCount + '... ('
+            + Object.keys(nodeMap).length + '/' + (page.total_nodes || '?') + ' Nodes)');
+        }
+      } while (cursor);
+
+      var allNodes = Object.values(nodeMap);
+      lastData = { nodes: allNodes, edges: Object.values(edgeMap) };
       syncProjectInUrl(projectId, focusState.customer);
       populateLineageFilters(lastData);
       applyDeepLinkFilters(lastData);
       renderGraph(lastData);
-      showToast('Graph geladen - ' + (lastData.nodes || []).length + ' Nodes');
+      showToast('Graph geladen - ' + allNodes.length + ' Nodes'
+        + (pageCount > 1 ? ' (' + pageCount + ' Seiten)' : ''));
     } catch (e) {
       showToast('Fehler: ' + e.message);
       document.getElementById('emptyState').classList.add('show');

@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from shared.config import is_prod, settings
-from shared.models import GraphResponse, HealthResponse, InventoryResponse, OrphansReport
+from shared.models import GraphResponse, HealthResponse, InventoryResponse, OrphansReport, PaginatedGraphResponse
 from shared.analytics_models import (
     AnalyticsAppFieldsResponse,
     AnalyticsAppTrendResponse,
@@ -39,6 +39,7 @@ from app.db_runtime_views import (
     load_app_usage_payload,
     load_data_connections_payload,
     load_graph_response,
+    load_graph_response_paginated,
     load_inventory,
     load_node_subgraph,
     load_orphans_report,
@@ -734,21 +735,46 @@ async def graph_for_app(app_id: str, depth: int = 1, session: AsyncSession = Dep
         raise HTTPException(status_code=404, detail="app not found")
 
 
-@app.get("/api/graph/all", response_model=GraphResponse)
-async def graph_all(session: AsyncSession = Depends(_session_with_rls_context)) -> GraphResponse:
+@app.get("/api/graph/all")
+async def graph_all(
+    page_size: int | None = Query(default=None, ge=10, le=5000),
+    after: str | None = Query(default=None),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> GraphResponse | PaginatedGraphResponse:
     """Legacy alias kept for compatibility; now DB-backed to avoid stale local artifact results."""
+    if page_size is not None:
+        return await load_graph_response_paginated(
+            session, page_size=page_size, after=after,
+        )
     return await _load_graph_from_db(session)
 
 
-@app.get("/api/graph/db", response_model=GraphResponse)
-async def graph_from_db(session: AsyncSession = Depends(_session_with_rls_context)) -> GraphResponse:
+@app.get("/api/graph/db")
+async def graph_from_db(
+    page_size: int | None = Query(default=None, ge=10, le=5000),
+    after: str | None = Query(default=None),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> GraphResponse | PaginatedGraphResponse:
     """Read all lineage graph data from PostgreSQL JSONB tables (all projects)."""
+    if page_size is not None:
+        return await load_graph_response_paginated(
+            session, page_size=page_size, after=after,
+        )
     return await _load_graph_from_db(session)
 
 
-@app.get("/api/graph/project/{project_id}", response_model=GraphResponse)
-async def graph_for_project(project_id: int, session: AsyncSession = Depends(_session_with_rls_context)) -> GraphResponse:
-    """Read lineage graph data for a specific project from PostgreSQL."""
+@app.get("/api/graph/project/{project_id}")
+async def graph_for_project(
+    project_id: int,
+    page_size: int | None = Query(default=None, ge=10, le=5000),
+    after: str | None = Query(default=None),
+    session: AsyncSession = Depends(_session_with_rls_context),
+) -> GraphResponse | PaginatedGraphResponse:
+    """Read lineage graph data for a specific project. Supports cursor-based pagination."""
+    if page_size is not None:
+        return await load_graph_response_paginated(
+            session, project_id=project_id, page_size=page_size, after=after,
+        )
     return await _load_graph_from_db(session, project_id=project_id)
 
 

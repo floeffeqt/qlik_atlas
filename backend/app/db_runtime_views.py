@@ -20,7 +20,9 @@ from app.models import (
 from app.runtime_query_rows import (
     fetch_data_connection_rows,
     fetch_graph_context_rows,
+    fetch_graph_counts,
     fetch_graph_rows,
+    fetch_graph_rows_paginated,
     fetch_inventory_rows,
     fetch_latest_app_row,
     fetch_latest_app_script_row,
@@ -30,7 +32,10 @@ from app.runtime_query_rows import (
 )
 from fetchers.heuristics import dead_ends, never_referenced, orphan_outputs
 from fetchers.subgraph import bfs_subgraph
-from shared.models import Edge, GraphResponse, GraphSnapshot, InventoryResponse, Node, OrphansReport
+from shared.models import (
+    Edge, GraphResponse, GraphSnapshot, InventoryResponse,
+    Node, OrphansReport, PaginatedGraphResponse,
+)
 
 def _safe_dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
@@ -352,6 +357,7 @@ def _build_snapshot_from_rows(
     app_info_by_project_and_app: dict[tuple[int, str], dict[str, Any]] | None = None,
     data_connection_rows: Iterable[QlikDataConnection] | None = None,
     connection_matches_by_project_and_connection: dict[tuple[int, str], list[dict[str, Any]]] | None = None,
+    create_edge_stub_nodes: bool = True,
 ) -> GraphSnapshot:
     nodes: dict[str, dict[str, Any]] = {}
     edges: dict[str, dict[str, Any]] = {}
@@ -421,10 +427,11 @@ def _build_snapshot_from_rows(
         edges[record["id"]] = record
         out_adj.setdefault(record["source"], set()).add(record["id"])
         in_adj.setdefault(record["target"], set()).add(record["id"])
-        if record["source"] not in nodes:
-            nodes[record["source"]] = _node_record_from_payload(record["source"], {"id": record["source"]})
-        if record["target"] not in nodes:
-            nodes[record["target"]] = _node_record_from_payload(record["target"], {"id": record["target"]})
+        if create_edge_stub_nodes:
+            if record["source"] not in nodes:
+                nodes[record["source"]] = _node_record_from_payload(record["source"], {"id": record["source"]})
+            if record["target"] not in nodes:
+                nodes[record["target"]] = _node_record_from_payload(record["target"], {"id": record["target"]})
         node_projects.setdefault(record["source"], set()).add(int(row.project_id))
         node_projects.setdefault(record["target"], set()).add(int(row.project_id))
 
@@ -730,6 +737,107 @@ async def load_graph_snapshot(
 async def load_graph_response(session: AsyncSession, *, project_id: int | None = None) -> GraphResponse:
     snapshot = await load_graph_snapshot(session, project_id=project_id)
     return _graph_response_from_snapshot(snapshot)
+
+
+async def load_graph_response_paginated(
+    session: AsyncSession,
+    *,
+    project_id: int | None = None,
+    page_size: int = 500,
+    after: str | None = None,
+) -> PaginatedGraphResponse:
+    """Load one page of graph data with cursor-based pagination on nodes."""
+    total_nodes, total_edges = await fetch_graph_counts(
+        session, project_id=project_id,
+    )
+    node_rows, edge_rows, data_connection_rows = await fetch_graph_rows_paginated(
+        session, project_id=project_id, page_size=page_size, after=after,
+    )
+
+    # ── Context loading (same as load_graph_snapshot) ──
+    resolved_project_ids = sorted(
+        {int(r.project_id) for r in node_rows}
+        | {int(r.project_id) for r in edge_rows}
+        | {int(r.project_id) for r in data_connection_rows}
+    )
+    app_info_by_project_and_app: dict[tuple[int, str], dict[str, Any]] = {}
+    app_roots_by_project_and_qri_prefix: dict[tuple[int, str], list[dict[str, Any]]] = {}
+    if resolved_project_ids:
+        apps_rows, spaces_rows = await fetch_graph_context_rows(
+            session, project_ids=resolved_project_ids,
+        )
+        space_name_by_project_and_space: dict[tuple[int, str], str] = {}
+        for row in spaces_rows:
+            space_id_val = _space_id_from_row(row)
+            space_name_val = _space_name_from_row(row)
+            if space_name_val:
+                if space_id_val:
+                    space_name_by_project_and_space[(int(row.project_id), space_id_val)] = space_name_val
+                if getattr(row, "space_id", None):
+                    space_name_by_project_and_space[(int(row.project_id), str(row.space_id))] = space_name_val
+        for row in apps_rows:
+            payload = _safe_dict(row.data)
+            app_id_val = str(row.app_id)
+            app_name_val = _app_name_from_row(row) or app_id_val
+            space_id_val = _app_space_id_from_row(row)
+            space_id_str = str(space_id_val) if space_id_val else None
+            app_info = {
+                "appId": app_id_val,
+                "appName": str(app_name_val),
+                "spaceId": space_id_str,
+                "spaceName": (
+                    space_name_by_project_and_space.get((int(row.project_id), space_id_str))
+                    if space_id_str else None
+                ),
+            }
+            root_node_id = getattr(row, "root_node_id", None) or payload.get("rootNodeId")
+            root_qri_prefix = _qri_prefix_before_hash(root_node_id)
+            if root_node_id:
+                app_info["rootNodeId"] = str(root_node_id)
+            if root_qri_prefix:
+                app_info["rootQriPrefix"] = root_qri_prefix
+                key = (int(row.project_id), root_qri_prefix)
+                app_roots_by_project_and_qri_prefix.setdefault(key, []).append({
+                    "appId": app_id_val,
+                    "appName": str(app_name_val),
+                    "rootNodeId": str(root_node_id),
+                })
+            for lookup_key in _app_lookup_keys_for_app_id(app_id_val):
+                app_info_by_project_and_app[(int(row.project_id), lookup_key)] = app_info
+
+    connection_matches_by_project_and_connection: dict[tuple[int, str], list[dict[str, Any]]] = {}
+    for row in data_connection_rows:
+        payload = _safe_dict(row.data)
+        connection_id = str(getattr(row, "connection_id", "") or "")
+        if not connection_id:
+            continue
+        connection_qri_prefix = _qri_prefix_before_hash(payload.get("qri") or getattr(row, "qri", None))
+        if not connection_qri_prefix:
+            continue
+        key = (int(row.project_id), connection_qri_prefix)
+        matches = app_roots_by_project_and_qri_prefix.get(key)
+        if not matches:
+            continue
+        connection_matches_by_project_and_connection[(int(row.project_id), connection_id)] = [dict(m) for m in matches]
+
+    snapshot = _build_snapshot_from_rows(
+        node_rows,
+        edge_rows,
+        app_info_by_project_and_app=app_info_by_project_and_app,
+        data_connection_rows=data_connection_rows,
+        connection_matches_by_project_and_connection=connection_matches_by_project_and_connection,
+        create_edge_stub_nodes=False,
+    )
+    graph = _graph_response_from_snapshot(snapshot)
+    next_cursor = node_rows[-1].node_id if len(node_rows) == page_size else None
+    return PaginatedGraphResponse(
+        nodes=graph.nodes,
+        edges=graph.edges,
+        next_cursor=next_cursor,
+        total_nodes=total_nodes,
+        total_edges=total_edges,
+        page_size=page_size,
+    )
 
 
 async def load_inventory(session: AsyncSession) -> InventoryResponse:

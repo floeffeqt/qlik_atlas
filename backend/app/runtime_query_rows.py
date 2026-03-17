@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Iterable
 
-from sqlalchemy import or_, select, union
+from sqlalchemy import func, or_, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -97,6 +97,95 @@ async def fetch_graph_rows(
 
     node_rows = await _execute_namespaced_rows(session, node_stmt)
     edge_rows = await _execute_namespaced_rows(session, edge_stmt)
+    connection_rows = await _execute_namespaced_rows(session, connection_stmt)
+    return node_rows, edge_rows, connection_rows
+
+
+async def fetch_graph_counts(
+    session: AsyncSession,
+    *,
+    project_id: int | None = None,
+    project_ids: Iterable[int] | None = None,
+) -> tuple[int, int]:
+    """Return (total_nodes, total_edges) for the given project scope."""
+    scope_ids = _normalize_project_scope(project_id=project_id, project_ids=project_ids)
+
+    n_stmt = select(func.count()).select_from(LineageNode)
+    n_stmt = _apply_project_scope(n_stmt, LineageNode.project_id, scope_ids)
+
+    e_stmt = select(func.count()).select_from(LineageEdge)
+    e_stmt = _apply_project_scope(e_stmt, LineageEdge.project_id, scope_ids)
+
+    total_nodes = int((await session.execute(n_stmt)).scalar() or 0)
+    total_edges = int((await session.execute(e_stmt)).scalar() or 0)
+    return total_nodes, total_edges
+
+
+async def fetch_graph_rows_paginated(
+    session: AsyncSession,
+    *,
+    project_id: int | None = None,
+    project_ids: Iterable[int] | None = None,
+    page_size: int = 500,
+    after: str | None = None,
+) -> tuple[list[Any], list[Any], list[Any]]:
+    """Fetch one page of nodes (keyset cursor on node_id) + matching edges + all connections."""
+    scope_ids = _normalize_project_scope(project_id=project_id, project_ids=project_ids)
+
+    # ── Paginated nodes ──
+    node_stmt = _apply_project_scope(
+        select(
+            LineageNode.project_id.label("project_id"),
+            LineageNode.node_id.label("node_id"),
+            LineageNode.app_id.label("app_id"),
+            LineageNode.node_type.label("node_type"),
+            LineageNode.data.label("data"),
+        ),
+        LineageNode.project_id,
+        scope_ids,
+    ).order_by(LineageNode.node_id)
+    if after:
+        node_stmt = node_stmt.where(LineageNode.node_id > after)
+    node_stmt = node_stmt.limit(page_size)
+    node_rows = await _execute_namespaced_rows(session, node_stmt)
+
+    # ── Edges where either endpoint is in the page ──
+    page_node_ids = [r.node_id for r in node_rows]
+    if page_node_ids:
+        edge_stmt = _apply_project_scope(
+            select(
+                LineageEdge.project_id.label("project_id"),
+                LineageEdge.edge_id.label("edge_id"),
+                LineageEdge.app_id.label("app_id"),
+                LineageEdge.source_node_id.label("source_node_id"),
+                LineageEdge.target_node_id.label("target_node_id"),
+                LineageEdge.data.label("data"),
+            ),
+            LineageEdge.project_id,
+            scope_ids,
+        ).where(
+            or_(
+                LineageEdge.source_node_id.in_(page_node_ids),
+                LineageEdge.target_node_id.in_(page_node_ids),
+            )
+        )
+        edge_rows = await _execute_namespaced_rows(session, edge_stmt)
+    else:
+        edge_rows = []
+
+    # ── All connections (small, not paginated) ──
+    connection_stmt = _apply_project_scope(
+        select(
+            QlikDataConnection.project_id.label("project_id"),
+            QlikDataConnection.connection_id.label("connection_id"),
+            QlikDataConnection.space_id.label("space_id"),
+            QlikDataConnection.qri.label("qri"),
+            QlikDataConnection.q_connect_statement.label("q_connect_statement"),
+            QlikDataConnection.data.label("data"),
+        ),
+        QlikDataConnection.project_id,
+        scope_ids,
+    )
     connection_rows = await _execute_namespaced_rows(session, connection_stmt)
     return node_rows, edge_rows, connection_rows
 

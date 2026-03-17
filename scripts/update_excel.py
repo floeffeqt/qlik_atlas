@@ -138,10 +138,10 @@ sec_data = [
      "z.B. (project_id, app_id) auf lineage_nodes"],
     ["M3", "Mittel", "Performance",
      "Graph Pagination",
-     "Voller In-Memory Load des Lineage-Graphen. Problematisch bei grossen Tenants.",
-     "Offen", "",
-     "backend/app/db_runtime_views.py",
-     "Cursor-basierte Pagination empfohlen"],
+     "Cursor-basierte Pagination fuer Lineage-Graph. Keyset auf node_id, page_size 10-5000. Frontend auto-paginiert.",
+     "Erledigt", "2026-03-17",
+     "backend/shared/models.py, backend/app/runtime_query_rows.py, backend/app/db_runtime_views.py, backend/main.py, frontend/lineage.html",
+     "Rueckwaertskompatibel: ohne page_size Parameter bleibt altes Verhalten"],
 ]
 
 write_sheet(ws_sec, sec_headers, sec_data, [6, 10, 18, 35, 60, 10, 14, 55, 45])
