@@ -25,11 +25,6 @@ from main import app  # type: ignore
 LEGACY_PBKDF2 = CryptContext(schemes=["pbkdf2_sha256"])
 
 
-@pytest.fixture(scope="session")
-def anyio_backend():
-    return "asyncio"
-
-
 @pytest.fixture(autouse=True)
 def reset_login_rate_limiter():
     previous = (
@@ -49,14 +44,14 @@ def reset_login_rate_limiter():
     LOGIN_RATE_LIMITER.reset()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def engine():
     url = "sqlite+aiosqlite:///:memory:"
-    engine = create_async_engine(url, future=True)
-    async with engine.begin() as conn:
+    eng = create_async_engine(url, future=True)
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    await engine.dispose()
+    yield eng
+    await eng.dispose()
 
 
 @pytest.fixture
@@ -81,7 +76,7 @@ async def db_session(session_factory):
 async def test_health():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        r = await ac.get("/health")
+        r = await ac.get("/api/health")
         assert r.status_code == 200
         payload = r.json()
         assert payload.get("status") == "ok"
@@ -208,14 +203,14 @@ async def test_login_rate_limit_blocks_after_repeated_ip_failures(db_session):
         for idx in range(2):
             res = await ac.post(
                 "/api/auth/login",
-                json={"email": f"missing-{idx}@example.com", "password": "wrong"},
+                json={"email": f"missing-{idx}@example.com", "password": "wrongpwd1"},
                 headers={"x-forwarded-for": "203.0.113.10"},
             )
             assert res.status_code == 401
 
         blocked = await ac.post(
             "/api/auth/login",
-            json={"email": "missing-3@example.com", "password": "wrong"},
+            json={"email": "missing-3@example.com", "password": "wrongpwd1"},
             headers={"x-forwarded-for": "203.0.113.10"},
         )
         assert blocked.status_code == 429
@@ -245,14 +240,14 @@ async def test_login_rate_limit_blocks_after_repeated_email_failures_across_ips(
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         first = await ac.post(
             "/api/auth/login",
-            json={"email": "ratelimit@example.com", "password": "wrong"},
+            json={"email": "ratelimit@example.com", "password": "wrongpwd1"},
             headers={"x-forwarded-for": "198.51.100.11"},
         )
         assert first.status_code == 401
 
         blocked = await ac.post(
             "/api/auth/login",
-            json={"email": "ratelimit@example.com", "password": "wrong"},
+            json={"email": "ratelimit@example.com", "password": "wrongpwd1"},
             headers={"x-forwarded-for": "198.51.100.12"},
         )
         assert blocked.status_code == 429

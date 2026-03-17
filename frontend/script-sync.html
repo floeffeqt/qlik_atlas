@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en" style="background:#1a1a2e;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Script Sync – Lineage Explorer</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --accent: #667eea;
+      --accent2: #764ba2;
+      --text: #fff;
+      --text-muted: rgba(255,255,255,0.5);
+      --text-dim: rgba(255,255,255,0.3);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); }
+
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
+    .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
+    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; overflow: hidden; }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
+    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
+    .nav-link:hover { color: var(--text); background: var(--surface-hover); }
+    .nav-link.active { color: var(--accent); background: var(--surface-hover); }
+    .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; min-width: 0; }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.28) inset; }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
+    .nav-spacer { flex: 1; }
+    .nav-user { display: flex; align-items: center; gap: 0.75rem; }
+    .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
+    .btn-sm { padding: 0.4rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
+    .btn-sm:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+    .page-title { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .page-subtitle { color: var(--text-muted); font-size: 0.9rem; }
+
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-action { background: rgba(102,126,234,0.15); border: 1px solid rgba(102,126,234,0.3); color: #a5b4fc; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-action:hover { background: rgba(102,126,234,0.3); }
+    .btn-danger { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-danger:hover { background: rgba(239,68,68,0.3); }
+    .btn-refresh { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-refresh:hover { background: rgba(34,197,94,0.3); }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem; border-radius: 100px; font-size: 0.72rem; font-weight: 600; }
+    .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .badge-in_sync  { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-git_ahead { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .badge-qlik_ahead { background: rgba(249,115,22,0.15); color: #fb923c; }
+    .badge-diverged  { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-error     { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-unmapped  { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+
+    /* Section */
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
+    .section-title { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+
+    /* Table */
+    .sync-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .sync-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    .sync-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+    .sync-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .sync-table .app-name { font-weight: 600; }
+    .sync-table .mono { font-family: 'Courier New', monospace; font-size: 0.75rem; color: var(--text-muted); }
+    .sync-table .actions { display: flex; gap: 0.3rem; }
+
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-dim); }
+    .empty-icon { font-size: 2rem; opacity: 0.3; margin-bottom: 0.75rem; }
+
+    /* Modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 520px; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.5rem; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .modal-close:hover { color: var(--text); }
+    .form-group { margin-bottom: 1.1rem; }
+    label { display: block; color: rgba(255,255,255,0.7); font-size: 0.82rem; font-weight: 500; margin-bottom: 0.45rem; }
+    input[type="text"], select { width: 100%; padding: 0.7rem 0.9rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; font-size: 0.9rem; outline: none; transition: border-color 0.2s; font-family: inherit; }
+    input::placeholder { color: rgba(255,255,255,0.3); }
+    input:focus, select:focus { border-color: var(--accent); }
+    select option { background: #1a1a2e; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+    .btn-modal-cancel { padding: 0.6rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.875rem; cursor: pointer; }
+    .btn-modal-cancel:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-modal-save { padding: 0.6rem 1.3rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-modal-save:hover { opacity: 0.9; }
+    .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .alert { border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
+    .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
+
+    /* History table */
+    .history-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .history-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .history-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.78rem; }
+    .history-table .mono { font-family: 'Courier New', monospace; font-size: 0.72rem; color: var(--text-muted); }
+
+    /* Stats row */
+    .stats-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem 1.25rem; flex: 1; min-width: 120px; text-align: center; }
+    .stat-value { font-size: 1.6rem; font-weight: 700; }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+    .stat-value.green { color: #4ade80; }
+    .stat-value.yellow { color: #fbbf24; }
+    .stat-value.orange { color: #fb923c; }
+    .stat-value.red { color: #f87171; }
+
+    #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(10px); background: rgba(30,40,70,0.95); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-size: 0.875rem; color: var(--text); backdrop-filter: blur(10px); opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; max-width: 320px; z-index: 500; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .admin-fab {
+      position: fixed; bottom: 1.5rem; left: 1.5rem; padding: 0.6rem 1.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff;
+      text-decoration: none; font-size: 0.85rem; font-weight: 600; border-radius: var(--radius-sm);
+      z-index: 90; box-shadow: 0 4px 16px rgba(102,126,234,0.3); transition: opacity 0.2s; display: none;
+    }
+    .admin-fab:hover { opacity: 0.9; }
+  </style>
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>Atlas</a>
+  <div class="nav-links">
+    <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/">Dashboard</a>
+    <a class="nav-link" href="/analytics.html">Analytics</a>
+    <a class="nav-link" href="/lineage.html">Lineage</a>
+    <a class="nav-link active" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
+  </div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-user">
+    <span class="nav-user-email" id="userEmail"></span>
+    <button class="btn-sm" id="logoutBtn">Sign out</button>
+  </div>
+</nav>
+
+<main>
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Script Sync</h1>
+      <p class="page-subtitle">Git-Repository Mappings und Drift-Status fuer Qlik App Load-Scripts</p>
+    </div>
+    <div style="display:flex;gap:0.5rem;">
+      <button class="btn-refresh" id="refreshBtn" disabled>Drift pruefen</button>
+      <button class="btn-primary" id="newMappingBtn" disabled>+ Neues Mapping</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="statsRow" style="display:none;">
+    <div class="stat-card"><div class="stat-value green" id="statSync">0</div><div class="stat-label">In Sync</div></div>
+    <div class="stat-card"><div class="stat-value yellow" id="statGitAhead">0</div><div class="stat-label">Git Ahead</div></div>
+    <div class="stat-card"><div class="stat-value orange" id="statQlikAhead">0</div><div class="stat-label">Qlik Ahead</div></div>
+    <div class="stat-card"><div class="stat-value red" id="statDiverged">0</div><div class="stat-label">Diverged / Error</div></div>
+  </div>
+
+  <!-- Overview table -->
+  <div class="section">
+    <div class="section-title">Mappings &amp; Sync-Status</div>
+    <div id="overviewWrap">
+      <div class="empty-state"><div class="empty-icon">&#x1F517;</div><div>Kein Projekt ausgewaehlt oder keine Mappings vorhanden.</div></div>
+    </div>
+  </div>
+
+  <!-- History (shown after clicking on an app) -->
+  <div class="section" id="historySection" style="display:none;">
+    <div class="section-title">Deployment-History: <span id="historyAppName" style="color:var(--accent)"></span></div>
+    <div id="historyWrap"></div>
+  </div>
+</main>
+
+<!-- Create/Edit Mapping Modal -->
+<div class="modal-backdrop" id="mappingModal">
+  <div class="modal">
+    <button class="modal-close" id="mappingModalClose">&times;</button>
+    <div class="modal-title" id="mappingModalTitle">Neues Mapping</div>
+    <div class="alert alert-error" id="mappingError"></div>
+    <form id="mappingForm">
+      <input type="hidden" id="editingAppId" value="" />
+      <div class="form-group">
+        <label for="mAppId">Qlik App ID *</label>
+        <input id="mAppId" type="text" placeholder="z.B. abc12345-def6-7890-abcd-ef1234567890" required />
+      </div>
+      <div class="form-group">
+        <label for="mRepo">Repository *</label>
+        <input id="mRepo" type="text" placeholder="z.B. owner/repo-name oder GitLab Project-ID" required />
+      </div>
+      <div class="form-group">
+        <label for="mBranch">Branch</label>
+        <input id="mBranch" type="text" placeholder="main" value="main" />
+      </div>
+      <div class="form-group">
+        <label for="mFilePath">Dateipfad im Repo *</label>
+        <input id="mFilePath" type="text" placeholder="z.B. apps/sales-dashboard/script.qvs" required />
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="mappingCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="mappingSave">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
+<div id="toast"></div>
+
+<script src="/assets/atlas-shared.js"></script>
+<script>
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
+  window.AtlasShared.bindLogout('logoutBtn');
+
+  function showToast(msg, dur) { window.AtlasShared.showToast(msg, dur, 'toast'); }
+  async function apiFetch(path, opts) { return window.AtlasShared.apiFetch(path, opts); }
+
+  var initialFocusState = window.AtlasShared.readFocusState(window.location.search);
+  var focusState = { project: initialFocusState.project, customer: initialFocusState.customer };
+  function projectCustomerId(project) { return window.AtlasShared.projectCustomerId(project); }
+  function applyFocusPersistence() { window.AtlasShared.persistFocusState(focusState); }
+
+  var projects = [];
+  var customers = [];
+  var mappings = [];
+  var overviewData = [];
+
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function fmtDate(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+  function shortSha(sha) { return sha ? sha.substring(0, 7) : ''; }
+
+  var STATUS_LABELS = {
+    in_sync:    { text: 'In Sync',    cls: 'badge-in_sync' },
+    git_ahead:  { text: 'Git Ahead',  cls: 'badge-git_ahead' },
+    qlik_ahead: { text: 'Qlik Ahead', cls: 'badge-qlik_ahead' },
+    diverged:   { text: 'Diverged',   cls: 'badge-diverged' },
+    error:      { text: 'Fehler',     cls: 'badge-error' },
+    unmapped:   { text: 'Unmapped',   cls: 'badge-unmapped' },
+  };
+
+  function statusBadge(status) {
+    var info = STATUS_LABELS[status] || STATUS_LABELS.unmapped;
+    return '<span class="badge ' + info.cls + '"><span class="dot"></span>' + escHtml(info.text) + '</span>';
+  }
+
+  // ── Focus selectors ──
+  function syncCustomerFromProject() {
+    var projectMap = {};
+    (Array.isArray(projects) ? projects : []).forEach(function(p) {
+      if (p && p.id !== undefined) projectMap[String(p.id)] = p;
+    });
+    window.AtlasShared.syncCustomerFromProject(focusState, projectMap);
+  }
+  function updateFocusNavLinks(pid, cid) {
+    window.AtlasShared.updateNavProjectContext(pid, cid, 'a.nav-link');
+  }
+  function syncFocusInUrl(pid, cid) {
+    var q = new URLSearchParams(window.location.search);
+    if (pid) q.set('project', String(pid)); else q.delete('project');
+    if (cid) q.set('customer', String(cid)); else q.delete('customer');
+    history.replaceState(null, '', '/script-sync.html' + (q.toString() ? ('?' + q.toString()) : ''));
+  }
+  function renderFocusCustomerSelect() {
+    var sel = document.getElementById('navCustomerSelect');
+    var list = Array.isArray(customers) ? customers : [];
+    if (!list.length) { sel.innerHTML = '<option value="">Keine Kunden</option>'; sel.disabled = true; return; }
+    sel.disabled = false;
+    if (!focusState.customer || !list.find(function(c) { return String(c.id) === String(focusState.customer); })) {
+      focusState.customer = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(c) {
+      return '<option value="' + escHtml(String(c.id)) + '"' + (String(c.id) === String(focusState.customer) ? ' selected' : '') + '>' + escHtml(c.name || ('Kunde ' + c.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.customer);
+  }
+  function renderFocusProjectSelect() {
+    var sel = document.getElementById('navProjectSelect');
+    var list = (Array.isArray(projects) ? projects : []).filter(function(p) {
+      return String(projectCustomerId(p)) === String(focusState.customer || '');
+    });
+    if (!list.length) {
+      focusState.project = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Projekte</option>';
+      applyFocusPersistence();
+      updateFocusNavLinks('', focusState.customer);
+      syncFocusInUrl('', focusState.customer);
+      onProjectChanged();
+      return;
+    }
+    sel.disabled = false;
+    if (!focusState.project || !list.find(function(p) { return String(p.id) === String(focusState.project); })) {
+      focusState.project = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(p) {
+      return '<option value="' + escHtml(String(p.id)) + '"' + (String(p.id) === String(focusState.project) ? ' selected' : '') + '>' + escHtml(p.name || ('Projekt ' + p.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.project);
+    applyFocusPersistence();
+    updateFocusNavLinks(focusState.project, focusState.customer);
+    syncFocusInUrl(focusState.project, focusState.customer);
+    onProjectChanged();
+  }
+
+  document.getElementById('navCustomerSelect').addEventListener('change', function() {
+    focusState.customer = this.value;
+    focusState.project = '';
+    renderFocusProjectSelect();
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function() {
+    focusState.project = this.value;
+    applyFocusPersistence();
+    updateFocusNavLinks(focusState.project, focusState.customer);
+    syncFocusInUrl(focusState.project, focusState.customer);
+    onProjectChanged();
+  });
+
+  // ── Data loading ──
+  async function loadData() {
+    var results = await Promise.all([
+      apiFetch('/api/projects'),
+      apiFetch('/api/customers/names'),
+    ]);
+    projects = await results[0].json();
+    customers = await results[1].json();
+    syncCustomerFromProject();
+    renderFocusCustomerSelect();
+    renderFocusProjectSelect();
+  }
+
+  function onProjectChanged() {
+    var pid = focusState.project;
+    var hasProject = pid && pid !== '';
+    document.getElementById('newMappingBtn').disabled = !hasProject;
+    document.getElementById('refreshBtn').disabled = !hasProject;
+    if (hasProject) {
+      loadMappings();
+    } else {
+      mappings = [];
+      overviewData = [];
+      renderOverview();
+    }
+  }
+
+  async function loadMappings() {
+    var pid = focusState.project;
+    if (!pid) return;
+    try {
+      var resp = await apiFetch('/api/script-sync/mappings?project_id=' + pid);
+      mappings = await resp.json();
+    } catch (e) {
+      mappings = [];
+    }
+    renderOverview();
+  }
+
+  async function loadDriftStatus() {
+    var pid = focusState.project;
+    if (!pid) return;
+    document.getElementById('refreshBtn').disabled = true;
+    document.getElementById('refreshBtn').textContent = 'Pruefen...';
+    try {
+      var resp = await apiFetch('/api/script-sync/overview?project_id=' + pid);
+      overviewData = await resp.json();
+      renderOverview();
+      showToast('Drift-Status aktualisiert');
+    } catch (e) {
+      showToast('Fehler: ' + (e.message || e));
+    } finally {
+      document.getElementById('refreshBtn').disabled = false;
+      document.getElementById('refreshBtn').textContent = 'Drift pruefen';
+    }
+  }
+
+  // ── Rendering ──
+  function renderOverview() {
+    var wrap = document.getElementById('overviewWrap');
+    var statsRow = document.getElementById('statsRow');
+
+    if (!mappings.length && !overviewData.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F517;</div><div>Keine Mappings vorhanden. Erstelle ein Mapping um eine Qlik App mit einem Git-Repository zu verbinden.</div></div>';
+      statsRow.style.display = 'none';
+      return;
+    }
+
+    // Build unified list: mappings + drift info
+    var items = [];
+    var statusMap = {};
+    overviewData.forEach(function(d) { statusMap[d.app_id] = d; });
+
+    mappings.forEach(function(m) {
+      var drift = statusMap[m.app_id] || null;
+      items.push({
+        app_id: m.app_id,
+        app_name: drift ? drift.app_name : null,
+        repo_identifier: m.repo_identifier,
+        branch: m.branch,
+        file_path: m.file_path,
+        status: drift ? drift.status : 'unmapped',
+        git_commit_sha: drift ? drift.git_commit_sha : m.last_git_commit_sha,
+        last_checked_at: drift ? drift.last_checked_at : (m.last_checked_at || null),
+      });
+    });
+
+    // Stats
+    var counts = { in_sync: 0, git_ahead: 0, qlik_ahead: 0, diverged: 0, error: 0 };
+    items.forEach(function(i) {
+      if (counts[i.status] !== undefined) counts[i.status]++;
+      if (i.status === 'error') counts.diverged++;
+    });
+    document.getElementById('statSync').textContent = counts.in_sync;
+    document.getElementById('statGitAhead').textContent = counts.git_ahead;
+    document.getElementById('statQlikAhead').textContent = counts.qlik_ahead;
+    document.getElementById('statDiverged').textContent = counts.diverged;
+    statsRow.style.display = items.some(function(i) { return i.status !== 'unmapped'; }) ? 'flex' : 'none';
+
+    // Table
+    var html = '<table class="sync-table"><thead><tr>'
+      + '<th>Status</th><th>App</th><th>Repository</th><th>Branch / Pfad</th><th>Commit</th><th>Geprueft</th><th>Aktionen</th>'
+      + '</tr></thead><tbody>';
+
+    items.forEach(function(item) {
+      var displayName = item.app_name ? escHtml(item.app_name) : '<span class="mono">' + escHtml(item.app_id) + '</span>';
+      html += '<tr>'
+        + '<td>' + statusBadge(item.status) + '</td>'
+        + '<td class="app-name">' + displayName + '</td>'
+        + '<td class="mono">' + escHtml(item.repo_identifier) + '</td>'
+        + '<td class="mono">' + escHtml(item.branch) + ' / ' + escHtml(item.file_path) + '</td>'
+        + '<td class="mono">' + escHtml(shortSha(item.git_commit_sha)) + '</td>'
+        + '<td>' + fmtDate(item.last_checked_at) + '</td>'
+        + '<td class="actions">'
+        + '<button class="btn-action" data-history="' + escHtml(item.app_id) + '">History</button>'
+        + '<button class="btn-action" data-edit="' + escHtml(item.app_id) + '">Edit</button>'
+        + '<button class="btn-danger" data-delete="' + escHtml(item.app_id) + '">Del</button>'
+        + '</td></tr>';
+    });
+
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+
+    // Bind action buttons
+    wrap.querySelectorAll('[data-history]').forEach(function(btn) {
+      btn.addEventListener('click', function() { loadHistory(this.dataset.history); });
+    });
+    wrap.querySelectorAll('[data-edit]').forEach(function(btn) {
+      btn.addEventListener('click', function() { openEditMapping(this.dataset.edit); });
+    });
+    wrap.querySelectorAll('[data-delete]').forEach(function(btn) {
+      btn.addEventListener('click', function() { deleteMapping(this.dataset.delete); });
+    });
+  }
+
+  // ── History ──
+  async function loadHistory(appId) {
+    var pid = focusState.project;
+    if (!pid) return;
+    var section = document.getElementById('historySection');
+    var wrap = document.getElementById('historyWrap');
+    var nameEl = document.getElementById('historyAppName');
+    nameEl.textContent = appId;
+    section.style.display = 'block';
+    wrap.innerHTML = '<div style="color:var(--text-muted);padding:1rem;">Laden...</div>';
+
+    try {
+      var resp = await apiFetch('/api/script-sync/history/' + encodeURIComponent(appId) + '?project_id=' + pid);
+      var entries = await resp.json();
+      if (!entries.length) {
+        wrap.innerHTML = '<div class="empty-state">Keine Deployments fuer diese App.</div>';
+        return;
+      }
+      var html = '<table class="history-table"><thead><tr>'
+        + '<th>Datum</th><th>Richtung</th><th>Status</th><th>Commit</th><th>Message</th><th>Fehler</th>'
+        + '</tr></thead><tbody>';
+      entries.forEach(function(d) {
+        var dir = d.direction === 'git_to_qlik' ? 'Git &rarr; Qlik' : 'Qlik &rarr; Git';
+        html += '<tr>'
+          + '<td>' + fmtDate(d.created_at) + '</td>'
+          + '<td>' + dir + '</td>'
+          + '<td>' + statusBadge(d.status === 'success' ? 'in_sync' : d.status === 'conflict' ? 'diverged' : 'error') + '</td>'
+          + '<td class="mono">' + escHtml(shortSha(d.git_commit_sha)) + '</td>'
+          + '<td>' + escHtml(d.version_message || '') + '</td>'
+          + '<td style="color:#f87171;">' + escHtml(d.error_detail || '') + '</td>'
+          + '</tr>';
+      });
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    } catch (e) {
+      wrap.innerHTML = '<div style="color:#f87171;padding:1rem;">Fehler: ' + escHtml(e.message || String(e)) + '</div>';
+    }
+  }
+
+  // ── Mapping CRUD ──
+  function openNewMapping() {
+    document.getElementById('mappingModalTitle').textContent = 'Neues Mapping';
+    document.getElementById('editingAppId').value = '';
+    document.getElementById('mAppId').value = '';
+    document.getElementById('mAppId').disabled = false;
+    document.getElementById('mRepo').value = '';
+    document.getElementById('mBranch').value = 'main';
+    document.getElementById('mFilePath').value = '';
+    document.getElementById('mappingError').style.display = 'none';
+    document.getElementById('mappingModal').classList.add('open');
+  }
+
+  function openEditMapping(appId) {
+    var m = mappings.find(function(x) { return x.app_id === appId; });
+    if (!m) return;
+    document.getElementById('mappingModalTitle').textContent = 'Mapping bearbeiten';
+    document.getElementById('editingAppId').value = m.app_id;
+    document.getElementById('mAppId').value = m.app_id;
+    document.getElementById('mAppId').disabled = true;
+    document.getElementById('mRepo').value = m.repo_identifier;
+    document.getElementById('mBranch').value = m.branch;
+    document.getElementById('mFilePath').value = m.file_path;
+    document.getElementById('mappingError').style.display = 'none';
+    document.getElementById('mappingModal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('mappingModal').classList.remove('open');
+  }
+
+  document.getElementById('mappingModalClose').addEventListener('click', closeModal);
+  document.getElementById('mappingCancel').addEventListener('click', closeModal);
+  document.getElementById('newMappingBtn').addEventListener('click', openNewMapping);
+  document.getElementById('refreshBtn').addEventListener('click', loadDriftStatus);
+
+  document.getElementById('mappingForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var editingId = document.getElementById('editingAppId').value;
+    var isEdit = editingId !== '';
+    var pid = parseInt(focusState.project, 10);
+    var body = {
+      project_id: pid,
+      app_id: document.getElementById('mAppId').value.trim(),
+      repo_identifier: document.getElementById('mRepo').value.trim(),
+      branch: document.getElementById('mBranch').value.trim() || 'main',
+      file_path: document.getElementById('mFilePath').value.trim(),
+    };
+
+    var errEl = document.getElementById('mappingError');
+    errEl.style.display = 'none';
+
+    try {
+      if (isEdit) {
+        await apiFetch('/api/script-sync/mappings/' + encodeURIComponent(editingId) + '?project_id=' + pid, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        showToast('Mapping aktualisiert');
+      } else {
+        await apiFetch('/api/script-sync/mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        showToast('Mapping erstellt');
+      }
+      closeModal();
+      await loadMappings();
+    } catch (err) {
+      errEl.textContent = err.message || String(err);
+      errEl.style.display = 'block';
+    }
+  });
+
+  async function deleteMapping(appId) {
+    if (!confirm('Mapping fuer App "' + appId + '" wirklich loeschen?')) return;
+    var pid = focusState.project;
+    try {
+      await apiFetch('/api/script-sync/mappings/' + encodeURIComponent(appId) + '?project_id=' + pid, { method: 'DELETE' });
+      showToast('Mapping geloescht');
+      await loadMappings();
+    } catch (e) {
+      showToast('Fehler: ' + (e.message || e));
+    }
+  }
+
+  // ── Init ──
+  loadData();
+</script>
+</body>
+</html>

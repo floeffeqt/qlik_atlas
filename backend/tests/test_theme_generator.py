@@ -11,13 +11,18 @@ from httpx import ASGITransport, AsyncClient
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.auth.utils import create_access_token  # type: ignore
+from app.auth.utils import get_current_user  # type: ignore
 from main import app  # type: ignore
 
 
-def _auth_headers() -> dict[str, str]:
-    token = create_access_token("7", role="admin", email="admin@example.com")
-    return {"Authorization": f"Bearer {token}"}
+@pytest.fixture(autouse=True)
+def _override_auth():
+    """Bypass DB-backed auth for theme endpoint unit tests."""
+    async def _mock():
+        return {"user_id": "7", "role": "admin"}
+    app.dependency_overrides[get_current_user] = _mock
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 def _build_payload() -> dict:
@@ -48,7 +53,7 @@ def _build_payload() -> dict:
 async def test_theme_build_returns_production_zip_with_only_theme_and_qext():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        res = await ac.post("/api/themes/build", json=_build_payload(), headers=_auth_headers())
+        res = await ac.post("/api/themes/build", json=_build_payload(), headers={})
 
     assert res.status_code == 200, res.text
     assert res.headers.get("content-type", "").startswith("application/zip")
@@ -75,7 +80,7 @@ async def test_theme_build_rejects_non_object_theme_json():
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        res = await ac.post("/api/themes/build", json=payload, headers=_auth_headers())
+        res = await ac.post("/api/themes/build", json=payload, headers={})
 
     assert res.status_code == 422
 
@@ -84,7 +89,7 @@ async def test_theme_build_rejects_non_object_theme_json():
 async def test_theme_upload_stub_returns_not_implemented():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        res = await ac.post("/api/themes/upload", json={"target": "qlik-cloud"}, headers=_auth_headers())
+        res = await ac.post("/api/themes/upload", json={"target": "qlik-cloud"}, headers={})
 
     assert res.status_code == 501
     payload = res.json()

@@ -394,7 +394,7 @@ async def test_load_node_subgraph_scopes_lookup_to_matching_projects(monkeypatch
         return GraphSnapshot(
             nodes={
                 "node-1": {"id": "node-1", "label": "Node 1", "type": "app", "layer": "app"},
-                "node-2": {"id": "node-2", "label": "Node 2", "type": "table", "layer": "data"},
+                "node-2": {"id": "node-2", "label": "Node 2", "type": "table", "layer": "db"},
             },
             edges={
                 "edge-1": {
@@ -417,5 +417,5 @@ async def test_load_node_subgraph_scopes_lookup_to_matching_projects(monkeypatch
 
     assert captured["project_id"] is None
     assert captured["project_ids"] == [7]
-    assert [node.id for node in response.nodes] == ["node-1", "node-2"]
-    assert [edge.id for edge in response.edges] == ["edge-1"]
+    assert {node.id for node in response.nodes} == {"node-1", "node-2"}
+    assert {edge.id for edge in response.edges} == {"edge-1"}

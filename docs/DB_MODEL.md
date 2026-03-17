@@ -8,7 +8,7 @@ tags:
   - schema
   - erd
   - postgres
-updated: 2026-03-03
+updated: 2026-03-16
 owners: []
 source_of_truth: no
 related_specs:
@@ -29,7 +29,7 @@ related_docs:
 ## Sources (Code-First)
 
 - Primar: `backend/app/models.py`
-- Migrationen/Policies: `backend/alembic/versions/0006_user_customer_access_and_rls.py`, `backend/alembic/versions/0007_db_runtime_source_tables.py` sowie spaetere Erweiterungs-Migrationen (`0009` bis `0012`)
+- Migrationen/Policies: `backend/alembic/versions/0006_user_customer_access_and_rls.py`, `backend/alembic/versions/0007_db_runtime_source_tables.py` sowie spaetere Erweiterungs-Migrationen (`0009` bis `0012`, `0019`, `0020`)
 
 ## Important Note
 
@@ -42,7 +42,7 @@ related_docs:
 |---|---|---|---|
 | `users` | `id` | - | Login/Authentifizierung |
 | `refresh_tokens` | `token_id` | `user_id -> users.id`, `replaced_by_token_id -> refresh_tokens.token_id` | Persistierte Refresh-Token-Rotation fuer Browser-Sessions |
-| `customers` | `id` | - | Kunden/Tenants mit verschluesselten Qlik-Credentials |
+| `customers` | `id` | - | Kunden/Tenants mit verschluesselten Qlik- und Git-Credentials |
 | `projects` | `id` | `customer_id -> customers.id` | Projekt-Scope fuer alle Qlik-/Lineage-Daten |
 | `user_customer_access` | `(user_id, customer_id)` | `user_id -> users.id`, `customer_id -> customers.id` | Kundenzugriff fuer Nicht-Admins |
 | `qlik_apps` | `(project_id, app_id)` | `project_id -> projects.id` | Qlik-App-Metadaten (JSONB + materialisierte Spalten) |
@@ -63,6 +63,8 @@ related_docs:
 | `field_frequency_distribution` | `row_id` | `project_id -> projects.id`, `snapshot_id -> app_data_metadata_snapshot.snapshot_id`, `field_profile_id -> field_profiles.field_profile_id` | Frequency-Distribution Bins pro Field-Profile |
 | `lineage_nodes` | `(project_id, node_id)` | `project_id -> projects.id` | Graph-Nodes |
 | `lineage_edges` | `(project_id, edge_id)` | `project_id -> projects.id` | Graph-Edges |
+| `script_git_mappings` | `(project_id, app_id)` | `project_id -> projects.id` | Mapping: Qlik App <-> Git-Repository/Datei fuer Script-Sync |
+| `script_deployments` | `id` | `project_id -> projects.id`, `triggered_by -> users.id` | Audit-Log fuer Script Sync/Publish Operationen |
 
 ## Key Design Pattern
 
@@ -168,6 +170,9 @@ related_docs:
 - `field_frequency_distribution.field_profile_id -> field_profiles.field_profile_id`
 - `lineage_nodes.project_id -> projects.id`
 - `lineage_edges.project_id -> projects.id`
+- `script_git_mappings.project_id -> projects.id`
+- `script_deployments.project_id -> projects.id`
+- `script_deployments.triggered_by -> users.id`
 
 ## Logical Relationships (Not DB-FK Enforced)
 
@@ -185,6 +190,14 @@ related_docs:
 - `lineage_nodes` / `lineage_edges` <-> `qlik_apps`
 - App-Bezug laeuft teils ueber `app_id`-Spalten, teils ueber Metadaten/Payload IDs (z. B. Qlik-QRI-Format vs UUID)
 - Backend-Runtime-Reads normalisieren diese IDs fuer UI-Anreicherung
+
+- `script_git_mappings` <-> `qlik_apps`
+- Join ueber `project_id` + `app_id` (fachlich eindeutig, nicht als FK modelliert)
+- Verknuepft eine Qlik App mit einer Datei in einem Git-Repository (Repo, Branch, Pfad)
+
+- `script_deployments` <-> `script_git_mappings`
+- Logischer Bezug ueber `project_id` + `app_id` (kein FK)
+- Audit-Trail fuer jede Script Sync/Publish Operation (direction, commit SHA, Hashes, Status)
 
 ## Mermaid ERD (High-Level)
 
@@ -205,16 +218,41 @@ erDiagram
     PROJECTS ||--o{ QLIK_LICENSE_STATUS : contains
     PROJECTS ||--o{ LINEAGE_NODES : contains
     PROJECTS ||--o{ LINEAGE_EDGES : contains
+    PROJECTS ||--o{ SCRIPT_GIT_MAPPINGS : contains
+    PROJECTS ||--o{ SCRIPT_DEPLOYMENTS : contains
 
     QLIK_SPACES ||--o{ QLIK_APPS : "logical via project_id + spaceId"
     QLIK_APPS ||--|| QLIK_APP_USAGE : "logical via (project_id, app_id)"
     QLIK_APPS ||--|| QLIK_APP_SCRIPTS : "logical via (project_id, app_id)"
+    QLIK_APPS ||--o| SCRIPT_GIT_MAPPINGS : "logical via (project_id, app_id)"
+    USERS ||--o{ SCRIPT_DEPLOYMENTS : triggers
 ```
+
+### `customers` (Git-Integration, ab Migration 0020)
+
+- Neue Spalten fuer Git-Anbindung pro Kunde:
+- `git_provider` (String, nullable): `'github'` oder `'gitlab'`
+- `git_token` (Text, nullable): AES-256-GCM verschluesselt (gleiche Crypto wie `api_key`)
+- `git_base_url` (String, nullable): Custom-URL fuer Self-hosted Instanzen
+
+### `script_git_mappings` (ab Migration 0020)
+
+- Mapping-Spalten: `repo_identifier`, `branch`, `file_path`
+- Caching-Spalten: `last_git_commit_sha`, `last_git_script_hash`, `last_qlik_script_hash`, `last_checked_at`
+- Timestamps: `created_at`, `updated_at`
+
+### `script_deployments` (ab Migration 0020)
+
+- Audit-Spalten: `direction` (`git_to_qlik` | `qlik_to_git`), `git_commit_sha`, `git_script_hash`, `qlik_script_hash`
+- Status: `status` (`success` | `failed` | `conflict`)
+- Tracking: `triggered_by` (FK -> users.id), `version_message`, `error_detail`
 
 ## RLS / Access Notes
 
 - RLS ist ein zentraler Bestandteil des Datenmodells fuer projekt-/kundenbezogene Sichtbarkeit.
 - Relevante Tabellen wurden ueber Migrationen mit Policies versehen (u. a. `customers`, `projects`, `qlik_apps`, `lineage_nodes`, `lineage_edges` sowie Runtime-Tabellen aus `0007`).
+- Migration `0019`: Korrektur aller 17 project-scoped `_project_inherited_select` Policies mit `app_has_customer_access()` Check.
+- Migration `0020`: RLS Policies fuer `script_git_mappings` und `script_deployments` (gleicher Pattern: admin OR customer access).
 - Fuer UI/Runtime-Reads ist deshalb nicht nur das Schema, sondern auch der gesetzte DB-Context (User/Rolle) relevant.
 
 ## Where To Inspect Live Schema (Without Data)
@@ -242,3 +280,30 @@ erDiagram
 - Snapshot-Logik:
 - Default-Sicht basiert auf latest Snapshot pro App aus `app_data_metadata_snapshot`
 - Trend-Fenster basiert auf `fetched_at` und `days`-Parameter
+
+## Script Sync API (Git-Integration, ab Migration 0020)
+
+- Admin-only REST-Endpunkte unter `/api/script-sync/`:
+- `GET /api/script-sync/mappings?project_id=` (alle Mappings eines Projekts)
+- `POST /api/script-sync/mappings` (neues App-Repo Mapping)
+- `PUT /api/script-sync/mappings/{app_id}` (Mapping bearbeiten)
+- `DELETE /api/script-sync/mappings/{app_id}` (Mapping entfernen)
+- `GET /api/script-sync/status/{app_id}?project_id=` (Drift-Status einer App)
+- `GET /api/script-sync/overview?project_id=` (Sync-Status aller gemappten Apps)
+- `GET /api/script-sync/history/{app_id}?project_id=` (Deployment-Audit-Log)
+- `GET /api/script-sync/verify-access?project_id=&repo_identifier=` (Git-Zugang testen)
+
+- Git-Provider-Abstraction:
+- `GitProvider` ABC mit Implementierungen fuer GitHub (REST API v3) und GitLab (REST API v4)
+- Factory: `build_provider()` erzeugt Provider basierend auf `customers.git_provider`
+- Script-Normalisierung: BOM-Entfernung, CRLF->LF, Trailing-Whitespace-Trim vor SHA-256 Hash
+
+- Drift Detection (Phase 1):
+- Status-Endpoint und Overview-Endpoint liefern zusaetzlich `app_name`, `repo_identifier`, `branch`, `file_path`
+- Drift-Logik: vergleicht normalisierte SHA-256 Hashes von Git-Skript vs Qlik-Skript (aus `qlik_app_scripts`)
+- Status-Werte: `in_sync`, `git_ahead`, `qlik_ahead`, `diverged`, `error`, `unmapped`
+- Cache-Spalten in `script_git_mappings` werden bei jedem Check aktualisiert
+
+- Frontend: `script-sync.html` (Admin-Seite)
+- Mapping-CRUD, Drift-Check, Stats-Karten, Deployment-History
+- Projekt/Kunden-Selektion ueber globale Focus-Selectors

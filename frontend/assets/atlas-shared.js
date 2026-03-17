@@ -308,7 +308,7 @@
         link.setAttribute('data-base-href', baseHref);
       }
       var nextHref = baseHref;
-      if (baseHref === '/' || baseHref === '/analytics.html' || baseHref === '/lineage.html') {
+      if (baseHref === '/' || baseHref === '/analytics.html' || baseHref === '/lineage.html' || baseHref === '/script-sync.html') {
         var params = new URLSearchParams();
         if (pid) params.set('project', pid);
         if (cid) params.set('customer', cid);

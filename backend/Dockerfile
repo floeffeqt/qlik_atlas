@@ -1,11 +1,13 @@
 FROM python:3.11-slim AS build
 RUN apt-get update && apt-get install -y --no-install-recommends gcc build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY requirements.txt ./
+COPY requirements.txt requirements-test.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel
 RUN pip wheel --no-cache-dir -w /wheels -r requirements.txt
+RUN pip wheel --no-cache-dir -w /wheels-test -r requirements-test.txt
 
-FROM python:3.11-slim
+# ── Production image ──
+FROM python:3.11-slim AS production
 RUN apt-get update && apt-get install -y --no-install-recommends libpq5 curl bash && rm -rf /var/lib/apt/lists/*
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 WORKDIR /app
@@ -19,3 +21,13 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 EXPOSE 8000
 ENTRYPOINT ["/app/entrypoint.sh"]
+
+# ── Test image (extends production, adds pytest) ──
+FROM production AS test
+USER root
+COPY --from=build /wheels-test /wheels-test
+COPY requirements-test.txt ./
+RUN pip install --no-cache-dir --find-links=/wheels-test -r requirements-test.txt
+USER appuser
+ENTRYPOINT ["pytest"]
+CMD ["-v", "--tb=short"]

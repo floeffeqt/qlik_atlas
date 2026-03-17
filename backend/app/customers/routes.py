@@ -35,6 +35,9 @@ class CustomerIn(BaseModel):
     tenant_url: str
     api_key: str
     notes: Optional[str] = None
+    git_provider: Optional[str] = None
+    git_token: Optional[str] = None
+    git_base_url: Optional[str] = None
 
 
 class CustomerUpdate(BaseModel):
@@ -42,6 +45,9 @@ class CustomerUpdate(BaseModel):
     tenant_url: Optional[str] = None
     api_key: Optional[str] = None  # None = keep existing
     notes: Optional[str] = None
+    git_provider: Optional[str] = None
+    git_token: Optional[str] = None  # None = keep existing
+    git_base_url: Optional[str] = None
 
 
 class CustomerOut(BaseModel):
@@ -49,6 +55,9 @@ class CustomerOut(BaseModel):
     name: str
     tenant_url: str
     api_key_preview: str
+    git_provider: Optional[str]
+    git_token_preview: Optional[str]
+    git_base_url: Optional[str]
     notes: Optional[str]
     created_at: str
     updated_at: str
@@ -63,11 +72,15 @@ def _mask_key(api_key: str) -> str:
 
 
 def _to_out(c: Customer) -> CustomerOut:
+    git_tok = c.git_token
     return CustomerOut(
         id=c.id,
         name=c.name,
         tenant_url=c.tenant_url,
         api_key_preview=_mask_key(c.api_key),
+        git_provider=c.git_provider,
+        git_token_preview=_mask_key(git_tok) if git_tok else None,
+        git_base_url=c.git_base_url,
         notes=c.notes,
         created_at=iso_or_empty(c.created_at),
         updated_at=iso_or_empty(c.updated_at),
@@ -112,7 +125,11 @@ async def create_customer(
         tenant_url=payload.tenant_url.strip().rstrip("/"),
         api_key=payload.api_key.strip(),
         notes=payload.notes,
+        git_provider=payload.git_provider.strip().lower() if payload.git_provider else None,
+        git_base_url=payload.git_base_url.strip().rstrip("/") if payload.git_base_url else None,
     )
+    if payload.git_token:
+        customer.git_token = payload.git_token.strip()
     session.add(customer)
     await session.commit()
     await session.refresh(customer)
@@ -156,6 +173,15 @@ async def update_customer(
         customer.api_key = payload.api_key.strip()
     if payload.notes is not None:
         customer.notes = payload.notes
+    if payload.git_provider is not None:
+        customer.git_provider = payload.git_provider.strip().lower() if payload.git_provider else None
+    if payload.git_token is not None:
+        if payload.git_token.strip():
+            customer.git_token = payload.git_token.strip()
+        else:
+            customer._git_token_encrypted = None
+    if payload.git_base_url is not None:
+        customer.git_base_url = payload.git_base_url.strip().rstrip("/") if payload.git_base_url else None
 
     await session.commit()
     await session.refresh(customer)

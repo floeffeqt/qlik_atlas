@@ -85,6 +85,23 @@ services:
     networks:
       - qliknet
 
+  test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: test
+    environment:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      JWT_SECRET: "test-secret-not-for-production"
+      CREDENTIALS_AES256_GCM_KEY_B64: "${CREDENTIALS_AES256_GCM_KEY_B64}"
+      CREDENTIALS_AES256_GCM_KEY_ID: "${CREDENTIALS_AES256_GCM_KEY_ID}"
+    volumes:
+      - ./backend:/app
+    networks:
+      - qliknet
+    profiles:
+      - test
+
 volumes:
   pgdata:
   pgadmin_data:

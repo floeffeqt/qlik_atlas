@@ -207,18 +207,24 @@ def test_sanitize_data_connection_payload_for_storage_keeps_original_input_uncha
 
 def test_app_data_metadata_snapshot_columns_maps_example_response_fields():
     payload = {
-        "app_id": "app-1",
-        "fetched_at": "2026-03-03T10:00:00Z",
-        "static_byte_size": 1234,
-        "has_section_access": True,
-        "is_direct_query_mode": False,
-        "reload_meta_cpu_time_spent_ms": 500,
-        "reload_meta_peak_memory_bytes": 2000,
-        "reload_meta_full_reload_peak_memory_bytes": 2100,
-        "reload_meta_partial_reload_peak_memory_bytes": 1300,
-        "reload_meta_hardware_total_memory": 64000000000,
-        "reload_meta_hardware_logical_cores": 8,
-        "schema_hash": "abc123",
+        "appId": "app-1",
+        "fetchedAt": "2026-03-03T10:00:00Z",
+        "staticByteSizeInfo": {
+            "staticByteSize": 1234,
+            "hasSectionAccess": True,
+            "isDirectQueryMode": False,
+        },
+        "reloadMeta": {
+            "cpuTimeSpentMs": 500,
+            "peakMemoryBytes": 2000,
+            "fullReloadPeakMemoryBytes": 2100,
+            "partialReloadPeakMemoryBytes": 1300,
+            "hardware": {
+                "totalMemory": 64000000000,
+                "logicalCores": 8,
+            },
+        },
+        "schemaHash": "abc123",
         "source": "/api/v1/apps/app-1/data/metadata",
         "tenant": "tenant.example.com",
     }

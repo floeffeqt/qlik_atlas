@@ -301,3 +301,91 @@ All code is ready to build and run now. No further development needed for basic 
 ### Fetch pipeline mode (new default)
 - Default: `FETCH_WRITE_LOCAL_ARTIFACTS=false` (DB-first, no local fetch JSON staging)
 - Optional debug/compat mode: set `FETCH_WRITE_LOCAL_ARTIFACTS=true`
+
+---
+
+## Update (2026-03-13): Security Hardening (K2, K3, H4-H7)
+
+### Completed
+- K2: RLS Policies auf allen 17 project-scoped Tabellen mit `app_has_customer_access()` Check korrigiert (Migration 0019)
+- K3: Explizite PostgreSQL Connection Pool Settings (pool_size, max_overflow, pool_recycle)
+- H4: CORS Wildcard durch explizites Method/Header Whitelisting ersetzt
+- H5: HSTS Header auf Backend + Nginx Frontend, CSP Haertung
+- H6: HMAC-SHA256 fuer Refresh Token Hashing (7-Tage Dual-Hash Transition)
+- H7: Structured Logging auf 13+ Exception Handler (atlas.api, atlas.runtime, atlas.graph)
+
+### Ausstehend
+- K1: .env Secrets aus Git-History entfernen
+- H8: Tests in CI/CD Pipeline
+
+---
+
+## Update (2026-03-16): Git Script Sync - Phase 0 (Grundstruktur)
+
+### Completed
+- Migration 0020: `script_git_mappings` + `script_deployments` Tabellen mit RLS Policies
+- `customers` Tabelle erweitert um `git_provider`, `git_token` (AES-256-GCM verschluesselt), `git_base_url`
+- Git Provider Abstraction: ABC `GitProvider` mit GitHub (REST API v3) und GitLab (REST API v4) Implementierung
+- `QlikClient` erweitert um `post_json()` (fuer Script-Write/Reload) und `get_text()` (fuer Script-Read)
+- 8 neue REST-Endpoints unter `/api/script-sync/` (Mapping CRUD, Status, Overview, History, Verify Access)
+- Customer API erweitert: Git-Felder bei Create/Update, Token maskiert in Response
+- Spec-Compliance: QLIK-PS-008 (Migration Name 23 chars, max 30), QLIK-PS-001 (Git Token AES-256-GCM), QLIK-PS-003 (RLS auf neuen Tabellen)
+
+### Naechste Phasen
+- P2: Publish (Git -> Qlik) mit Pre-Checks
+- P3: Reverse Sync (Qlik -> Git)
+- P4: Webhook Auto-Drift
+- P5: Erweiterungen (Auto-Publish, Batch, CLI)
+- Tracking: siehe `qlik_atlas_analytics_catalog.xlsx` Sheet "Git Integration Plan"
+
+---
+
+## Update (2026-03-17): H8 - Docker-basierte Test-Pipeline
+
+### Completed
+- Dockerfile: Multi-Stage Build mit `test` Target (production + pytest/aiosqlite)
+- `requirements-test.txt`: pytest, pytest-asyncio, aiosqlite (erweitert requirements.txt)
+- `docker-compose.yml`: Neuer `test` Service mit `profiles: [test]` – laeuft isoliert gegen SQLite in-memory
+- Kein Zugriff auf Produktiv-DB, keine Secrets-Exposure, kein Netzwerk-I/O
+
+### Usage
+```bash
+# Alle Tests ausfuehren
+docker compose --profile test run --rm test
+
+# Einzelnen Test ausfuehren
+docker compose --profile test run --rm test pytest tests/test_auth.py -v
+
+# Nur einen Test
+docker compose --profile test run --rm test pytest tests/test_auth.py::test_health -v
+```
+
+### Bestehende Test-Suite (12 Testdateien)
+- `test_auth.py`: Login, Refresh, Logout, Rate Limiting, Password Rehash
+- `test_auth_utils.py`: Token/Cookie Utilities
+- `test_credentials_crypto.py`: AES-256-GCM Encryption
+- `test_analytics_api.py`, `test_analytics_runtime_views.py`: Analytics Endpoints
+- `test_db_runtime_views.py`: DB Runtime Views
+- `test_customer_project_contracts.py`: Customer/Project Contracts
+- `test_fetch_lineage.py`, `test_fetch_app_data_metadata.py`: Fetch Pipeline
+- `test_ingestion_payload_columns.py`: Ingestion Logic
+- `test_qri_heuristics.py`: QRI Parsing
+- `test_theme_generator.py`: Theme Generator
+
+---
+
+## Update (2026-03-16): Git Script Sync - Phase 1 (Drift Detection + UI)
+
+### Completed
+- Overview- und Status-Endpoints um `app_name`, `repo_identifier`, `branch`, `file_path` angereichert
+- Batch-Load von App-Namen aus `qlik_apps` Tabelle (statt N+1 Queries)
+- Neue Admin-Seite `frontend/script-sync.html`:
+  - Mapping-Verwaltung (CRUD): Erstellen, Bearbeiten, Loeschen von App-Git-Mappings
+  - Sync-Ampel: Farbcodierte Status-Badges (in_sync, git_ahead, qlik_ahead, diverged, error)
+  - Stats-Karten: Zusammenfassung der Sync-Stati pro Projekt
+  - Drift-Check Button: Manueller Abgleich aller Mappings gegen Git
+  - Deployment-History: Audit-Log pro App anzeigbar
+  - Projekt/Kunden-Auswahl ueber globale Focus-Selectors (wie andere Seiten)
+- Navigation: "Script Sync" Link auf allen 6 Seiten hinzugefuegt
+- `atlas-shared.js`: `updateNavProjectContext()` um script-sync.html erweitert
+- Spec-Compliance: QLIK-PS-006 (Frontend-Impact geprueft), QLIK-PS-009 (n/a, keine Runtime-Aenderung)

@@ -34,6 +34,9 @@ class Customer(Base):
     name = Column(String(200), nullable=False)
     _tenant_url_encrypted = Column("tenant_url", Text, nullable=False)
     _api_key_encrypted = Column("api_key", Text, nullable=False)
+    git_provider = Column(String(20), nullable=True)
+    _git_token_encrypted = Column("git_token", Text, nullable=True)
+    git_base_url = Column(String(500), nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -61,6 +64,23 @@ class Customer(Base):
     @api_key.setter
     def api_key(self, value: str) -> None:
         self._api_key_encrypted = encrypt_credential(value, context="customers.api_key")
+
+    @property
+    def git_token(self) -> str | None:
+        if not self._git_token_encrypted:
+            return None
+        return decrypt_credential(
+            self._git_token_encrypted,
+            context="customers.git_token",
+            allow_plaintext_fallback=True,
+        )
+
+    @git_token.setter
+    def git_token(self, value: str | None) -> None:
+        if value is None:
+            self._git_token_encrypted = None
+        else:
+            self._git_token_encrypted = encrypt_credential(value, context="customers.git_token")
 
 
 class Project(Base):
@@ -516,3 +536,37 @@ class LineageEdge(Base):
     target_node_id = Column(Text, index=True)
     data = Column(JSONB, nullable=False)
     fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ScriptGitMapping(Base):
+    """Maps a Qlik app to a file in a Git repository."""
+    __tablename__ = "script_git_mappings"
+    __table_args__ = (PrimaryKeyConstraint('project_id', 'app_id'),)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    app_id = Column(String(100), nullable=False)
+    repo_identifier = Column(String(500), nullable=False)
+    branch = Column(String(200), nullable=False, server_default="main")
+    file_path = Column(String(500), nullable=False)
+    last_git_commit_sha = Column(String(64), nullable=True)
+    last_git_script_hash = Column(String(64), nullable=True)
+    last_qlik_script_hash = Column(String(64), nullable=True)
+    last_checked_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ScriptDeployment(Base):
+    """Audit log entry for every script sync / publish operation."""
+    __tablename__ = "script_deployments"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    app_id = Column(String(100), nullable=False)
+    direction = Column(String(20), nullable=False)
+    git_commit_sha = Column(String(64), nullable=True)
+    git_script_hash = Column(String(64), nullable=True)
+    qlik_script_hash = Column(String(64), nullable=True)
+    status = Column(String(20), nullable=False)
+    triggered_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    version_message = Column(Text, nullable=True)
+    error_detail = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
