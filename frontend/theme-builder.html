@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Theme Builder - Lineage Explorer</title>
+  <title>Theme - Lineage Explorer</title>
   <style>
     :root{--bg:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);--surface:rgba(255,255,255,.05);--surface-hover:rgba(255,255,255,.08);--border:rgba(255,255,255,.12);--accent:#667eea;--accent2:#14b8a6;--text:#fff;--muted:rgba(255,255,255,.64);--dim:rgba(255,255,255,.42);--r:14px;--rs:8px}
     *{box-sizing:border-box;margin:0;padding:0}
@@ -148,6 +148,50 @@
     .muted{font-size:.73rem;color:var(--dim)}.empty{border:1px dashed rgba(255,255,255,.2);border-radius:10px;padding:.8rem;text-align:center;font-size:.78rem;color:var(--dim)}
     #toast{position:fixed;right:1.2rem;bottom:1.2rem;border:1px solid var(--border);border-radius:var(--rs);background:rgba(30,40,70,.95);color:var(--text);font-size:.84rem;padding:.72rem .96rem;max-width:430px;opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;pointer-events:none;z-index:30}
     #toast.show{opacity:1;transform:translateY(0)}
+    .preset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.4rem;margin-top:.45rem}
+    .preset-card{border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:.45rem .5rem;cursor:pointer;text-align:center;transition:all .15s ease;background:rgba(255,255,255,.02)}
+    .preset-card:hover{border-color:var(--accent);background:rgba(102,126,234,.08);transform:translateY(-1px)}
+    .preset-swatches{display:flex;gap:2px;justify-content:center;margin-bottom:.28rem}
+    .preset-swatch{width:16px;height:16px;border-radius:3px;border:1px solid rgba(255,255,255,.18)}
+    .preset-name{font-size:.72rem;color:var(--muted)}
+    .harmony-row{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin-top:.35rem}
+    .harmony-swatches{display:flex;gap:3px;flex-wrap:wrap;margin-top:.25rem}
+    .harmony-swatch{width:24px;height:24px;border-radius:5px;border:1px solid rgba(255,255,255,.25);cursor:pointer;transition:transform .12s}
+    .harmony-swatch:hover{transform:scale(1.2);border-color:var(--accent)}
+    .var-palette-strip{display:flex;flex-wrap:wrap;gap:3px;padding:.25rem 0}
+    .var-swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.2);cursor:pointer;position:relative;transition:transform .12s}
+    .var-swatch:hover{border-color:var(--accent);transform:scale(1.1)}
+    .var-swatch-tip{position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:rgba(15,20,40,.95);color:#fff;font-size:.62rem;padding:.15rem .35rem;border-radius:4px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:5}
+    .var-swatch:hover .var-swatch-tip{opacity:1}
+    .submodule-tabs{display:flex;gap:.5rem;margin:.5rem 0 1rem}
+    .submodule-tab{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#94a3b8;padding:.4rem 1.2rem;border-radius:6px;cursor:pointer;font-size:.85rem;font-family:inherit;transition:all .15s}
+    .submodule-tab.active{background:rgba(102,126,234,.2);border-color:rgba(102,126,234,.6);color:#e2e8f0}
+    .submodule-tab:hover:not(.active){background:rgba(255,255,255,.1)}
+    .gen-section{margin-bottom:1rem}
+    .gen-section-title{font-size:.82rem;font-weight:600;color:var(--text);margin-bottom:.45rem}
+    .gen-size-btns{display:flex;gap:.4rem;flex-wrap:wrap}
+    .gen-size-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#94a3b8;padding:.35rem .9rem;border-radius:6px;cursor:pointer;font-size:.8rem;font-family:inherit;transition:all .15s}
+    .gen-size-btn.active{background:rgba(102,126,234,.2);border-color:rgba(102,126,234,.6);color:#e2e8f0}
+    .gen-size-btn:hover:not(.active){background:rgba(255,255,255,.1)}
+    .gen-color-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.45rem;margin-top:.4rem}
+    .gen-color-slot{display:flex;align-items:center;gap:.35rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.3rem .4rem}
+    .gen-color-slot.prio-primary{border-color:rgba(234,179,8,.6);background:rgba(234,179,8,.08)}
+    .gen-color-slot.prio-secondary{border-color:rgba(139,92,246,.5);background:rgba(139,92,246,.06)}
+    .gen-color-slot.prio-tertiary{border-color:rgba(20,184,166,.5);background:rgba(20,184,166,.06)}
+    .gen-color-slot input[type=color]{width:28px;height:28px;border:none;border-radius:5px;cursor:pointer;padding:0;background:none}
+    .gen-color-slot input[type=text]{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:4px;color:#e2e8f0;font-size:.76rem;padding:.2rem .35rem;font-family:monospace}
+    .gen-prio-btn{background:none;border:none;cursor:pointer;font-size:.9rem;padding:.1rem;line-height:1;color:rgba(255,255,255,.3);transition:color .15s}
+    .gen-prio-btn.active-primary{color:#eab308}
+    .gen-prio-btn.active-secondary{color:#8b5cf6}
+    .gen-prio-btn.active-tertiary{color:#14b8a6}
+    .gen-prio-btn:hover{color:rgba(255,255,255,.7)}
+    .gen-prio-label{font-size:.58rem;color:var(--dim);text-align:center;line-height:1;margin-top:1px}
+    .gen-preview-strip{display:flex;gap:2px;margin:.4rem 0;flex-wrap:wrap}
+    .gen-preview-swatch{width:32px;height:32px;border-radius:5px;border:1px solid rgba(255,255,255,.2)}
+    .gen-derived-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:.3rem;margin-top:.3rem}
+    .gen-derived-item{display:flex;align-items:center;gap:.3rem;font-size:.7rem;color:var(--muted)}
+    .gen-derived-swatch{width:18px;height:18px;border-radius:4px;border:1px solid rgba(255,255,255,.15);flex-shrink:0}
+    .gen-actions{display:flex;gap:.6rem;margin-top:1rem;flex-wrap:wrap}
   </style>
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
@@ -160,7 +204,7 @@
     <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/script-sync.html">Script Sync</a>
-    <a class="nav-link active" href="/theme-builder.html">Theme Builder</a>
+    <a class="nav-link active" href="/theme-builder.html">Theme</a>
   </div>
   <div class="nav-project-badge" id="navCustomerBadge">
     <span class="k">Kunde</span>
@@ -174,8 +218,13 @@
   <div class="nav-user"><span class="nav-user-email" id="userEmail">-</span><button class="btn-sm" id="logoutBtn">Sign out</button></div>
 </nav>
 <main>
-  <h1 class="title">Theme Builder (Qlik production ZIP)</h1>
-  <p class="subtitle">Alle Theme-Properties koennen im Guided Editor mit passendem Eingabetyp bearbeitet werden (inkl. Kurzbeschreibung). Der Export bleibt produktionsfaehig: nur <code>theme.json</code> + <code>&lt;name&gt;.qext</code>.</p>
+  <h1 class="title">Theme</h1>
+  <div class="submodule-tabs">
+    <button class="submodule-tab active" data-submodule="builder">Theme Builder</button>
+    <button class="submodule-tab" data-submodule="generator">Theme Generator</button>
+  </div>
+  <div id="submoduleBuilder" class="submodule-content">
+  <p class="subtitle">Guided Editor mit Farb-Labor, Harmonien, Variablen-Palette und Live-Preview. Quick-Start Presets, direkter Upload in Qlik Cloud oder ZIP-Download. Shortcuts: <code>Ctrl+S</code> Download, <code>Ctrl+Shift+F</code> Format, <code>Ctrl+Shift+U</code> Upload.</p>
   <div class="layout">
     <div class="stack">
       <section class="panel">
@@ -192,10 +241,10 @@
           <div class="field"><label for="qextPreview">QEXT Preview</label><input id="qextPreview" type="text" value="" /></div>
           <div class="field"><label for="qextKeywords">QEXT Keywords (Komma-getrennt)</label><input id="qextKeywords" type="text" value="atlas, theme" /></div>
           <div class="actions">
-            <button type="submit" class="btn primary" id="downloadBtn">ZIP bauen & downloaden</button>
-            <button type="button" class="btn" id="uploadStubBtn">Upload Stub testen</button>
-            <button type="button" class="btn" id="loadExampleBtn">Beispiel laden</button>
-            <button type="button" class="btn" id="resetThemeBtn">Theme reset</button>
+            <button type="submit" class="btn primary" id="downloadBtn" title="ZIP bauen und herunterladen (Ctrl+S)">ZIP bauen & downloaden</button>
+            <button type="button" class="btn primary" id="uploadToQlikBtn" title="Theme direkt in Qlik Cloud hochladen (Ctrl+Shift+U)">In Qlik hochladen</button>
+            <button type="button" class="btn" id="loadExampleBtn" title="Vollstaendiges Beispiel-Theme laden">Beispiel laden</button>
+            <button type="button" class="btn" id="resetThemeBtn" title="Theme auf Default-Werte zuruecksetzen">Theme reset</button>
           </div>
           <p class="hint">Export bleibt unveraendert ohne Zusatzdateien.</p>
         </form>
@@ -229,9 +278,22 @@
                 <button class="btn tiny" type="button" id="colorLabCopyRgb">RGB kopieren</button>
                 <button class="btn tiny primary" type="button" id="colorLabUseForVariable">Farbe in Variable</button>
               </div>
+              <div class="harmony-row">
+                <span class="muted">Harmonien:</span>
+                <button class="btn tiny" type="button" id="harmonyComplementary">Komplementaer</button>
+                <button class="btn tiny" type="button" id="harmonyAnalogous">Analog</button>
+                <button class="btn tiny" type="button" id="harmonyTriadic">Triadisch</button>
+                <button class="btn tiny" type="button" id="harmonySplit">Split</button>
+              </div>
+              <div class="harmony-swatches" id="harmonySwatches"></div>
             </div>
           </div>
         </div>
+      </section>
+      <section class="panel">
+        <div class="panel-title">Quick-Start Presets</div>
+        <div class="muted">Klicke ein Preset um sofort ein vorkonfiguriertes Theme zu laden.</div>
+        <div class="preset-grid" id="presetGrid"></div>
       </section>
     </div>
 
@@ -250,6 +312,7 @@
             <button class="btn tiny primary" type="button" id="addVariableBtn">Variable anlegen</button>
           </div>
           <div id="variableList" class="variables-list"></div>
+          <div id="varPaletteStrip" class="var-palette-strip"></div>
         </div>
       </div>
       <div class="property-tools">
@@ -300,7 +363,7 @@
         <button class="chip" type="button" data-snippet="object">Snippet object</button>
         <button class="chip" type="button" data-snippet="palettes">Snippet palettes</button>
         <button class="chip" type="button" data-snippet="scales">Snippet scales</button>
-        <button class="chip" type="button" id="formatJsonBtn">JSON formatieren</button>
+        <button class="chip" type="button" id="formatJsonBtn" title="JSON neu formatieren (Ctrl+Shift+F)">JSON formatieren</button>
         <button class="chip" type="button" id="clearJsonToObjectBtn">JSON leeren ({})</button>
         <button class="chip" type="button" id="clearJsonEditorBtn">Editor komplett leeren</button>
       </div>
@@ -308,6 +371,69 @@
       <div class="status-row"><span class="status-badge" id="jsonStatus">JSON: ungeprueft</span><span id="jsonMeta"></span></div>
     </section>
   </div>
+  </div><!-- /submoduleBuilder -->
+
+  <div id="submoduleGenerator" class="submodule-content" style="display:none">
+    <p class="subtitle">Gib deine CI-Farben ein, markiere Prioritaeten und generiere automatisch ein vollstaendiges Qlik-Theme fuer alle Objekt-Typen.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start">
+      <div class="stack">
+        <section class="panel">
+          <div class="panel-title">1. Palette-Groesse</div>
+          <div class="gen-size-btns" id="genSizeBtns">
+            <button class="gen-size-btn" data-size="5">5 Farben</button>
+            <button class="gen-size-btn active" data-size="10">10 Farben</button>
+            <button class="gen-size-btn" data-size="15">15 Farben</button>
+            <button class="gen-size-btn" data-size="20">20 Farben</button>
+            <button class="gen-size-btn" data-size="25">25 Farben</button>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-title">Farben aus JSON importieren</div>
+          <div class="muted" style="margin-bottom:.3rem">JSON-Datei oder Text mit Hex/RGB-Farben laden. Akzeptiert Arrays (<code>["#1d4ed8","rgb(59,130,246)"]</code>) oder Objekte (<code>{"primary":"#1d4ed8"}</code>).</div>
+          <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+            <button class="btn" type="button" id="genJsonFileBtn" style="font-size:.78rem">JSON-Datei waehlen</button>
+            <input type="file" id="genJsonFileInput" accept=".json,application/json" style="display:none" />
+            <span class="muted" id="genJsonFileInfo"></span>
+          </div>
+          <textarea id="genJsonPasteArea" rows="3" placeholder='Oder hier einfuegen: ["#1d4ed8","#3b82f6","rgb(20,184,166)"] ...' style="width:100%;margin-top:.35rem;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:#e2e8f0;font-size:.74rem;font-family:monospace;padding:.35rem .5rem;resize:vertical"></textarea>
+          <button class="btn" type="button" id="genJsonApplyBtn" style="margin-top:.35rem;font-size:.78rem">Farben uebernehmen</button>
+        </section>
+        <section class="panel">
+          <div class="panel-title">2. Farben + Prioritaeten</div>
+          <div class="muted" style="margin-bottom:.3rem">Klicke den Stern um Primary / Secondary / Tertiary zu setzen (max 3).</div>
+          <div id="genColorGrid" class="gen-color-grid"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-title">3. Optionen</div>
+          <div class="field" style="margin-bottom:.4rem">
+            <label for="genThemeName">Theme Name</label>
+            <input id="genThemeName" type="text" value="CI Theme" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:#e2e8f0;padding:.35rem .5rem;font-size:.82rem;width:100%" />
+          </div>
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--muted);cursor:pointer">
+            <input type="checkbox" id="genDarkMode" /> Dark Mode erzwingen (sonst Auto-Erkennung per Luminanz)
+          </label>
+        </section>
+      </div>
+      <div class="stack">
+        <section class="panel">
+          <div class="panel-title">4. Vorschau</div>
+          <div class="gen-section-title">Palette</div>
+          <div id="genPreviewStrip" class="gen-preview-strip"></div>
+          <div class="gen-section-title" style="margin-top:.6rem">Abgeleitete Farben</div>
+          <div id="genDerivedPreview" class="gen-derived-grid"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-title">5. Generieren</div>
+          <div class="gen-actions">
+            <button class="btn" type="button" id="genGenerateBtn">Theme generieren</button>
+            <button class="btn" type="button" id="genToBuilderBtn" disabled>In Builder uebernehmen</button>
+          </div>
+          <div id="genResultInfo" class="muted" style="margin-top:.4rem"></div>
+        </section>
+      </div>
+    </div>
+  </div><!-- /submoduleGenerator -->
+
 </main>
 <div id="toast"></div>
 <script src="/assets/atlas-shared.js"></script>
@@ -1118,47 +1244,173 @@
       list.appendChild(b);
     });
   }
+
+  function getPaletteColors(theme,primary,others){
+    var colors=[];
+    try{
+      var data=getPathValue(theme,"palettes.data");
+      if(Array.isArray(data)){
+        for(var i=0;i<data.length;i++){
+          if(Array.isArray(data[i].scale)){
+            data[i].scale.forEach(function(c){
+              var resolved=String(resolveThemeValue(theme,c)||c);
+              if(looksHexColor(resolved)) colors.push(normalizeHex(resolved));
+              else if(/^#/.test(resolved)) colors.push(resolved);
+            });
+            if(colors.length>=2) break;
+          }
+        }
+      }
+    }catch(e){}
+    if(colors.length<2) colors=[primary,others,"#f97316","#22c55e","#a855f7","#ec4899"];
+    return colors;
+  }
+
+  function hsvToHex(h,s,v){var c=hsvToRgb(h,s,v);return rgbToHex(c.r,c.g,c.b)}
+
+  function drawGridAndAxes(ctx,m,cw,ch,axisCol,gridCol){
+    ctx.strokeStyle=gridCol;ctx.lineWidth=0.5;
+    for(var i=1;i<=4;i++){var gy=m.top+ch*(i/5);ctx.beginPath();ctx.moveTo(m.left,gy);ctx.lineTo(m.left+cw,gy);ctx.stroke()}
+    ctx.strokeStyle=axisCol;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(m.left,m.top);ctx.lineTo(m.left,m.top+ch);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(m.left,m.top+ch);ctx.lineTo(m.left+cw,m.top+ch);ctx.stroke();
+    ctx.fillStyle=axisCol;ctx.font="9px sans-serif";ctx.textAlign="right";
+    for(var j=0;j<=4;j++){ctx.fillText(String(100-j*25),m.left-5,m.top+ch*(j/4)+3)}
+    ctx.textAlign="left";
+  }
+
+  function drawLegend(ctx,colors,labels,x,y){
+    ctx.font="9px sans-serif";
+    var max=Math.min(colors.length,6);
+    for(var i=0;i<max;i++){
+      ctx.fillStyle=colors[i];ctx.fillRect(x,y+i*17,11,11);
+      ctx.strokeStyle="rgba(255,255,255,.25)";ctx.lineWidth=0.5;ctx.strokeRect(x,y+i*17,11,11);
+      ctx.fillStyle="#94a3b8";ctx.fillText(labels&&labels[i]?labels[i]:"Serie "+(i+1),x+15,y+i*17+9);
+    }
+  }
+
   function renderVisualizationPreview(theme){
     var canvas=document.getElementById("previewCanvas");
     if(!canvas) return;
     var ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height;
     ctx.clearRect(0,0,w,h);
-    var root=activeObjectRoot || nearestVisualRootFromPath(activeEditedPath) || activeVisualRoots(theme)[0] || "";
-    if(!activeObjectRoot && root) activeObjectRoot=root;
+    var root=activeObjectRoot||nearestVisualRootFromPath(activeEditedPath)||activeVisualRoots(theme)[0]||"";
+    if(!activeObjectRoot&&root) activeObjectRoot=root;
     var bg=resolvedColor(theme,root?root+".backgroundColor":"backgroundColor","#f2f2f2");
-    ctx.fillStyle=bg; ctx.fillRect(0,0,w,h);
-    document.getElementById("previewObjectName").textContent="Preview: "+(root?root.split(".")[1]:"-");
-    document.getElementById("previewHint").textContent=root?"Farben aus aktuellem JSON/Variablen":"Objekt im Guided Editor waehlen";
-    if(!root){
-      ctx.fillStyle="#64748b";
-      ctx.font="16px sans-serif";
-      ctx.fillText("Keine Visualisierung aktiv.",24,46);
-      renderPreviewPropertyBoard(theme,"");
-      return;
-    }
     var primary=resolvedColor(theme,"dataColors.primaryColor","#0ea5e9");
     var others=resolvedColor(theme,"dataColors.othersColor","#94a3b8");
-    var text=resolvedColor(theme,root+".title.main.color","#334155");
-    var accent=resolvedColor(theme,root+".label.value.color",primary);
-    ctx.fillStyle=text; ctx.font="bold 18px sans-serif"; ctx.fillText(root.split(".")[1],20,28);
+    var titleColor=resolvedColor(theme,root+".title.main.color","#334155");
+    var axisColor=resolvedColor(theme,root+".axis.title.color","#64748b");
+    var gridColor="rgba(148,163,184,0.18)";
+    var palette=getPaletteColors(theme,primary,others);
+    var chartName=root?root.split(".")[1]:"-";
+    ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
+    document.getElementById("previewObjectName").textContent="Preview: "+chartName;
+    document.getElementById("previewHint").textContent=root?"Farben aus aktuellem JSON/Variablen":"Objekt im Guided Editor waehlen";
+    if(!root){
+      ctx.fillStyle="#64748b";ctx.font="14px sans-serif";
+      ctx.fillText("Keine Visualisierung aktiv \u2014 waehle ein Objekt im Guided Editor.",20,40);
+      renderPreviewPropertyBoard(theme,"");return;
+    }
+    var m={top:32,right:130,bottom:32,left:48};
+    var cw=w-m.left-m.right,ch=h-m.top-m.bottom;
+    ctx.fillStyle=titleColor;ctx.font="bold 13px sans-serif";ctx.fillText(chartName,m.left,20);
+
     if(root==="object.pieChart"){
-      var cx=210,cy=125,r=78,vals=[0.42,0.27,0.18,0.13],cols=[primary,others,resolvedColor(theme,"object.pieChart.title.footer.backgroundColor","#f97316"),resolvedColor(theme,"object.pieChart.title.main.color","#22c55e")],start=-Math.PI/2;
-      vals.forEach(function(v,i){var end=start+Math.PI*2*v;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,start,end);ctx.closePath();ctx.fillStyle=cols[i%cols.length];ctx.fill();start=end;});
+      var pcx=m.left+cw*0.38,pcy=m.top+ch/2,pr=Math.min(cw*0.32,ch/2)-4;
+      var pvals=[0.35,0.25,0.20,0.12,0.08],pstart=-Math.PI/2;
+      pvals.forEach(function(v,i){var end=pstart+Math.PI*2*v;ctx.beginPath();ctx.moveTo(pcx,pcy);ctx.arc(pcx,pcy,pr,pstart,end);ctx.closePath();ctx.fillStyle=palette[i%palette.length];ctx.fill();pstart=end});
+      drawLegend(ctx,palette,null,w-122,m.top);
     }else if(root==="object.barChart"||root==="object.histogram"){
-      var bars=[48,88,132,72,110],x=120;
-      bars.forEach(function(v,i){ctx.fillStyle=i%2?others:primary;ctx.fillRect(x,190-v,44,v);x+=58;});
+      drawGridAndAxes(ctx,m,cw,ch,axisColor,gridColor);
+      var bvals=[65,88,45,72,55,82],bcount=bvals.length;
+      var bw=Math.max(12,(cw-20)/bcount-8),bgap=(cw-bcount*bw)/(bcount+1);
+      bvals.forEach(function(v,i){var bh=(v/100)*ch;ctx.fillStyle=palette[i%palette.length];ctx.fillRect(m.left+bgap+i*(bw+bgap),m.top+ch-bh,bw,bh)});
+      drawLegend(ctx,palette,null,w-122,m.top);
     }else if(root==="object.lineChart"){
-      ctx.strokeStyle=primary;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(90,170);ctx.lineTo(180,122);ctx.lineTo(260,148);ctx.lineTo(340,94);ctx.lineTo(430,120);ctx.stroke();
-      [ [90,170],[180,122],[260,148],[340,94],[430,120] ].forEach(function(p){ctx.fillStyle=accent;ctx.beginPath();ctx.arc(p[0],p[1],5,0,Math.PI*2);ctx.fill();});
+      drawGridAndAxes(ctx,m,cw,ch,axisColor,gridColor);
+      var lv1=[42,68,55,85,72,90,78];
+      ctx.strokeStyle=palette[0];ctx.lineWidth=2.5;ctx.beginPath();
+      lv1.forEach(function(v,i){var lx=m.left+(i/(lv1.length-1))*cw,ly=m.top+ch-(v/100)*ch;if(i===0)ctx.moveTo(lx,ly);else ctx.lineTo(lx,ly)});ctx.stroke();
+      lv1.forEach(function(v,i){var lx=m.left+(i/(lv1.length-1))*cw,ly=m.top+ch-(v/100)*ch;ctx.fillStyle=palette[0];ctx.beginPath();ctx.arc(lx,ly,3.5,0,Math.PI*2);ctx.fill()});
+      if(palette.length>=2){
+        var lv2=[28,45,38,60,52,70,62];
+        ctx.strokeStyle=palette[1];ctx.lineWidth=2;ctx.beginPath();
+        lv2.forEach(function(v,i){var lx=m.left+(i/(lv2.length-1))*cw,ly=m.top+ch-(v/100)*ch;if(i===0)ctx.moveTo(lx,ly);else ctx.lineTo(lx,ly)});ctx.stroke();
+      }
+      drawLegend(ctx,palette.slice(0,2),["Serie A","Serie B"],w-122,m.top);
     }else if(root==="object.scatterPlot"){
-      var pts=[[130,150],[170,110],[210,136],[250,88],[290,132],[330,104],[370,146],[410,90]];
-      pts.forEach(function(p,i){ctx.fillStyle=i%2?primary:others;ctx.beginPath();ctx.arc(p[0],p[1],6,0,Math.PI*2);ctx.fill();});
+      drawGridAndAxes(ctx,m,cw,ch,axisColor,gridColor);
+      var spts=[[0.15,0.65],[0.25,0.45],[0.35,0.72],[0.42,0.38],[0.52,0.58],[0.60,0.82],[0.68,0.50],[0.75,0.68],[0.85,0.40],[0.92,0.75]];
+      spts.forEach(function(p,i){ctx.fillStyle=palette[i%palette.length];ctx.beginPath();ctx.arc(m.left+p[0]*cw,m.top+ch-p[1]*ch,5,0,Math.PI*2);ctx.fill()});
+      drawLegend(ctx,palette.slice(0,3),null,w-122,m.top);
     }else if(root==="object.waterfallChart"){
-      var vals=[70,-46,62,-30,78],xw=120,base=138;
-      vals.forEach(function(v,i){var y=v>=0?base-v:base,w=46,hv=Math.abs(v);ctx.fillStyle=v>=0?primary:others;ctx.fillRect(xw,y,w,hv);if(i<vals.length-1){ctx.strokeStyle=resolvedColor(theme,"object.waterfallChart.shape.bridge.stroke","#64748b");ctx.beginPath();ctx.moveTo(xw+w,y);ctx.lineTo(xw+58,y);ctx.stroke();}xw+=58;});
+      drawGridAndAxes(ctx,m,cw,ch,axisColor,gridColor);
+      var wvals=[70,-30,50,-20,40],wbw=Math.max(16,cw/(wvals.length*2)),wgap=(cw-wvals.length*wbw)/(wvals.length+1),wcum=0;
+      wvals.forEach(function(v,i){
+        var base=wcum,top2=wcum+v,dBase=Math.min(base,top2),dTop=Math.max(base,top2);
+        var py1=m.top+ch-(dTop/120)*ch,py2=m.top+ch-(dBase/120)*ch,px=m.left+wgap+i*(wbw+wgap);
+        ctx.fillStyle=v>=0?palette[0]:(palette[1]||others);ctx.fillRect(px,py1,wbw,py2-py1);
+        if(i<wvals.length-1){var by=m.top+ch-(top2/120)*ch;ctx.strokeStyle=resolvedColor(theme,"object.waterfallChart.shape.bridge.stroke","#94a3b8");ctx.lineWidth=1;ctx.setLineDash([3,2]);ctx.beginPath();ctx.moveTo(px+wbw,by);ctx.lineTo(px+wbw+wgap,by);ctx.stroke();ctx.setLineDash([])}
+        wcum=top2;
+      });
+      drawLegend(ctx,[palette[0],palette[1]||others],["Positiv","Negativ"],w-122,m.top);
+    }else if(root==="object.comboChart"){
+      drawGridAndAxes(ctx,m,cw,ch,axisColor,gridColor);
+      var cbvals=[55,72,48,80,62],cbbw=Math.max(14,cw/(cbvals.length*2.5)),cbgap=(cw-cbvals.length*cbbw)/(cbvals.length+1);
+      cbvals.forEach(function(v,i){ctx.fillStyle=palette[0];ctx.fillRect(m.left+cbgap+i*(cbbw+cbgap),m.top+ch-(v/100)*ch,cbbw,(v/100)*ch)});
+      var clv=[35,55,42,68,50];
+      ctx.strokeStyle=palette[1]||others;ctx.lineWidth=2.5;ctx.beginPath();
+      clv.forEach(function(v,i){var lx=m.left+cbgap+i*(cbbw+cbgap)+cbbw/2,ly=m.top+ch-(v/100)*ch;if(i===0)ctx.moveTo(lx,ly);else ctx.lineTo(lx,ly)});ctx.stroke();
+      clv.forEach(function(v,i){var lx=m.left+cbgap+i*(cbbw+cbgap)+cbbw/2,ly=m.top+ch-(v/100)*ch;ctx.fillStyle=palette[1]||others;ctx.beginPath();ctx.arc(lx,ly,3,0,Math.PI*2);ctx.fill()});
+      drawLegend(ctx,palette.slice(0,2),["Balken","Linie"],w-122,m.top);
+    }else if(root==="object.gauge"){
+      var gcx=m.left+cw/2,gcy=m.top+ch*0.72,gr=Math.min(cw,ch)*0.42;
+      ctx.lineWidth=16;ctx.lineCap="round";
+      ctx.strokeStyle="rgba(148,163,184,0.15)";ctx.beginPath();ctx.arc(gcx,gcy,gr,Math.PI,2*Math.PI);ctx.stroke();
+      ctx.strokeStyle=palette[0];ctx.beginPath();ctx.arc(gcx,gcy,gr,Math.PI,Math.PI+Math.PI*0.72);ctx.stroke();
+      ctx.fillStyle=titleColor;ctx.font="bold 22px sans-serif";ctx.textAlign="center";ctx.fillText("72%",gcx,gcy-6);
+      ctx.font="11px sans-serif";ctx.fillStyle=axisColor;ctx.fillText("Ergebnis",gcx,gcy+12);ctx.textAlign="left";
+    }else if(root==="object.kpi"){
+      ctx.fillStyle=palette[0];ctx.font="bold 40px sans-serif";ctx.textAlign="center";
+      ctx.fillText("1.284",m.left+cw/2,m.top+ch*0.45);
+      ctx.fillStyle=titleColor;ctx.font="13px sans-serif";ctx.fillText("Umsatz (Tsd. EUR)",m.left+cw/2,m.top+ch*0.65);
+      ctx.fillStyle="#22c55e";ctx.font="bold 13px sans-serif";ctx.fillText("+12.4%",m.left+cw/2,m.top+ch*0.82);
+      ctx.textAlign="left";
+    }else if(root==="object.table"||root==="object.pivotTable"||root==="object.straightTable"){
+      var tCols=4,tRows=5,cellW=cw/tCols,cellH=ch/(tRows+1);
+      var tData=[[142,87,231,65],[98,156,42,189],[215,73,128,54],[67,198,91,176],[183,45,167,112]];
+      ctx.fillStyle=palette[0];ctx.fillRect(m.left,m.top,cw,cellH);
+      ctx.fillStyle="#fff";ctx.font="bold 10px sans-serif";
+      ["Produkt","Menge","Umsatz","Score"].forEach(function(hd,c){ctx.fillText(hd,m.left+c*cellW+6,m.top+cellH-5)});
+      tData.forEach(function(row,ri){
+        var ry=m.top+(ri+1)*cellH;
+        ctx.fillStyle=ri%2===0?"rgba(255,255,255,0.02)":"rgba(255,255,255,0.05)";ctx.fillRect(m.left,ry,cw,cellH);
+        ctx.strokeStyle=gridColor;ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(m.left,ry+cellH);ctx.lineTo(m.left+cw,ry+cellH);ctx.stroke();
+        ctx.fillStyle=axisColor;ctx.font="10px sans-serif";
+        row.forEach(function(val,ci){ctx.fillText(String(val),m.left+ci*cellW+6,ry+cellH-5)});
+      });
+    }else if(root==="object.treemap"){
+      var tAreas=[{x:0,y:0,w:0.5,h:0.6},{x:0.5,y:0,w:0.5,h:0.35},{x:0.5,y:0.35,w:0.3,h:0.65},{x:0.8,y:0.35,w:0.2,h:0.65},{x:0,y:0.6,w:0.25,h:0.4},{x:0.25,y:0.6,w:0.25,h:0.4}];
+      tAreas.forEach(function(a,i){
+        ctx.fillStyle=palette[i%palette.length];ctx.fillRect(m.left+a.x*cw+1,m.top+a.y*ch+1,a.w*cw-2,a.h*ch-2);
+        ctx.fillStyle="#fff";ctx.font="10px sans-serif";
+        if(a.w*cw>30&&a.h*ch>14) ctx.fillText("Block "+(i+1),m.left+a.x*cw+5,m.top+a.y*ch+15);
+      });
+    }else if(root==="object.funnelChart"){
+      var fvals=[1.0,0.75,0.55,0.38,0.25],fh=ch/fvals.length,fcx=m.left+cw/2;
+      fvals.forEach(function(v,i){
+        var fw=v*cw*0.8,fy=m.top+i*fh,nw=(i<fvals.length-1)?fvals[i+1]*cw*0.8:fw*0.6;
+        ctx.fillStyle=palette[i%palette.length];ctx.beginPath();
+        ctx.moveTo(fcx-fw/2,fy);ctx.lineTo(fcx+fw/2,fy);ctx.lineTo(fcx+nw/2,fy+fh);ctx.lineTo(fcx-nw/2,fy+fh);
+        ctx.closePath();ctx.fill();
+      });
+      drawLegend(ctx,palette,["Stufe 1","Stufe 2","Stufe 3","Stufe 4","Stufe 5"],w-122,m.top);
     }else{
-      ctx.fillStyle=primary;ctx.fillRect(130,78,320,100);
-      ctx.fillStyle=others;ctx.fillRect(150,98,120,16);ctx.fillRect(150,124,220,14);ctx.fillRect(150,148,180,14);
+      drawGridAndAxes(ctx,m,cw,ch,axisColor,gridColor);
+      ctx.fillStyle=palette[0];ctx.fillRect(m.left+10,m.top+20,cw-20,ch-40);
+      ctx.fillStyle=palette[1]||others;ctx.fillRect(m.left+20,m.top+40,cw*0.4,14);ctx.fillRect(m.left+20,m.top+60,cw*0.6,12);ctx.fillRect(m.left+20,m.top+78,cw*0.5,12);
+      drawLegend(ctx,palette.slice(0,3),null,w-122,m.top);
     }
     renderPreviewPropertyBoard(theme,root);
   }
@@ -1568,9 +1820,90 @@
     setColorLabFromRgb(start);
   }
 
+  function generateHarmonyColors(hex,mode){
+    var rgb=hexToRgb(hex);if(!rgb) return [hex];
+    var hsv=rgbToHsv(rgb.r,rgb.g,rgb.b),h=hsv.h,s=hsv.s,v=hsv.v;
+    if(mode==="complementary") return [hex,hsvToHex((h+180)%360,s,v)];
+    if(mode==="analogous") return [hex,hsvToHex((h+30)%360,s,v),hsvToHex((h+330)%360,s,v)];
+    if(mode==="triadic") return [hex,hsvToHex((h+120)%360,s,v),hsvToHex((h+240)%360,s,v)];
+    if(mode==="split") return [hex,hsvToHex((h+150)%360,s,v),hsvToHex((h+210)%360,s,v)];
+    return [hex];
+  }
+
+  function renderHarmonySwatches(colors){
+    var container=document.getElementById("harmonySwatches");if(!container) return;
+    container.innerHTML="";
+    colors.forEach(function(hex){
+      var sw=document.createElement("div");sw.className="harmony-swatch";sw.style.background=hex;sw.title=hex;
+      sw.addEventListener("click",function(){
+        document.getElementById("newVariableValue").value=hex;document.getElementById("newVariableColor").value=hex;
+        setColorLabFromRgb(hexToRgb(hex));showToast("Farbe uebernommen: "+hex,1400);
+      });
+      container.appendChild(sw);
+    });
+  }
+
+  function applyHarmonyMode(mode){
+    var hex=document.getElementById("colorLabHex").value;
+    if(!looksHexColor(hex)){showToast("Zuerst eine Farbe im Color Lab waehlen.",2400);return}
+    var colors=generateHarmonyColors(hex,mode);
+    renderHarmonySwatches(colors);
+    showToast(mode.charAt(0).toUpperCase()+mode.slice(1)+": "+colors.length+" Farben generiert.",1800);
+  }
+
+  function renderVarPaletteStrip(theme){
+    var strip=document.getElementById("varPaletteStrip");if(!strip) return;
+    strip.innerHTML="";
+    if(!theme||!theme._variables||typeof theme._variables!=="object") return;
+    var keys=Object.keys(theme._variables).sort();
+    keys.forEach(function(key){
+      var val=String(theme._variables[key]||"");if(!looksHexColor(val)) return;
+      var sw=document.createElement("div");sw.className="var-swatch";sw.style.background=normalizeHex(val);
+      var tip=document.createElement("span");tip.className="var-swatch-tip";tip.textContent=key+": "+val;
+      sw.appendChild(tip);
+      sw.addEventListener("click",function(){setColorLabFromRgb(hexToRgb(val));showToast(key+" \u2192 Color Lab",1200)});
+      strip.appendChild(sw);
+    });
+  }
+
+  var PRESET_THEMES={
+    corporate:{name:"Corporate Blue",colors:["#1d4ed8","#3b82f6","#60a5fa","#93c5fd","#dbeafe"],theme:{"_variables":{"@primary":"#1d4ed8","@secondary":"#3b82f6","@text":"13px","@bg":"#ffffff"},"dataColors":{"primaryColor":"@primary","othersColor":"#94a3b8","nullColor":"#e2e8f0"},"object":{"barChart":{"title":{"main":{"color":"@primary"}},"axis":{"title":{"color":"#475569","fontSize":"11px"}}},"lineChart":{"title":{"main":{"color":"@primary"}},"axis":{"title":{"color":"#475569"}}},"pieChart":{"title":{"main":{"color":"@primary"}}}},"palettes":{"data":[{"name":"Corporate","type":"row","propertyValue":"corporate","scale":["#1d4ed8","#3b82f6","#60a5fa","#93c5fd","#bfdbfe","#dbeafe"]}]}}},
+    emerald:{name:"Emerald",colors:["#059669","#10b981","#34d399","#6ee7b7","#d1fae5"],theme:{"_variables":{"@primary":"#059669","@secondary":"#10b981","@text":"13px"},"dataColors":{"primaryColor":"@primary","othersColor":"#94a3b8","nullColor":"#e2e8f0"},"object":{"barChart":{"title":{"main":{"color":"@primary"}},"axis":{"title":{"color":"#475569"}}},"lineChart":{"title":{"main":{"color":"@primary"}}}},"palettes":{"data":[{"name":"Emerald","type":"row","propertyValue":"emerald","scale":["#059669","#10b981","#34d399","#6ee7b7","#a7f3d0","#d1fae5"]}]}}},
+    sunset:{name:"Sunset",colors:["#dc2626","#ea580c","#f59e0b","#facc15","#fef3c7"],theme:{"_variables":{"@primary":"#dc2626","@warm":"#ea580c","@text":"13px"},"dataColors":{"primaryColor":"@primary","othersColor":"#94a3b8","nullColor":"#e2e8f0"},"object":{"barChart":{"title":{"main":{"color":"#7c2d12"}},"axis":{"title":{"color":"#78716c"}}},"lineChart":{"title":{"main":{"color":"#7c2d12"}}}},"palettes":{"data":[{"name":"Sunset","type":"row","propertyValue":"sunset","scale":["#dc2626","#ea580c","#f59e0b","#facc15","#fde68a","#fef3c7"]}]}}},
+    dark:{name:"Dark Mode",colors:["#818cf8","#a78bfa","#c084fc","#e879f9","#f472b6"],theme:{"_variables":{"@primary":"#818cf8","@secondary":"#a78bfa","@bg":"#1e1b4b","@text":"13px"},"dataColors":{"primaryColor":"@primary","othersColor":"#64748b","nullColor":"#334155"},"object":{"barChart":{"backgroundColor":"#1e1b4b","title":{"main":{"color":"#e0e7ff"}},"axis":{"title":{"color":"#94a3b8"}}},"lineChart":{"backgroundColor":"#1e1b4b","title":{"main":{"color":"#e0e7ff"}}}},"palettes":{"data":[{"name":"Dark Palette","type":"row","propertyValue":"dark","scale":["#818cf8","#a78bfa","#c084fc","#e879f9","#f472b6","#fb923c"]}]}}},
+    pastel:{name:"Pastel",colors:["#93c5fd","#a5b4fc","#c4b5fd","#f9a8d4","#fda4af"],theme:{"_variables":{"@primary":"#93c5fd","@secondary":"#a5b4fc","@text":"13px"},"dataColors":{"primaryColor":"@primary","othersColor":"#cbd5e1","nullColor":"#e2e8f0"},"object":{"barChart":{"title":{"main":{"color":"#475569"}},"axis":{"title":{"color":"#64748b"}}},"lineChart":{"title":{"main":{"color":"#475569"}}}},"palettes":{"data":[{"name":"Pastel","type":"row","propertyValue":"pastel","scale":["#93c5fd","#a5b4fc","#c4b5fd","#f9a8d4","#fda4af","#fca5a5"]}]}}}
+  };
+
+  function renderPresetGrid(){
+    var grid=document.getElementById("presetGrid");if(!grid) return;
+    grid.innerHTML="";
+    Object.keys(PRESET_THEMES).forEach(function(key){
+      var preset=PRESET_THEMES[key];
+      var card=document.createElement("div");card.className="preset-card";
+      var swatches=document.createElement("div");swatches.className="preset-swatches";
+      preset.colors.forEach(function(c){var sw=document.createElement("div");sw.className="preset-swatch";sw.style.background=c;swatches.appendChild(sw)});
+      card.appendChild(swatches);
+      var name=document.createElement("div");name.className="preset-name";name.textContent=preset.name;
+      card.appendChild(name);
+      card.addEventListener("click",function(){loadPreset(key)});
+      grid.appendChild(card);
+    });
+  }
+
+  function loadPreset(key){
+    var preset=PRESET_THEMES[key];if(!preset) return;
+    insertedObjectRoots={};activeObjectRoot="";activeEditedPath="";
+    setEditorJson(deepClone(preset.theme));
+    showToast("Preset geladen: "+preset.name,2000);
+  }
+
   function parseThemeJsonFromEditor(){var obj=JSON.parse(document.getElementById("themeJsonEditor").value);if(!obj||typeof obj!=="object"||Array.isArray(obj))throw new Error("theme.json muss ein JSON-Objekt sein.");return obj}
   function setEditorJson(obj){document.getElementById("themeJsonEditor").value=JSON.stringify(obj,null,2);updateJsonStatus();lastValidTheme=obj;syncInsertedObjectRoots(obj);ensureActiveObjectRoot(obj);renderActiveObjectList(obj);renderVariableManager(obj);renderGuidedProperties(obj);renderCatalogTemplates();renderVisualizationPreview(obj)}
-  function updateJsonStatus(){var badge=document.getElementById("jsonStatus"),meta=document.getElementById("jsonMeta");try{var obj=parseThemeJsonFromEditor();badge.textContent="JSON: gueltig";badge.className="status-badge status-ok";meta.textContent=Object.keys(obj).length+" Top-Level Keys";lastValidTheme=obj;return true}catch(err){badge.textContent="JSON: Fehler";badge.className="status-badge status-error";meta.textContent=err.message;return false}}
+  function updateJsonStatus(){
+    var badge=document.getElementById("jsonStatus"),meta=document.getElementById("jsonMeta"),editor=document.getElementById("themeJsonEditor"),text=editor.value,lines=text.split("\n").length;
+    try{var obj=parseThemeJsonFromEditor();badge.textContent="JSON: gueltig";badge.className="status-badge status-ok";meta.textContent=Object.keys(obj).length+" Top-Level Keys | "+lines+" Zeilen";lastValidTheme=obj;return true}
+    catch(err){badge.textContent="JSON: Fehler";badge.className="status-badge status-error";var posMatch=err.message.match(/position\s+(\d+)/i);if(posMatch){var pos=parseInt(posMatch[1],10),before=text.slice(0,pos),errLine=before.split("\n").length;meta.textContent="Zeile "+errLine+": "+err.message}else{meta.textContent=err.message}return false}
+  }
 
   function tokenizePath(path){var out=[],re=/([^[.\]]+)|\[(\d+)\]/g,m;while((m=re.exec(path))!==null){if(m[1]!==undefined)out.push(m[1]);else out.push(parseInt(m[2],10))}return out}
   function isEmptyContainer(v){if(Array.isArray(v)) return v.length===0;return !!v && typeof v==="object" && !Array.isArray(v) && Object.keys(v).length===0}
@@ -1742,6 +2075,7 @@
       row.appendChild(actions);
       list.appendChild(row);
     });
+    renderVarPaletteStrip(theme);
   }
 
   function applyPathUpdate(path,val){try{setEditedPath(path);var obj=parseThemeJsonFromEditor();setPathValue(obj,path,val);setEditorJson(obj)}catch(err){showToast("Update fehlgeschlagen: "+err.message,4200)}}
@@ -2275,7 +2609,23 @@
   function mergeSnippet(name){var snippets={variables:{"_variables":{"@primaryColor":"#667eea","@text":"13px"}},dataColors:{"dataColors":{"primaryColor":"@primaryColor","othersColor":"#9ca3af","nullColor":"#d1d5db"}},object:{"object":{"title":{"main":{"color":"@primaryColor"}},"axis":{"title":{"fontSize":"@text"}}}},palettes:{"palettes":{"data":[{"name":"Custom","type":"row","scale":["#1d4ed8","#14b8a6","#f59e0b"]}]}},scales:{"scales":[{"name":"Custom gradient","type":"gradient","propertyValue":"sg","scale":["#1d4ed8","#dbeafe"]}]}};try{var cur=parseThemeJsonFromEditor(),sn=snippets[name];if(!sn)return;Object.keys(sn).forEach(function(k){cur[k]=sn[k]});setEditorJson(cur);showToast("Snippet eingefuegt: "+name,1800)}catch(err){showToast("Snippet konnte nicht eingefuegt werden: "+err.message,3800)}}
 
   async function downloadZip(evt){evt.preventDefault();var btn=document.getElementById("downloadBtn");if(!updateJsonStatus()){showToast("JSON vor dem Download korrigieren.",3200);return}btn.disabled=true;btn.textContent="Baue ZIP...";try{var payload=buildPayload();var res=await fetch("/api/themes/build",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify(payload)});if(res.status===401)return;if(!res.ok){var err=await res.json().catch(function(){return {}});throw new Error(err.detail||("HTTP "+res.status))}var blob=await res.blob();var cd=res.headers.get("content-disposition")||"";var m=cd.match(/filename=\"([^\"]+)\"/i);var filename=m?m[1]:"theme.zip";var href=URL.createObjectURL(blob);var a=document.createElement("a");a.href=href;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(href);showToast("Produktions-ZIP erstellt: "+filename)}catch(err){showToast("Build fehlgeschlagen: "+err.message,4200)}btn.disabled=false;btn.textContent="ZIP bauen & downloaden"}
-  async function runUploadStub(){var btn=document.getElementById("uploadStubBtn");btn.disabled=true;btn.textContent="Pruefe Stub...";try{var res=await fetch("/api/themes/upload",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({target:"qlik-cloud"})});var payload=await res.json().catch(function(){return {}});if(res.status===401)return;if(res.status===501)showToast(payload.detail||"Upload ist noch nicht implementiert.");else showToast("Unerwartete Antwort: HTTP "+res.status)}catch(err){showToast("Stub-Call fehlgeschlagen: "+err.message,4200)}btn.disabled=false;btn.textContent="Upload Stub testen"}
+  async function uploadToQlik(){
+    var btn=document.getElementById("uploadToQlikBtn");
+    var projectId=focusState.project;
+    if(!projectId){showToast("Bitte zuerst ein Projekt in der Navigation auswaehlen.",3600);return}
+    if(!updateJsonStatus()){showToast("JSON vor dem Upload korrigieren.",3200);return}
+    btn.disabled=true;btn.textContent="Lade hoch...";
+    try{
+      var payload=buildPayload();
+      payload.project_id=parseInt(projectId,10);
+      var res=await fetch("/api/themes/upload",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify(payload)});
+      if(res.status===401) return;
+      var data=await res.json().catch(function(){return {}});
+      if(!res.ok){throw new Error(data.detail||"HTTP "+res.status)}
+      showToast("Theme erfolgreich hochgeladen!"+(data.theme_id?" (ID: "+data.theme_id+")":""),4000);
+    }catch(err){showToast("Upload fehlgeschlagen: "+err.message,5000)}
+    btn.disabled=false;btn.textContent="In Qlik hochladen";
+  }
 
   function loadExampleTheme(){insertedObjectRoots={};activeObjectRoot="";activeEditedPath="";setEditorJson(JSON.parse(JSON.stringify(EXAMPLE_THEME_JSON)));showToast("Beispiel-Theme geladen.")}
   function resetTheme(){insertedObjectRoots={};activeObjectRoot="";activeEditedPath="";setEditorJson(JSON.parse(JSON.stringify(DEFAULT_THEME_JSON)));showToast("Theme auf Default zurueckgesetzt.")}
@@ -2298,7 +2648,7 @@
   }
 
   document.getElementById("themeForm").addEventListener("submit",downloadZip);
-  document.getElementById("uploadStubBtn").addEventListener("click",runUploadStub);
+  document.getElementById("uploadToQlikBtn").addEventListener("click",uploadToQlik);
   document.getElementById("loadExampleBtn").addEventListener("click",loadExampleTheme);
   document.getElementById("resetThemeBtn").addEventListener("click",resetTheme);
   document.getElementById("formatJsonBtn").addEventListener("click",function(){try{setEditorJson(parseThemeJsonFromEditor());showToast("JSON formatiert.",1500)}catch(err){showToast("JSON kann nicht formatiert werden: "+err.message,3800)}});
@@ -2333,6 +2683,10 @@
   });
   document.getElementById("catalogAddSelected").addEventListener("click",addSelectedCatalogTemplates);
   document.getElementById("catalogRemoveSelected").addEventListener("click",removeSelectedCatalogTemplates);
+  document.getElementById("harmonyComplementary").addEventListener("click",function(){applyHarmonyMode("complementary")});
+  document.getElementById("harmonyAnalogous").addEventListener("click",function(){applyHarmonyMode("analogous")});
+  document.getElementById("harmonyTriadic").addEventListener("click",function(){applyHarmonyMode("triadic")});
+  document.getElementById("harmonySplit").addEventListener("click",function(){applyHarmonyMode("split")});
   document.getElementById("previewToggleBtn").addEventListener("click",function(){applyPreviewCollapsedState(!previewCollapsed);});
   document.getElementById("variablesToggleBtn").addEventListener("click",function(){applyVariableManagerCollapsedState(!variableManagerCollapsed);});
   document.getElementById("themeJsonEditor").addEventListener("input",function(){
@@ -2363,6 +2717,11 @@
     updateFocusNavLinks(selected, focusState.customer);
     syncFocusProjectInUrl(selected, focusState.customer);
   });
+  document.addEventListener("keydown",function(ev){
+    if((ev.ctrlKey||ev.metaKey)&&ev.key==="s"){ev.preventDefault();document.getElementById("themeForm").requestSubmit()}
+    if((ev.ctrlKey||ev.metaKey)&&ev.shiftKey&&ev.key==="F"){ev.preventDefault();document.getElementById("formatJsonBtn").click()}
+    if((ev.ctrlKey||ev.metaKey)&&ev.shiftKey&&ev.key==="U"){ev.preventDefault();document.getElementById("uploadToQlikBtn").click()}
+  });
   updateFocusNavLinks(focusState.project, focusState.customer);
   loadFocusProjects();
   applyUiStyleMode(uiStyleMode);
@@ -2370,7 +2729,608 @@
   applyVariableManagerCollapsedState(variableManagerCollapsed);
   catalogTemplates=buildCatalogTemplatesFromTheme(EXAMPLE_THEME_JSON);
   initColorLab();
+  renderPresetGrid();
   setEditorJson(JSON.parse(JSON.stringify(DEFAULT_THEME_JSON)));
+
+  /* ===== Sub-Module Tab Switcher ===== */
+  document.querySelectorAll('.submodule-tab').forEach(function(tab){
+    tab.addEventListener('click', function(){
+      var target = tab.getAttribute('data-submodule');
+      document.querySelectorAll('.submodule-tab').forEach(function(t){ t.classList.remove('active'); });
+      tab.classList.add('active');
+      document.getElementById('submoduleBuilder').style.display = target === 'builder' ? '' : 'none';
+      document.getElementById('submoduleGenerator').style.display = target === 'generator' ? '' : 'none';
+    });
+  });
+
+  /* ===== Theme Generator ===== */
+  var genState = {
+    size: 10,
+    colors: [],
+    priorities: { primary: -1, secondary: -1, tertiary: -1 },
+    generatedTheme: null
+  };
+
+  function genInitColors(size){
+    var defaults = [
+      '#1d4ed8','#3b82f6','#14b8a6','#f59e0b','#ef4444',
+      '#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316',
+      '#6366f1','#10b981','#e11d48','#0891b2','#a855f7',
+      '#d946ef','#059669','#dc2626','#2563eb','#7c3aed',
+      '#0d9488','#ca8a04','#be123c','#4f46e5','#16a34a'
+    ];
+    var arr = [];
+    for(var i = 0; i < size; i++){
+      arr.push(genState.colors[i] || defaults[i] || '#888888');
+    }
+    return arr;
+  }
+
+  /* --- Color Math (ES5, no libs) --- */
+  function genHexToRgb(hex){
+    var h = String(hex||'').replace('#','');
+    if(h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    var n = parseInt(h, 16);
+    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+  }
+  function genRgbToHex(r,g,b){
+    return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+  }
+  function genHexToHsl(hex){
+    var c = genHexToRgb(hex);
+    var r=c.r/255, g=c.g/255, b=c.b/255;
+    var max=Math.max(r,g,b), min=Math.min(r,g,b);
+    var h=0, s=0, l=(max+min)/2;
+    if(max!==min){
+      var d=max-min;
+      s = l>0.5 ? d/(2-max-min) : d/(max+min);
+      if(max===r) h=((g-b)/d+(g<b?6:0))/6;
+      else if(max===g) h=((b-r)/d+2)/6;
+      else h=((r-g)/d+4)/6;
+    }
+    return {h:h*360, s:s, l:l};
+  }
+  function genHslToHex(h,s,l){
+    h = ((h%360)+360)%360;
+    var c=(1-Math.abs(2*l-1))*s;
+    var x=c*(1-Math.abs((h/60)%2-1));
+    var m=l-c/2;
+    var r1=0,g1=0,b1=0;
+    if(h<60){r1=c;g1=x}else if(h<120){r1=x;g1=c}else if(h<180){g1=c;b1=x}
+    else if(h<240){g1=x;b1=c}else if(h<300){r1=x;b1=c}else{r1=c;b1=x}
+    return genRgbToHex(Math.round((r1+m)*255),Math.round((g1+m)*255),Math.round((b1+m)*255));
+  }
+  function genLuminance(hex){
+    var c=genHexToRgb(hex);
+    function ch(v){ v=v/255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); }
+    return 0.2126*ch(c.r)+0.7152*ch(c.g)+0.0722*ch(c.b);
+  }
+  function genTint(hex, factor){
+    var c=genHexToRgb(hex);
+    return genRgbToHex(
+      Math.round(c.r+(255-c.r)*factor),
+      Math.round(c.g+(255-c.g)*factor),
+      Math.round(c.b+(255-c.b)*factor)
+    );
+  }
+  function genShade(hex, factor){
+    var c=genHexToRgb(hex);
+    return genRgbToHex(
+      Math.round(c.r*(1-factor)),
+      Math.round(c.g*(1-factor)),
+      Math.round(c.b*(1-factor))
+    );
+  }
+  function genSortByLuminance(colors){
+    return colors.slice().sort(function(a,b){ return genLuminance(a)-genLuminance(b); });
+  }
+
+  /* --- Generator UI --- */
+  function genRenderColorGrid(){
+    var host = document.getElementById('genColorGrid');
+    if(!host) return;
+    var html = '';
+    var prioLabels = ['Primary','Secondary','Tertiary'];
+    for(var i = 0; i < genState.colors.length; i++){
+      var color = genState.colors[i];
+      var prioClass = '';
+      var prioLabel = '';
+      if(genState.priorities.primary === i){ prioClass = ' prio-primary'; prioLabel = 'Primary'; }
+      else if(genState.priorities.secondary === i){ prioClass = ' prio-secondary'; prioLabel = 'Secondary'; }
+      else if(genState.priorities.tertiary === i){ prioClass = ' prio-tertiary'; prioLabel = 'Tertiary'; }
+      var btnClass = 'gen-prio-btn';
+      if(prioClass) btnClass += prioClass.replace(' prio-','  active-').replace('  ',' ');
+      html += '<div class="gen-color-slot'+prioClass+'">' +
+        '<input type="color" value="'+color+'" data-gen-idx="'+i+'" />' +
+        '<input type="text" value="'+color+'" data-gen-hex="'+i+'" maxlength="7" />' +
+        '<div style="text-align:center">' +
+          '<button type="button" class="'+btnClass+'" data-gen-prio="'+i+'" title="Prioritaet setzen">' +
+            (prioLabel ? '\u2605' : '\u2606') +
+          '</button>' +
+          (prioLabel ? '<div class="gen-prio-label">'+prioLabel+'</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+    host.innerHTML = html;
+    host.querySelectorAll('input[data-gen-idx]').forEach(function(input){
+      input.addEventListener('input', function(){
+        var idx = parseInt(input.getAttribute('data-gen-idx'));
+        genState.colors[idx] = input.value;
+        var hexInput = host.querySelector('input[data-gen-hex="'+idx+'"]');
+        if(hexInput) hexInput.value = input.value;
+        genRenderPreview();
+      });
+    });
+    host.querySelectorAll('input[data-gen-hex]').forEach(function(input){
+      input.addEventListener('change', function(){
+        var idx = parseInt(input.getAttribute('data-gen-hex'));
+        var val = String(input.value||'').trim();
+        if(/^#[0-9a-fA-F]{6}$/.test(val)){
+          genState.colors[idx] = val;
+          var colorInput = host.querySelector('input[data-gen-idx="'+idx+'"]');
+          if(colorInput) colorInput.value = val;
+          genRenderPreview();
+        }
+      });
+    });
+    host.querySelectorAll('button[data-gen-prio]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var idx = parseInt(btn.getAttribute('data-gen-prio'));
+        genCyclePriority(idx);
+        genRenderColorGrid();
+        genRenderPreview();
+      });
+    });
+  }
+
+  function genCyclePriority(idx){
+    var p = genState.priorities;
+    if(p.primary === idx){ p.primary = -1; return; }
+    if(p.secondary === idx){ p.secondary = -1; return; }
+    if(p.tertiary === idx){ p.tertiary = -1; return; }
+    if(p.primary < 0){ p.primary = idx; return; }
+    if(p.secondary < 0){ p.secondary = idx; return; }
+    if(p.tertiary < 0){ p.tertiary = idx; return; }
+    p.tertiary = idx;
+  }
+
+  function genRenderPreview(){
+    var strip = document.getElementById('genPreviewStrip');
+    var derived = document.getElementById('genDerivedPreview');
+    if(!strip || !derived) return;
+    strip.innerHTML = genState.colors.map(function(c){
+      return '<div class="gen-preview-swatch" style="background:'+c+'"></div>';
+    }).join('');
+    var d = genDerivePalette();
+    var items = [
+      {label:'Primary', color:d.primary}, {label:'Secondary', color:d.secondary},
+      {label:'Tertiary', color:d.tertiary}, {label:'Background', color:d.bg},
+      {label:'Text', color:d.text}, {label:'Muted', color:d.muted},
+      {label:'Grid', color:d.grid}, {label:'Error', color:d.error},
+      {label:'Light', color:d.light}, {label:'Dark', color:d.dark}
+    ];
+    derived.innerHTML = items.map(function(it){
+      return '<div class="gen-derived-item"><div class="gen-derived-swatch" style="background:'+it.color+'"></div>'+it.label+'<span style="font-family:monospace;font-size:.62rem">'+it.color+'</span></div>';
+    }).join('');
+  }
+
+  function genDerivePalette(){
+    var colors = genState.colors;
+    var p = genState.priorities;
+    var sorted = genSortByLuminance(colors);
+    var primary = p.primary >= 0 ? colors[p.primary] : sorted[Math.floor(sorted.length * 0.35)] || '#1d4ed8';
+    var secondary = p.secondary >= 0 ? colors[p.secondary] : sorted[Math.floor(sorted.length * 0.55)] || '#3b82f6';
+    var tertiary = p.tertiary >= 0 ? colors[p.tertiary] : sorted[Math.floor(sorted.length * 0.75)] || '#14b8a6';
+    var avgLum = 0;
+    colors.forEach(function(c){ avgLum += genLuminance(c); });
+    avgLum = avgLum / (colors.length || 1);
+    var forceDark = document.getElementById('genDarkMode') && document.getElementById('genDarkMode').checked;
+    var isDark = forceDark || avgLum <= 0.4;
+    var bg, text, muted, grid;
+    if(isDark){
+      bg = genShade(sorted[0] || '#0f172a', 0.7);
+      if(genLuminance(bg) > 0.08) bg = '#0f172a';
+      text = '#e2e8f0';
+      muted = '#94a3b8';
+      grid = 'rgba(255,255,255,0.1)';
+    } else {
+      bg = '#ffffff';
+      text = '#1e293b';
+      muted = '#64748b';
+      grid = 'rgba(0,0,0,0.08)';
+    }
+    var error = '#ef4444';
+    colors.forEach(function(c){
+      var hsl = genHexToHsl(c);
+      if(hsl.h >= 0 && hsl.h <= 30 && hsl.s > 0.5){ error = c; }
+    });
+    return {
+      primary:primary, secondary:secondary, tertiary:tertiary,
+      bg:bg, text:text, muted:muted, grid:grid, error:error,
+      light: sorted[sorted.length-1] || '#f8fafc',
+      dark: sorted[0] || '#0f172a',
+      isDark: isDark
+    };
+  }
+
+  /* --- Core: Generate Complete Theme --- */
+  function generateThemeFromPalette(){
+    var colors = genState.colors;
+    var d = genDerivePalette();
+    var themeName = (document.getElementById('genThemeName') || {}).value || 'CI Theme';
+
+    /* All derived colors become variables — theme JSON only uses @references */
+    var variables = { '@font-normal':'13px', '@font-family':'sans-serif', '@text':'13px' };
+    variables['@primary'] = d.primary;
+    variables['@secondary'] = d.secondary;
+    variables['@tertiary'] = d.tertiary;
+    variables['@default'] = d.text;
+    variables['@light'] = d.light;
+    variables['@dark'] = d.dark;
+    variables['@bg'] = d.bg;
+    variables['@muted'] = d.muted;
+    variables['@error'] = d.error;
+    variables['@grid-major'] = d.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)';
+    variables['@grid-minor'] = d.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+    variables['@grid-high'] = d.isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
+    variables['@header-bg'] = d.isDark ? genShade(d.bg, 0.1) : '#f8fafc';
+    variables['@hover-bg'] = genTint(d.primary, 0.85);
+    variables['@hover-subtle'] = d.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)';
+    variables['@waterfall-pos'] = genTint(d.primary, 0.3);
+    variables['@waterfall-neg'] = d.error;
+    variables['@listbox-alt'] = genTint(d.primary, 0.7);
+    variables['@listbox-excl'] = genShade(d.muted, 0.5);
+    variables['@listbox-selexcl'] = genShade(d.primary, 0.3);
+    variables['@treemap-branch'] = genShade(d.primary, 0.3);
+    variables['@null-color'] = genTint(d.light, 0.5);
+    variables['@sheet-private-bg'] = d.primary;
+    variables['@sheet-private-grad'] = genShade(d.primary, 0.2);
+    variables['@sheet-approved-bg'] = d.secondary;
+    variables['@sheet-approved-grad'] = genShade(d.secondary, 0.2);
+    variables['@sheet-published-bg'] = d.tertiary;
+    variables['@sheet-published-grad'] = genShade(d.tertiary, 0.2);
+    for(var i = 0; i < colors.length; i++){
+      variables['@color'+(i+1)] = colors[i];
+    }
+    /* UI palette tints as variables */
+    variables['@ui-tint-90'] = genTint(d.primary, 0.9);
+    variables['@ui-tint-70'] = genTint(d.primary, 0.7);
+    variables['@ui-tint-40'] = genTint(d.primary, 0.4);
+    variables['@ui-shade-30'] = genShade(d.primary, 0.3);
+    variables['@ui-shade-60'] = genShade(d.primary, 0.6);
+
+    function titleBlock(){
+      return {
+        main:{ color:'@primary', fontSize:'20px', fontFamily:'@font-family' },
+        subTitle:{ color:'@secondary', fontSize:'16px', fontFamily:'@font-family' },
+        footer:{ color:'@muted', fontSize:'@text', fontFamily:'@font-family', backgroundColor:'@bg' }
+      };
+    }
+    function axisBlock(){
+      return {
+        title:{ color:'@default', fontSize:'@text', fontFamily:'@font-family' },
+        label:{ color:'@muted', fontSize:'@text', fontFamily:'@font-family',
+          name:{ color:'@muted', fontSize:'@text', fontFamily:'@font-family' } },
+        line:{ major:{ color:'@grid-major' }, minor:{ color:'@grid-minor' } }
+      };
+    }
+    function legendBlock(){
+      return {
+        title:{ color:'@default', fontSize:'@text' },
+        label:{ color:'@muted', fontSize:'@text' }
+      };
+    }
+    function labelBlock(){
+      return {
+        name:{ color:'@default', fontSize:'@font-normal', fontFamily:'@font-family' },
+        value:{ color:'@default', fontSize:'@font-normal', fontFamily:'@font-family' }
+      };
+    }
+    function chartBase(extra){
+      var obj = {
+        backgroundColor:'@bg',
+        title: titleBlock(),
+        axis: axisBlock(),
+        legend: legendBlock(),
+        label: labelBlock()
+      };
+      if(extra){
+        for(var k in extra) obj[k] = extra[k];
+      }
+      return obj;
+    }
+
+    var objectBlock = {
+      title: titleBlock(),
+      axis: axisBlock(),
+      legend: legendBlock(),
+      label: labelBlock(),
+      grid:{
+        line:{
+          major:{ color:'@grid-major' },
+          minor:{ color:'@grid-minor' },
+          highContrast:{ color:'@grid-high' }
+        }
+      },
+      referenceLine:{
+        label:{ name:{ color:'@default' } },
+        outOfBounds:{ color:'@muted', backgroundColor:'@bg' }
+      }
+    };
+
+    objectBlock.barChart = chartBase({ outOfRange:{ color:'@muted' } });
+    objectBlock.lineChart = chartBase({ outOfRange:{ color:'@muted' } });
+    objectBlock.pieChart = chartBase({});
+    objectBlock.scatterPlot = chartBase({});
+    objectBlock.histogram = chartBase({ outOfRange:{ color:'@muted' } });
+    objectBlock.comboChart = chartBase({ outOfRange:{ color:'@muted' } });
+    objectBlock.distributionPlot = chartBase({});
+    objectBlock.boxPlot = chartBase({});
+
+    objectBlock.waterfallChart = chartBase({
+      shape:{
+        positiveValue:{ fill:'@waterfall-pos' },
+        negativeValue:{ fill:'@waterfall-neg' },
+        subtotal:{ fill:'@secondary' },
+        bridge:{ stroke:'@muted' }
+      },
+      value:{ color:{ 'default':'@default', dark:'@dark', light:'@light' } },
+      outOfRange:{ color:'@muted' }
+    });
+
+    objectBlock.straightTable = {
+      backgroundColor:'@bg',
+      title: titleBlock(),
+      header:{ color:'@default', fontSize:'@text', fontFamily:'@font-family', backgroundColor:'@header-bg' },
+      content:{ color:'@default', fontSize:'@font-normal', fontFamily:'@font-family', hoverColor:'@hover-subtle', hoverFontColor:'@default' }
+    };
+
+    objectBlock.straightTableV2 = {
+      dimension:{ label:{ name:{ color:'@default', fontFamily:'@font-family' }, value:{ color:'@default', fontFamily:'@font-family' } } },
+      measure:{ label:{ value:{ color:'@default', fontFamily:'@font-family' } } },
+      total:{ label:{ value:{ color:'@primary', fontWeight:'700' } } },
+      'null':{ label:{ value:{ color:'@muted' } } },
+      grid:{
+        borderColor:'@grid-major',
+        divider:{ borderColor:'@grid-minor' },
+        hover:{ color:'@default', backgroundColor:'@hover-bg' }
+      }
+    };
+
+    objectBlock.pivotTable = {
+      backgroundColor:'@bg',
+      title: titleBlock()
+    };
+
+    objectBlock.kpi = {
+      backgroundColor:'@bg',
+      title: titleBlock(),
+      label:{ name:{ color:'@primary', fontSize:'14px' }, value:{ color:'@default' } }
+    };
+
+    objectBlock.gauge = chartBase({});
+
+    objectBlock.treemap = {
+      backgroundColor:'@bg',
+      title: titleBlock(),
+      branch:{ backgroundColor:'@treemap-branch' },
+      header:{ color:'@default', fontFamily:'@font-family' },
+      label: labelBlock()
+    };
+
+    objectBlock.listBox = {
+      backgroundColor:'@bg',
+      title:{ main:{ color:'@primary', fontSize:'@font-normal', fontFamily:'@font-family' } },
+      content:{ color:'@default', fontSize:'@font-normal', fontFamily:'@font-family' },
+      dataColors:{
+        selected:'@primary',
+        alternative:'@listbox-alt',
+        excluded:'@listbox-excl',
+        selectedExcluded:'@listbox-selexcl',
+        possible:'@bg'
+      }
+    };
+
+    objectBlock.filterpane = {
+      backgroundColor:'@bg',
+      title: titleBlock()
+    };
+
+    objectBlock.mapChart = {
+      backgroundColor:'@bg',
+      title: titleBlock(),
+      legend: legendBlock(),
+      label:{ value:{ dark:{ color:'@dark' }, light:{ color:'@light' }, fontSize:'@text' } }
+    };
+
+    objectBlock.textImage = {
+      backgroundColor:'@bg',
+      title: titleBlock()
+    };
+
+    /* Build palette scale using @colorN variable references */
+    var paletteScale = [];
+    for(var pi = 0; pi < colors.length; pi++){ paletteScale.push('@color'+(pi+1)); }
+
+    var theme = {
+      _inherit: true,
+      _variables: variables,
+      color: '@default',
+      fontSize: '@text',
+      backgroundColor: '@bg',
+      fontFamily: '@font-family',
+      dataColors:{
+        primaryColor: '@primary',
+        othersColor: '@secondary',
+        errorColor: '@error',
+        nullColor: '@null-color'
+      },
+      sheet:{
+        title:{
+          'private':{ titleBackgroundColor:'@sheet-private-bg', titleBackgroundGradientColor:'@sheet-private-grad' },
+          approved:{ titleBackgroundColor:'@sheet-approved-bg', titleBackgroundGradientColor:'@sheet-approved-grad' },
+          published:{ titleBackgroundColor:'@sheet-published-bg', titleBackgroundGradientColor:'@sheet-published-grad' }
+        }
+      },
+      object: objectBlock,
+      palettes:{
+        data:[{
+          name: themeName,
+          translation: themeName,
+          propertyValue: 'ci-generated',
+          type: 'row',
+          scale: paletteScale
+        }],
+        ui:[{
+          name: themeName + ' UI',
+          colors: ['none', '@ui-tint-90', '@ui-tint-70', '@ui-tint-40', '@primary', '@ui-shade-30', '@ui-shade-60']
+        }]
+      },
+      scales:[
+        { name: themeName+' Gradient', translation: themeName+' Gradient', type:'gradient', propertyValue:'sg', scale:['@light', '@dark'] },
+        { name: themeName+' Diverging', translation: themeName+' Diverging', type:'gradient', propertyValue:'dg', scale:['@primary', '#f5f5f5', '@secondary'] }
+      ]
+    };
+
+    return theme;
+  }
+
+  /* --- Generator Init & Events --- */
+  function genInit(){
+    genState.colors = genInitColors(genState.size);
+    genRenderColorGrid();
+    genRenderPreview();
+  }
+
+  document.getElementById('genSizeBtns').addEventListener('click', function(ev){
+    var btn = ev.target.closest('.gen-size-btn');
+    if(!btn) return;
+    var size = parseInt(btn.getAttribute('data-size'));
+    if(!size) return;
+    genState.size = size;
+    genState.colors = genInitColors(size);
+    genState.priorities = { primary: genState.priorities.primary, secondary: genState.priorities.secondary, tertiary: genState.priorities.tertiary };
+    if(genState.priorities.primary >= size) genState.priorities.primary = -1;
+    if(genState.priorities.secondary >= size) genState.priorities.secondary = -1;
+    if(genState.priorities.tertiary >= size) genState.priorities.tertiary = -1;
+    document.querySelectorAll('.gen-size-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    genRenderColorGrid();
+    genRenderPreview();
+  });
+
+  document.getElementById('genGenerateBtn').addEventListener('click', function(){
+    var theme = generateThemeFromPalette();
+    genState.generatedTheme = theme;
+    document.getElementById('genToBuilderBtn').disabled = false;
+    var objCount = 0;
+    if(theme.object){
+      for(var k in theme.object){ if(theme.object.hasOwnProperty(k)) objCount++; }
+    }
+    document.getElementById('genResultInfo').textContent = 'Theme generiert: ' + Object.keys(theme._variables||{}).length + ' Variablen, ' + objCount + ' Objekt-Typen, ' + ((theme.palettes&&theme.palettes.data&&theme.palettes.data[0]&&theme.palettes.data[0].scale)||[]).length + ' Palette-Farben.';
+    showToast('Theme erfolgreich generiert!', 2500);
+  });
+
+  document.getElementById('genToBuilderBtn').addEventListener('click', function(){
+    if(!genState.generatedTheme) return;
+    insertedObjectRoots = {};
+    activeObjectRoot = '';
+    activeEditedPath = '';
+    setEditorJson(JSON.parse(JSON.stringify(genState.generatedTheme)));
+    document.querySelectorAll('.submodule-tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelector('.submodule-tab[data-submodule="builder"]').classList.add('active');
+    document.getElementById('submoduleBuilder').style.display = '';
+    document.getElementById('submoduleGenerator').style.display = 'none';
+    showToast('Theme in Builder uebernommen — bereit zum Anpassen, Download oder Upload.', 3000);
+  });
+
+  if(document.getElementById('genDarkMode')){
+    document.getElementById('genDarkMode').addEventListener('change', function(){ genRenderPreview(); });
+  }
+
+  genInit();
+
+  /* --- JSON Color Import --- */
+  function genParseColorValue(raw){
+    var s = String(raw||'').trim();
+    if(/^#[0-9a-fA-F]{3}$/.test(s)){
+      return '#'+s[1]+s[1]+s[2]+s[2]+s[3]+s[3];
+    }
+    if(/^#[0-9a-fA-F]{6}$/i.test(s)) return s.toLowerCase();
+    var rgbMatch = s.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/);
+    if(rgbMatch) return genRgbToHex(parseInt(rgbMatch[1]),parseInt(rgbMatch[2]),parseInt(rgbMatch[3]));
+    if(/^[0-9a-fA-F]{6}$/i.test(s)) return '#'+s.toLowerCase();
+    if(/^[0-9a-fA-F]{3}$/i.test(s)) return '#'+s[0]+s[0]+s[1]+s[1]+s[2]+s[2];
+    return null;
+  }
+  function genExtractColors(data){
+    var results = [];
+    if(Array.isArray(data)){
+      data.forEach(function(item){
+        if(typeof item === 'string'){
+          var c = genParseColorValue(item);
+          if(c) results.push(c);
+        } else if(item && typeof item === 'object'){
+          results = results.concat(genExtractColors(item));
+        }
+      });
+    } else if(data && typeof data === 'object'){
+      var keys = Object.keys(data);
+      keys.forEach(function(k){
+        var val = data[k];
+        if(typeof val === 'string'){
+          var c = genParseColorValue(val);
+          if(c) results.push(c);
+        } else if(val && typeof val === 'object'){
+          results = results.concat(genExtractColors(val));
+        }
+      });
+    }
+    return results;
+  }
+  function genApplyJsonColors(jsonText){
+    var parsed;
+    try { parsed = JSON.parse(jsonText); }
+    catch(e){ showToast('JSON Parse-Fehler: '+e.message, 3000); return; }
+    var colors = genExtractColors(parsed);
+    if(!colors.length){ showToast('Keine gueltigen Farben im JSON gefunden.', 2500); return; }
+    var sizes = [5,10,15,20,25];
+    var bestSize = 25;
+    for(var i = 0; i < sizes.length; i++){
+      if(colors.length <= sizes[i]){ bestSize = sizes[i]; break; }
+    }
+    genState.size = bestSize;
+    genState.colors = [];
+    for(var j = 0; j < bestSize; j++){
+      genState.colors.push(colors[j] || colors[j % colors.length]);
+    }
+    genState.priorities = { primary:-1, secondary:-1, tertiary:-1 };
+    document.querySelectorAll('.gen-size-btn').forEach(function(b){
+      b.classList.toggle('active', parseInt(b.getAttribute('data-size')) === bestSize);
+    });
+    genRenderColorGrid();
+    genRenderPreview();
+    showToast(colors.length+' Farben importiert (Palette: '+bestSize+' Slots).', 2500);
+  }
+  document.getElementById('genJsonFileBtn').addEventListener('click', function(){
+    document.getElementById('genJsonFileInput').click();
+  });
+  document.getElementById('genJsonFileInput').addEventListener('change', function(ev){
+    var file = ev.target.files && ev.target.files[0];
+    if(!file) return;
+    document.getElementById('genJsonFileInfo').textContent = file.name;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      document.getElementById('genJsonPasteArea').value = e.target.result;
+    };
+    reader.readAsText(file);
+    ev.target.value = '';
+  });
+  document.getElementById('genJsonApplyBtn').addEventListener('click', function(){
+    var text = (document.getElementById('genJsonPasteArea').value||'').trim();
+    if(!text){ showToast('Bitte JSON einfuegen oder Datei waehlen.', 2000); return; }
+    genApplyJsonColors(text);
+  });
 </script>
 </body>
 </html>

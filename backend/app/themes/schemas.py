@@ -69,17 +69,34 @@ class ThemeBuildRequest(BaseModel):
         return value
 
 
-class ThemeUploadStubRequest(BaseModel):
-    target: str | None = Field(default=None, max_length=120)
+class ThemeUploadRequest(BaseModel):
+    project_id: int = Field(gt=0)
+    theme_name: str = Field(min_length=3, max_length=64)
+    file_basename: str | None = Field(default=None, min_length=1, max_length=80)
+    qext: ThemeQextInput = Field(default_factory=ThemeQextInput)
+    theme_json: dict[str, Any] = Field(default_factory=lambda: {"_inherit": True})
 
-    @field_validator("target")
-    def normalize_target(cls, value: str | None) -> str | None:
+    @field_validator("theme_name")
+    def normalize_theme_name(cls, value: str) -> str:
+        normalized = " ".join(value.strip().split())
+        if not normalized:
+            raise ValueError("theme_name cannot be empty")
+        return normalized
+
+    @field_validator("file_basename")
+    def normalize_file_basename(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        normalized = " ".join(value.strip().split())
-        return normalized or None
+        return slugify_theme_name(value)
+
+    @field_validator("theme_json")
+    def validate_theme_json_root_object(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            raise ValueError("theme_json must be a JSON object")
+        return value
 
 
-class ThemeUploadStubResponse(BaseModel):
-    status: Literal["not_implemented"]
+class ThemeUploadResponse(BaseModel):
+    status: Literal["uploaded", "error"]
     detail: str
+    theme_id: str | None = None

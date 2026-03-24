@@ -14,7 +14,7 @@ from fetchers.fetch_lineage import fetch_app_edges_for_apps, fetch_lineage_for_a
 from fetchers.fetch_reloads import fetch_all_reloads
 from fetchers.fetch_spaces import fetch_all_spaces
 from fetchers.fetch_usage import fetch_usage_async
-from shared.qlik_client import QlikClient
+from shared.qlik_client import QlikClient, QlikCredentials
 
 
 class FetchJobRequestLike(Protocol):
@@ -26,14 +26,10 @@ class FetchJobRequestLike(Protocol):
     usageWindowDays: int | None
 
 
-def _build_qlik_client() -> QlikClient:
-    tenant_url = os.getenv("QLIK_TENANT_URL", "").strip()
-    api_key = os.getenv("QLIK_API_KEY", "").strip()
-    if not tenant_url or not api_key:
-        raise RuntimeError("Qlik credentials not loaded - ensure project has a customer with valid credentials")
+def _build_qlik_client(creds: QlikCredentials) -> QlikClient:
     return QlikClient(
-        base_url=tenant_url,
-        api_key=api_key,
+        base_url=creds.tenant_url,
+        api_key=creds.api_key,
         timeout=float(os.getenv("QLIK_TIMEOUT", "30")),
         max_retries=int(os.getenv("QLIK_MAX_RETRIES", "5")),
     )
@@ -87,8 +83,8 @@ def _select_apps_for_app_edges(
     return list(apps), "fallback_all_apps"
 
 
-async def _run_apps_step(request: FetchJobRequestLike) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    client = _build_qlik_client()
+async def _run_apps_step(request: FetchJobRequestLike, creds: QlikCredentials) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client(creds)
     try:
         apps = await fetch_all_apps(client, limit_apps=request.limitApps, only_space=request.onlySpace)
     finally:
@@ -96,8 +92,8 @@ async def _run_apps_step(request: FetchJobRequestLike) -> tuple[list[dict[str, A
     return apps, {"count": len(apps), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
-async def _run_spaces_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    client = _build_qlik_client()
+async def _run_spaces_step(creds: QlikCredentials) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client(creds)
     limit = int(os.getenv("FETCH_SPACES_LIMIT", "100"))
     try:
         spaces = await fetch_all_spaces(client, limit=limit)
@@ -106,8 +102,8 @@ async def _run_spaces_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return spaces, {"count": len(spaces), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
-async def _run_data_connections_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    client = _build_qlik_client()
+async def _run_data_connections_step(creds: QlikCredentials) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client(creds)
     limit = int(os.getenv("FETCH_DATA_CONNECTIONS_LIMIT", "100"))
     try:
         connections = await fetch_all_data_connections(client, limit=limit)
@@ -116,8 +112,8 @@ async def _run_data_connections_step() -> tuple[list[dict[str, Any]], dict[str, 
     return connections, {"count": len(connections), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
-async def _run_reloads_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    client = _build_qlik_client()
+async def _run_reloads_step(creds: QlikCredentials) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client(creds)
     limit = int(os.getenv("FETCH_RELOADS_LIMIT", "100"))
     try:
         reloads = await fetch_all_reloads(client, limit=limit)
@@ -126,8 +122,8 @@ async def _run_reloads_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return reloads, {"count": len(reloads), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
-async def _run_audits_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    client = _build_qlik_client()
+async def _run_audits_step(creds: QlikCredentials) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client(creds)
     limit = int(os.getenv("FETCH_AUDITS_LIMIT", "100"))
     window_days = int(os.getenv("FETCH_AUDITS_WINDOW_DAYS", "90"))
     try:
@@ -137,8 +133,8 @@ async def _run_audits_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return audits, {"count": len(audits), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
-async def _run_licenses_consumption_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    client = _build_qlik_client()
+async def _run_licenses_consumption_step(creds: QlikCredentials) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client(creds)
     limit = int(os.getenv("FETCH_LICENSES_CONSUMPTION_LIMIT", "100"))
     try:
         consumptions = await fetch_all_licenses_consumption(client, limit=limit)
@@ -147,8 +143,8 @@ async def _run_licenses_consumption_step() -> tuple[list[dict[str, Any]], dict[s
     return consumptions, {"count": len(consumptions), "storage": "db-first-memory", "localArtifactWritten": False}
 
 
-async def _run_licenses_status_step() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    client = _build_qlik_client()
+async def _run_licenses_status_step(creds: QlikCredentials) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    client = _build_qlik_client(creds)
     try:
         statuses = await fetch_all_licenses_status(client)
     finally:
@@ -158,6 +154,7 @@ async def _run_licenses_status_step() -> tuple[list[dict[str, Any]], dict[str, A
 
 async def _run_app_data_metadata_step(
     apps: list[dict[str, Any]],
+    creds: QlikCredentials,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     profiling_enabled_raw = os.getenv("FETCH_APP_DATA_METADATA_PROFILING_ENABLED", "true").strip().lower()
     profiling_enabled = profiling_enabled_raw in {"1", "true", "yes", "on"}
@@ -178,7 +175,7 @@ async def _run_app_data_metadata_step(
     except ValueError:
         concurrency = 5
 
-    client = _build_qlik_client()
+    client = _build_qlik_client(creds)
     try:
         semaphore = asyncio.Semaphore(concurrency)
         results: list[dict[str, Any]] = []
@@ -214,9 +211,10 @@ async def _run_app_data_metadata_step(
 async def _run_lineage_step(
     request: FetchJobRequestLike,
     apps: list[dict[str, Any]],
+    creds: QlikCredentials,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     lineage_concurrency = request.lineageConcurrency or int(os.getenv("QLIK_LINEAGE_CONCURRENCY", "5"))
-    client = _build_qlik_client()
+    client = _build_qlik_client(creds)
     lineage_payloads: list[dict[str, Any]] = []
     lineage_result = await fetch_lineage_for_apps(
         client=client,
@@ -237,6 +235,7 @@ async def _run_lineage_step(
 async def _run_app_edges_step(
     request: FetchJobRequestLike,
     apps: list[dict[str, Any]],
+    creds: QlikCredentials,
     lineage_payloads: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     eligible_apps, filter_source = _select_apps_for_app_edges(apps, lineage_payloads=lineage_payloads)
@@ -252,7 +251,7 @@ async def _run_app_edges_step(
         }
 
     lineage_concurrency = request.lineageConcurrency or int(os.getenv("QLIK_LINEAGE_CONCURRENCY", "5"))
-    client = _build_qlik_client()
+    client = _build_qlik_client(creds)
     app_edges_payloads: list[dict[str, Any]] = []
     edges_result = await fetch_app_edges_for_apps(
         client=client,
@@ -279,8 +278,9 @@ async def _run_app_edges_step(
 async def _run_usage_step(
     request: FetchJobRequestLike,
     apps: list[dict[str, Any]],
+    creds: QlikCredentials,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    client = _build_qlik_client()
+    client = _build_qlik_client(creds)
     usage_window_days = request.usageWindowDays or int(os.getenv("QLIK_USAGE_WINDOW_DAYS", "28"))
     usage_concurrency = request.usageConcurrency or int(os.getenv("QLIK_USAGE_CONCURRENCY", "5"))
     try:

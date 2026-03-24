@@ -209,8 +209,8 @@
     }
 
     .canvas-wrap { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; }
-    #costValueCanvas { display: block; width: 100%; height: 300px; background: rgba(6,10,24,0.72); }
-    #costValueModalCanvas { display: block; width: 100%; height: 100%; min-height: 420px; background: rgba(6,10,24,0.88); }
+    #costValueChart { display: block; width: 100%; height: 300px; background: rgba(6,10,24,0.72); }
+    #costValueModalChart { display: block; width: 100%; height: 100%; min-height: 420px; background: rgba(6,10,24,0.88); }
     .cv-modal-backdrop {
       position: fixed;
       inset: 0;
@@ -298,6 +298,11 @@
     .table-filter-reset { width: 100%; min-height: 30px; }
     .table-filter-reset:disabled { opacity: 0.45; cursor: default; }
     .table-filter-meta { margin: 0 0 0.35rem; font-size: 0.72rem; color: var(--dim); }
+    .table-pager { display: flex; align-items: center; justify-content: center; gap: 0.45rem; margin-top: 0.45rem; font-size: 0.72rem; color: var(--muted); }
+    .table-pager button { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #e2e8f0; border-radius: 5px; padding: 0.2rem 0.55rem; font-size: 0.72rem; cursor: pointer; transition: background 0.15s; }
+    .table-pager button:hover:not(:disabled) { background: rgba(102,126,234,0.25); border-color: rgba(102,126,234,0.5); }
+    .table-pager button:disabled { opacity: 0.35; cursor: default; }
+    .table-pager .pager-info { font-variant-numeric: tabular-nums; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; color: #c7d2fe; }
     .empty { border: 1px dashed rgba(255,255,255,0.18); border-radius: 10px; padding: 0.7rem; color: var(--dim); font-size: 0.78rem; }
 
@@ -352,7 +357,7 @@
     <a class="nav-link active" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/script-sync.html">Script Sync</a>
-    <a class="nav-link" href="/theme-builder.html">Theme Builder</a>
+    <a class="nav-link" href="/theme-builder.html">Theme</a>
   </div>
   <div class="nav-project-badge" id="navCustomerBadge">
     <span class="k">Kunde</span>
@@ -434,7 +439,7 @@
           </div>
           <div class="panel-b">
             <div class="viz-doc"><div class="viz-doc-title">Analyse + Daten</div><p><strong>Analyse:</strong> Positioniert jede App nach Kosten (Y) und Nutzen (X), um Handlungscluster zu erkennen.</p><p><strong>Daten:</strong> Je App: `cost_score`, `value_score`, `quadrant`, `value_usage_score`, `value_proxy_score`.</p><p><strong>Hinweis:</strong> Bei gleichen Koordinaten werden Punkte minimal aufgefaechert, damit Ueberlagerungen sichtbar bleiben.</p></div>
-            <div class="canvas-wrap"><canvas id="costValueCanvas" width="860" height="300"></canvas></div>
+            <div class="canvas-wrap"><div id="costValueChart" style="width:100%;height:300px;"></div></div>
             <div class="legend"><span><i class="dot d-hclv"></i>High-Cost-Low-Value</span><span><i class="dot d-hchv"></i>High-Cost-High-Value</span><span><i class="dot d-ev"></i>Efficient-Value</span><span><i class="dot d-lclv"></i>Low-Cost-Low-Value</span></div>
           </div>
         </div>
@@ -664,7 +669,7 @@
     </div>
     <div class="cv-modal-body">
       <div class="cv-modal-canvas-wrap">
-        <canvas id="costValueModalCanvas" width="1180" height="650"></canvas>
+        <div id="costValueModalChart" style="width:100%;height:100%;min-height:420px;"></div>
       </div>
       <div class="legend"><span><i class="dot d-hclv"></i>High-Cost-Low-Value</span><span><i class="dot d-hchv"></i>High-Cost-High-Value</span><span><i class="dot d-ev"></i>Efficient-Value</span><span><i class="dot d-lclv"></i>Low-Cost-Low-Value</span></div>
     </div>
@@ -672,6 +677,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script src="/assets/atlas-shared.js"></script>
 <script>
   window.AtlasShared.requireAuth({ emailElementId: 'userEmail' });
@@ -830,8 +836,9 @@
   }
 
   var payloads = { costValue: null, bloat: null, lineage: null, dataModelPack: null, governance: null };
-  var costScatterState = { pointsByCanvas: {}, selectedKey: '', modalOpen: false };
-  var costScatterBound = {};
+  var costScatterState = { selectedKey: '', modalOpen: false };
+  var costScatterChart = null;
+  var costScatterModalChart = null;
   var tableFilterState = {
     costTop: {},
     apps: {},
@@ -845,6 +852,7 @@
     govQvds: {},
     govActions: {}
   };
+  var tablePaginationState = {};
   var capacityState = { selectedKey: '', trendByKey: {}, errors: {}, loadingKey: '' };
 
   function cvKey(row){ return String(row && row.project_id || '') + '::' + String(row && row.app_id || ''); }
@@ -1316,103 +1324,197 @@
         '<button type="button" class="btn table-filter-reset" data-filter-reset="' + esc(tableKey) + '"' + (hasActiveFilters ? '' : ' disabled') + '>Filter aufheben</button>' +
       '</div>'
     ) : '') + '</div>') : '';
+    var pageSize = Number(cfg.pageSize) || 0;
+    var pageVisible = filtered;
+    var pagerHtml = '';
+    if(pageSize > 0 && filtered.length > pageSize){
+      var page = tablePaginationState[tableKey] || 0;
+      var totalPages = Math.ceil(filtered.length / pageSize);
+      if(page >= totalPages) page = totalPages - 1;
+      if(page < 0) page = 0;
+      tablePaginationState[tableKey] = page;
+      pageVisible = filtered.slice(page * pageSize, (page + 1) * pageSize);
+      pagerHtml = '<div class="table-pager">' +
+        '<button type="button" data-pager-table="' + esc(tableKey) + '" data-pager-dir="first"' + (page === 0 ? ' disabled' : '') + '>&laquo;</button>' +
+        '<button type="button" data-pager-table="' + esc(tableKey) + '" data-pager-dir="prev"' + (page === 0 ? ' disabled' : '') + '>&lsaquo;</button>' +
+        '<span class="pager-info">Seite ' + (page + 1) + ' / ' + totalPages + '</span>' +
+        '<button type="button" data-pager-table="' + esc(tableKey) + '" data-pager-dir="next"' + (page >= totalPages - 1 ? ' disabled' : '') + '>&rsaquo;</button>' +
+        '<button type="button" data-pager-table="' + esc(tableKey) + '" data-pager-dir="last"' + (page >= totalPages - 1 ? ' disabled' : '') + '>&raquo;</button>' +
+      '</div>';
+    }
     var metaHtml = '<div class="table-filter-meta">Treffer: ' + n(filtered.length) + ' / ' + n(list.length) + '</div>';
-    host.innerHTML = filterHtml + metaHtml + renderSimpleTable(columns, filtered);
+    host.innerHTML = filterHtml + metaHtml + renderSimpleTable(columns, pageVisible) + pagerHtml;
     host.querySelectorAll('select[data-filter-table]').forEach(function(select){
       select.addEventListener('change', function(){
         var colKey = String(select.getAttribute('data-filter-col') || '');
         filters[colKey] = String(select.value || '').toLowerCase();
+        tablePaginationState[tableKey] = 0;
         renderFilterableTable(containerId, tableKey, columns, list, cfg);
       });
     });
     host.querySelectorAll('button[data-filter-reset]').forEach(function(button){
       button.addEventListener('click', function(){
         tableFilterState[tableKey] = {};
+        tablePaginationState[tableKey] = 0;
+        renderFilterableTable(containerId, tableKey, columns, list, cfg);
+      });
+    });
+    host.querySelectorAll('button[data-pager-table]').forEach(function(button){
+      button.addEventListener('click', function(){
+        var dir = button.getAttribute('data-pager-dir');
+        var cur = tablePaginationState[tableKey] || 0;
+        var total = Math.ceil(filtered.length / pageSize);
+        if(dir === 'first') cur = 0;
+        else if(dir === 'prev') cur = Math.max(0, cur - 1);
+        else if(dir === 'next') cur = Math.min(total - 1, cur + 1);
+        else if(dir === 'last') cur = total - 1;
+        tablePaginationState[tableKey] = cur;
         renderFilterableTable(containerId, tableKey, columns, list, cfg);
       });
     });
   }
 
-  function resizeCostValueCanvas(canvas){
-    if(!canvas) return;
-    var rect = canvas.getBoundingClientRect();
-    var targetWidth = Math.round(rect.width || canvas.width || 860);
-    var targetHeight = Math.round(rect.height || canvas.height || 300);
-    if(targetWidth < 320) targetWidth = 320;
-    if(targetHeight < 220) targetHeight = 220;
-    if(canvas.width !== targetWidth || canvas.height !== targetHeight){
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-    }
+  function buildCostValueScatterOption(rows){
+    var quadrantColors = {
+      'high-cost-low-value': '#ef4444',
+      'high-cost-high-value': '#f59e0b',
+      'efficient-value': '#22c55e',
+      'low-cost-low-value': '#94a3b8'
+    };
+    var quadrantLabels = {
+      'high-cost-low-value': 'High-Cost-Low-Value',
+      'high-cost-high-value': 'High-Cost-High-Value',
+      'efficient-value': 'Efficient-Value',
+      'low-cost-low-value': 'Low-Cost-Low-Value'
+    };
+    var quadrants = ['high-cost-low-value','high-cost-high-value','efficient-value','low-cost-low-value'];
+    var seriesData = {};
+    quadrants.forEach(function(q){ seriesData[q] = []; });
+
+    (rows || []).forEach(function(a){
+      var pointKey = cvKey(a);
+      var q = a.quadrant || 'low-cost-low-value';
+      if(!seriesData[q]) q = 'low-cost-low-value';
+      var label = String(a.app_name || a.app_id || '-');
+      if(label.length > 22) label = label.slice(0, 21) + '\u2026';
+      var point = {
+        value: [Number(a.value_score || 0), Number(a.cost_score || 0)],
+        name: label,
+        _key: pointKey,
+        _appData: a
+      };
+      if(costScatterState.selectedKey === pointKey){
+        point.itemStyle = { borderColor: 'rgba(255,255,255,0.95)', borderWidth: 2.5 };
+        point.symbolSize = 14;
+      }
+      seriesData[q].push(point);
+    });
+
+    var seriesList = [];
+    quadrants.forEach(function(q, idx){
+      var s = {
+        name: quadrantLabels[q],
+        type: 'scatter',
+        symbolSize: 9,
+        data: seriesData[q],
+        itemStyle: { color: quadrantColors[q], borderColor: 'rgba(5,10,20,0.85)', borderWidth: 1 },
+        label: {
+          show: !!state.showCvLabels,
+          formatter: function(params){ return params.data.name; },
+          position: 'right',
+          fontSize: 10,
+          color: 'rgba(226,232,240,0.95)',
+          textBorderColor: 'rgba(3,8,20,0.92)',
+          textBorderWidth: 3,
+          fontFamily: '"Segoe UI", sans-serif'
+        },
+        emphasis: { itemStyle: { borderColor: '#fff', borderWidth: 2.2 } }
+      };
+      if(idx === 0){
+        s.markArea = {
+          silent: true,
+          data: [
+            [{xAxis:0, yAxis:50, itemStyle:{color:'rgba(239,68,68,0.06)'}}, {xAxis:50, yAxis:100}],
+            [{xAxis:50, yAxis:50, itemStyle:{color:'rgba(245,158,11,0.06)'}}, {xAxis:100, yAxis:100}],
+            [{xAxis:50, yAxis:0, itemStyle:{color:'rgba(34,197,94,0.06)'}}, {xAxis:100, yAxis:50}],
+            [{xAxis:0, yAxis:0, itemStyle:{color:'rgba(148,163,184,0.04)'}}, {xAxis:50, yAxis:50}]
+          ]
+        };
+      }
+      seriesList.push(s);
+    });
+
+    return {
+      backgroundColor: 'rgba(8,12,26,0.9)',
+      grid: { left: 50, right: 34, top: 34, bottom: 50, containLabel: false },
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: 'rgba(15,23,42,0.95)',
+        borderColor: 'rgba(148,163,184,0.38)',
+        textStyle: { color: '#e2e8f0', fontSize: 12 },
+        formatter: function(params){
+          var d = params.data._appData;
+          if(!d) return '';
+          return '<strong>' + esc(d.app_name || d.app_id) + '</strong><br/>'
+            + 'Value Score: ' + pct(d.value_score) + '<br/>'
+            + 'Cost Score: ' + pct(d.cost_score) + '<br/>'
+            + 'Quadrant: ' + esc(d.quadrant || '-');
+        }
+      },
+      legend: {
+        show: true, bottom: 2, left: 'center',
+        textStyle: { color: 'rgba(255,255,255,0.58)', fontSize: 10 },
+        itemWidth: 10, itemHeight: 10
+      },
+      xAxis: {
+        name: 'Value Score', nameLocation: 'end',
+        nameTextStyle: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontFamily: 'Segoe UI' },
+        min: 0, max: 100, splitNumber: 2,
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+        axisLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10 }
+      },
+      yAxis: {
+        name: 'Cost Score', nameLocation: 'end',
+        nameTextStyle: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontFamily: 'Segoe UI' },
+        min: 0, max: 100, splitNumber: 2,
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+        axisLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10 }
+      },
+      series: seriesList
+    };
   }
 
-  function drawCostValueScatterOnCanvas(rows, canvasId){
-    var c = document.getElementById(canvasId);
-    if(!c) return;
-    resizeCostValueCanvas(c);
-    var ctx=c.getContext('2d'); var w=c.width,h=c.height,p=34;
-    var points = [];
-    var labels = [];
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle='rgba(8,12,26,0.9)'; ctx.fillRect(0,0,w,h);
-    ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(p,h-p); ctx.lineTo(w-p,h-p); ctx.moveTo(p,h-p); ctx.lineTo(p,p); ctx.stroke();
-    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.moveTo((w/2),h-p); ctx.lineTo((w/2),p); ctx.moveTo(p,h/2); ctx.lineTo(w-p,h/2); ctx.stroke();
-    ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.font='11px Segoe UI'; ctx.fillText('Value Score', w-95, h-p-8); ctx.save(); ctx.translate(10,80); ctx.rotate(-Math.PI/2); ctx.fillText('Cost Score',0,0); ctx.restore();
-    var seen = {};
-    (rows||[]).forEach(function(a){
-      var pointKey = cvKey(a);
-      var baseX = p + ((Number(a.value_score||0)/100)*(w-(p*2)));
-      var baseY = h-p - ((Number(a.cost_score||0)/100)*(h-(p*2)));
-      var key = Math.round(baseX) + '|' + Math.round(baseY);
-      var overlap = seen[key] || 0;
-      seen[key] = overlap + 1;
-      var x = baseX;
-      var y = baseY;
-      if(overlap > 0){
-        var angle = overlap * 0.95;
-        var radius = Math.min(12, 2 + Math.floor(overlap / 2) * 2);
-        x += Math.cos(angle) * radius;
-        y += Math.sin(angle) * radius;
+  function _initScatterChart(elId){
+    var el = document.getElementById(elId);
+    if(!el) return null;
+    var chart = echarts.init(el);
+    chart.on('click', function(params){
+      if(params.data && params.data._key){
+        costScatterState.selectedKey = params.data._key;
+        renderCostValue();
       }
-      var color = '#94a3b8';
-      if(a.quadrant==='high-cost-low-value') color='#ef4444';
-      else if(a.quadrant==='high-cost-high-value') color='#f59e0b';
-      else if(a.quadrant==='efficient-value') color='#22c55e';
-      ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x,y,4.5,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle='rgba(5,10,20,0.85)'; ctx.lineWidth=1; ctx.stroke();
-      var label = String(a.app_name || a.app_id || '-');
-      if(label.length > 22) label = label.slice(0, 21) + '…';
-      labels.push({ text: label, x: x + 7, y: y - 7 });
-      if(costScatterState.selectedKey && costScatterState.selectedKey===pointKey){
-        ctx.strokeStyle='rgba(255,255,255,0.95)';
-        ctx.lineWidth=2.2;
-        ctx.beginPath();
-        ctx.arc(x,y,7.2,0,Math.PI*2);
-        ctx.stroke();
-      }
-      points.push({ x:x, y:y, key:pointKey, radius:7.5 });
     });
-    if(state.showCvLabels){
-      ctx.font = '10px "Segoe UI", sans-serif';
-      ctx.textBaseline = 'middle';
-      labels.forEach(function(item){
-        var lx = Math.max(p + 2, Math.min(w - p - 2, item.x));
-        var ly = Math.max(p + 2, Math.min(h - p - 2, item.y));
-        ctx.strokeStyle = 'rgba(3,8,20,0.92)';
-        ctx.lineWidth = 3;
-        ctx.strokeText(item.text, lx, ly);
-        ctx.fillStyle = 'rgba(226,232,240,0.95)';
-        ctx.fillText(item.text, lx, ly);
-      });
-    }
-    costScatterState.pointsByCanvas[canvasId] = points;
+    return chart;
   }
 
   function drawCostValueScatter(rows){
-    drawCostValueScatterOnCanvas(rows, 'costValueCanvas');
+    var option = buildCostValueScatterOption(rows);
+    var inlineEl = document.getElementById('costValueChart');
+    if(inlineEl){
+      if(!costScatterChart) costScatterChart = _initScatterChart('costValueChart');
+      if(costScatterChart) costScatterChart.setOption(option, true);
+    }
     if(costScatterState.modalOpen){
-      drawCostValueScatterOnCanvas(rows, 'costValueModalCanvas');
+      var modalEl = document.getElementById('costValueModalChart');
+      if(modalEl){
+        if(!costScatterModalChart) costScatterModalChart = _initScatterChart('costValueModalChart');
+        if(costScatterModalChart){
+          costScatterModalChart.setOption(option, true);
+          costScatterModalChart.resize();
+        }
+      }
     }
   }
 
@@ -1480,46 +1582,6 @@
     }
   }
 
-  function bindCostValueScatterCanvasInteractions(canvasId){
-    if(costScatterBound[canvasId]) return;
-    var c=document.getElementById(canvasId);
-    if(!c) return;
-    costScatterBound[canvasId] = true;
-
-    function _hitTest(ev){
-      var rect = c.getBoundingClientRect();
-      var x = (ev.clientX - rect.left) * (c.width / rect.width);
-      var y = (ev.clientY - rect.top) * (c.height / rect.height);
-      var best = null;
-      var bestDist = Infinity;
-      (costScatterState.pointsByCanvas[canvasId]||[]).forEach(function(pt){
-        var dx = x - pt.x;
-        var dy = y - pt.y;
-        var d = Math.sqrt((dx*dx) + (dy*dy));
-        if(d <= pt.radius && d < bestDist){
-          best = pt;
-          bestDist = d;
-        }
-      });
-      return best;
-    }
-
-    c.addEventListener('mousemove', function(ev){
-      c.style.cursor = _hitTest(ev) ? 'pointer' : 'default';
-    });
-    c.addEventListener('click', function(ev){
-      var hit = _hitTest(ev);
-      if(!hit) return;
-      costScatterState.selectedKey = hit.key;
-      renderCostValue();
-    });
-  }
-
-  function bindCostValueScatterInteractions(){
-    bindCostValueScatterCanvasInteractions('costValueCanvas');
-    bindCostValueScatterCanvasInteractions('costValueModalCanvas');
-  }
-
   function getCostValueFilteredApps(){
     var p = payloads.costValue || {apps:[],summary:{}};
     return getCostAreaFilteredApps(p.apps || []);
@@ -1535,6 +1597,7 @@
     document.body.classList.toggle('cv-modal-open', show);
     if(show){
       drawCostValueScatter(getCostValueFilteredApps());
+      setTimeout(function(){ if(costScatterModalChart) costScatterModalChart.resize(); }, 60);
     }
   }
 
@@ -1594,7 +1657,7 @@
         {h:'Drift',f:function(r){return n(r.schema_drift_count_in_window);}}
       ],
       (p.top_apps||[]),
-      { showReset: true }
+      { showReset: true, pageSize: 10 }
     );
     renderFilterableTable(
       'bloatTablesWrap',
@@ -1609,7 +1672,7 @@
         {h:'Keys',f:function(r){return n(r.no_of_key_fields);}}
       ],
       (p.top_tables||[]),
-      { showReset: true }
+      { showReset: true, pageSize: 10 }
     );
     renderFilterableTable(
       'bloatFieldsWrap',
@@ -1623,7 +1686,7 @@
         {h:'Total',f:function(r){return n(r.total_count);}}
       ],
       (p.top_fields||[]),
-      { showReset: true }
+      { showReset: true, pageSize: 10 }
     );
     renderFilterableTable(
       'bloatDriftWrap',
@@ -1634,7 +1697,8 @@
         {h:'Drift',f:function(r){return n(r.schema_drift_count_in_window);}},
         {h:'Size',f:function(r){return bytes(r.static_byte_size_latest);}}
       ],
-      (p.schema_drift_apps||[])
+      (p.schema_drift_apps||[]),
+      { pageSize: 10 }
     );
   }
 
@@ -2187,23 +2251,15 @@
   document.getElementById('daysSelect').addEventListener('change', function(){ state.days=parseInt(this.value||'30',10)||30; reloadInsights(); });
   document.getElementById('reloadBtn').addEventListener('click', reloadInsights);
   window.addEventListener('resize', function(){
-    if(payloads.costValue){
-      window.requestAnimationFrame(function(){
-        drawCostValueScatter(getCostValueFilteredApps());
-      });
-    }
-    if(state.module === 'data-model' && payloads.dataModelPack){
-      window.requestAnimationFrame(function(){
-        renderDataModelPack();
-      });
-    }
+    if(costScatterChart) costScatterChart.resize();
+    if(costScatterModalChart && costScatterState.modalOpen) costScatterModalChart.resize();
+    renderDataModelPack();
   });
 
   async function init(){
     try {
       setActiveModule(state.module);
       setUrl();
-      bindCostValueScatterInteractions();
       document.getElementById('daysSelect').value = String(state.days||30);
       document.getElementById('dmpMetricSelect').value = state.dataModelMetric;
       document.getElementById('cvLabelToggle').checked = !!state.showCvLabels;

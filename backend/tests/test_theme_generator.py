@@ -86,12 +86,25 @@ async def test_theme_build_rejects_non_object_theme_json():
 
 
 @pytest.mark.asyncio
-async def test_theme_upload_stub_returns_not_implemented():
+async def test_theme_upload_rejects_missing_project_id():
+    """Upload endpoint requires project_id and theme_name."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         res = await ac.post("/api/themes/upload", json={"target": "qlik-cloud"}, headers={})
 
-    assert res.status_code == 501
-    payload = res.json()
-    assert payload.get("status") == "not_implemented"
-    assert "not implemented" in payload.get("detail", "").lower()
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_theme_upload_validates_payload_shape():
+    """Upload endpoint accepts valid shape but fails on non-existent project (400)."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.post("/api/themes/upload", json={
+            "project_id": 99999,
+            "theme_name": "Test Theme",
+            "theme_json": {"_inherit": True},
+        }, headers={})
+
+    # 400 because project 99999 won't exist, or 502 if DB not available
+    assert res.status_code in (400, 502)

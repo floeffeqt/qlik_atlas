@@ -427,3 +427,110 @@ docker compose --profile test run --rm test pytest tests/test_auth.py::test_heal
 - `test_ingestion_payload_columns.py`: Test-Payload an Qlik API camelCase-Format angepasst
 - `tests/conftest.py`: SQLAlchemy Load-Listener fuer SQLite Timezone-Fix (RefreshToken)
 - Ergebnis: **86/86 Tests bestanden**
+
+## Update (2026-03-17): Theme Builder UX-Verbesserungen
+
+### Chart Preview (komplett ueberarbeitet)
+- Achsen (X/Y) mit Beschriftungen und Gitterlinien
+- Legende mit Farb-Swatches fuer alle Datenserien
+- Vollstaendige Palette-Farben aus `palettes.data[].scale` statt nur primary/others
+- 12 chart-spezifische Renderings: pieChart, barChart, histogram, lineChart, scatterPlot, waterfallChart, comboChart, gauge, kpi, table/pivotTable/straightTable, treemap, funnelChart
+- Generischer Fallback mit Achsen fuer unbekannte Objekt-Typen
+
+### Farb-Labor (Color Lab)
+- **Harmonien-Generator**: Komplementaer, Analog, Triadisch, Split-Komplementaer
+- Klickbare Farb-Swatches uebernehmen Farbe direkt in Variablen-Eingabe + Color Lab
+- Nahtlose Integration: Farbe waehlen → Harmonie generieren → als Variablen uebernehmen
+
+### Variablenverwaltung
+- **Palette-Strip**: Visuelle Uebersicht aller Farbvariablen als klickbare Swatches
+- Tooltip mit Variablenname und Hex-Wert bei Hover
+- Klick laedt Farbe ins Color Lab
+
+### Quick-Start Presets
+- 5 vorkonfigurierte Themes: Corporate Blue, Emerald, Sunset, Dark Mode, Pastel
+- Ein-Klick-Laden mit Farbvorschau-Swatches
+- Jedes Preset enthaelt Variablen, dataColors, Objekt-Styles und Paletten
+
+### JSON Editor
+- Zeilenanzahl in Status-Leiste
+- Fehler-Zeilennummer bei JSON-Parse-Fehlern
+- Bessere Fehlermeldungen mit Position
+
+### Qlik Cloud Upload
+- **Backend**: `POST /api/themes/upload` mit echtem Upload via Qlik Cloud REST API (`/api/v1/themes`)
+- `QlikClient.post_file()` Methode fuer multipart/form-data File-Upload
+- Projekt-basierte Credential-Aufloesung (Customer → tenant_url + api_key)
+- **Frontend**: "In Qlik hochladen" Button (ersetzt Upload-Stub)
+- Erfordert Projekt-Auswahl in der Navigation
+
+### UX-Verbesserungen
+- Keyboard-Shortcuts: `Ctrl+S` Download, `Ctrl+Shift+F` Format, `Ctrl+Shift+U` Upload
+- Tooltips auf allen wichtigen Buttons
+- Aktualisierte Beschreibung mit Feature-Uebersicht
+
+### Tests
+- Ergebnis: **87/87 Tests bestanden** (1 neuer Upload-Test)
+- Docker-Build: Backend + Frontend erfolgreich
+
+### Geaenderte Dateien
+- `frontend/theme-builder.html` (Chart Preview, Color Lab, Presets, Variablen-Palette, Upload, Shortcuts)
+- `backend/shared/qlik_client.py` (post_file Methode)
+- `backend/app/themes/schemas.py` (ThemeUploadRequest/Response)
+- `backend/app/themes/service.py` (upload_theme_to_qlik)
+- `backend/app/themes/routes.py` (Upload-Endpoint)
+- `backend/tests/test_theme_generator.py` (Upload-Tests aktualisiert)
+
+## Update (2026-03-18): Analytics Visualisierung — Hybrid-Migration (ECharts + D3)
+
+### Motivation
+- Custom Canvas 2D (Cost-Value Scatter) durch Apache ECharts 5.5.1 ersetzt
+- ~300 Zeilen handgeschriebener Canvas-Draw-/Hit-Testing-Code durch ~120 Zeilen ECharts-Konfiguration ersetzt
+- Data Model Circle Pack bleibt auf D3.js v7 (natuerlichere Darstellung als gepackte Kreise, ECharts bietet kein Circle-Pack-Equivalent)
+- Lizenzen: Apache 2.0 (ECharts) + ISC (D3.js) — beide kommerziell uneingeschraenkt
+
+### Aenderungen
+- **Cost-Value Scatter**: Canvas 2D → ECharts `type: 'scatter'` mit 4 Quadranten-Serien, markArea-Hintergrund, Click-Events, Tooltips
+- **Data Model Circle Pack**: Bleibt D3.js v7 SVG Circle Pack mit Zoom, Pan, Drag, Breadcrumb-Navigation
+- **CDN**: D3.js v7 + ECharts 5.5.1 beide eingebunden in `analytics.html`
+- **Resize-Handler**: ECharts `.resize()` fuer Scatter, `renderDataModelPack()` Re-Render fuer Circle Pack
+
+### Entfernte Funktionen
+- `resizeCostValueCanvas()`, `drawCostValueScatterOnCanvas()`, `bindCostValueScatterCanvasInteractions()`, `bindCostValueScatterInteractions()`
+- Canvas-basierter Cost-Value Scatter (~200 Zeilen)
+
+### Beibehaltene Funktionen
+- `truncateCircleLabel()` — D3 Circle Pack Label-Truncation
+- `renderDataModelPack()` — D3 Circle Pack (SVG, Zoom, Pan, Drag, Breadcrumb)
+
+### Geaenderte Dateien
+- `frontend/analytics.html` (ECharts CDN + D3 CDN, Scatter-Migration, Circle Pack beibehalten, Resize-Handler)
+
+## Update (2026-03-23): Theme Generator + Navigation Umbenennung
+
+### Navigation
+- "Theme Builder" in allen 6 HTML-Seiten zu "Theme" umbenannt (analytics, index, lineage, projects, script-sync, theme-builder)
+- Dateiname bleibt `theme-builder.html` (keine URL-Aenderung)
+
+### Theme-Seite: Sub-Module
+- Tab-Switcher trennt "Theme Builder" (bestehend) und "Theme Generator" (neu)
+- Builder: Keine funktionalen Aenderungen — Editor, Presets, Color Lab, Upload etc. wie vorher
+
+### Theme Generator (neu)
+- **Palette-Konfigurator**: Wahlbare Groessen (5/10/15/20/25 Farben) mit Color-Picker + Hex-Input pro Slot
+- **Prioritaeten-System**: Bis zu 3 Farben als Primary/Secondary/Tertiary markierbar (Stern-Toggle)
+- **Farb-Algorithmus** (reines ES5, keine externen Libraries):
+  - Hex↔RGB↔HSL Konvertierung, WCAG Luminanz-Berechnung
+  - Auto-Erkennung Dark/Light-Modus per Durchschnittsluminanz (oder manuell erzwingbar)
+  - Tint/Shade-Generierung fuer abgeleitete Farben (Background, Text, Muted, Grid, Error)
+- **Vollstaendige Theme-Generierung**: Alle 19 Qlik-Objekt-Typen werden befuellt:
+  - barChart, lineChart, pieChart, scatterPlot, waterfallChart, histogram, comboChart, distributionPlot, boxPlot, straightTable, straightTableV2, pivotTable, kpi, gauge, treemap, listBox, filterpane, mapChart, textImage
+  - Spezial-Properties: waterfallChart.shape, listBox.dataColors, straightTableV2.grid, treemap.branch, mapChart.label
+- **Palettes + Scales**: Data-Palette aus CI-Farben, UI-Palette als Primary-Tints, Gradient + Diverging Scales
+- **Sheet-Titel**: Private/Approved/Published mit Primary/Secondary/Tertiary Hintergrund
+- **Live-Vorschau**: Palette-Strip + abgeleitete Farben-Grid vor Generierung sichtbar
+- **Builder-Integration**: "In Builder uebernehmen" laedt Theme via `setEditorJson()` — sofort editierbar, downloadbar, uploadbar
+
+### Geaenderte Dateien
+- `frontend/theme-builder.html` (Sub-Module Tabs, Generator UI, Farb-Algorithmus, Theme-Generierung)
+- `frontend/analytics.html`, `frontend/index.html`, `frontend/lineage.html`, `frontend/projects.html`, `frontend/script-sync.html` (Nav-Link Umbenennung)

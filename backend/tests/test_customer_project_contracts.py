@@ -1,6 +1,9 @@
+import base64
+import os
 import sys
 from pathlib import Path
 
+import pytest
 from fastapi.routing import APIRoute
 
 
@@ -10,6 +13,13 @@ sys.path.insert(0, str(ROOT / "backend"))
 from app.customers import routes as customer_routes  # type: ignore
 from app.models import Customer, Project  # type: ignore
 from app.projects import routes as project_routes  # type: ignore
+
+
+@pytest.fixture(autouse=True)
+def _set_crypto_key(monkeypatch):
+    """Provide a test encryption key so Customer credential setters work."""
+    key = base64.urlsafe_b64encode(b"0123456789abcdef0123456789abcdef").decode("ascii")
+    monkeypatch.setenv("CREDENTIALS_AES256_GCM_KEY_B64", key)
 
 
 def _route_by_name(router, endpoint_name: str) -> APIRoute:

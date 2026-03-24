@@ -34,6 +34,14 @@ class QlikApiError(RuntimeError):
         self.response_text = response_text
 
 
+@dataclass(frozen=True)
+class QlikCredentials:
+    """Immutable credentials container — pass by reference, never store in os.environ."""
+
+    tenant_url: str
+    api_key: str
+
+
 @dataclass
 class QlikClient:
     base_url: str
@@ -169,6 +177,56 @@ class QlikClient:
 
             logger.info("GET(text) %s -> %s", path, resp.status_code)
             return resp.text, resp.status_code
+
+    async def post_file(
+        self,
+        path: str,
+        file_content: bytes,
+        file_name: str = "file.zip",
+        mime_type: str = "application/zip",
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Any, int]:
+        """POST a file as multipart/form-data."""
+        retryable_statuses = {429} | set(range(500, 600))
+        attempt = 0
+        logger = self.logger
+
+        while True:
+            attempt += 1
+            logger.info("POST(file) %s attempt=%s filename=%s", path, attempt, file_name)
+            try:
+                files = {"file": (file_name, file_content, mime_type)}
+                resp = await self._client.post(path, files=files, params=params)
+            except httpx.HTTPError as exc:
+                if attempt > self.max_retries:
+                    logger.error("POST(file) %s failed after retries: %s", path, exc)
+                    raise QlikApiError(0, f"HTTP error after retries: {exc}") from exc
+                logger.warning("POST(file) %s http error, retrying: %s", path, exc)
+                await self._sleep_backoff(attempt)
+                continue
+
+            if resp.status_code in retryable_statuses:
+                if attempt > self.max_retries:
+                    logger.error("POST(file) %s max retries status=%s", path, resp.status_code)
+                    raise QlikApiError(resp.status_code, "Max retries reached", resp.text)
+                logger.warning("POST(file) %s retryable status=%s", path, resp.status_code)
+                await self._sleep_backoff(attempt, resp)
+                continue
+
+            if resp.status_code >= 400:
+                logger.error("POST(file) %s failed status=%s body=%s", path, resp.status_code, resp.text[:500])
+                raise QlikApiError(resp.status_code, f"HTTP {resp.status_code}", resp.text)
+
+            if not resp.content:
+                logger.info("POST(file) %s -> %s (empty body)", path, resp.status_code)
+                return None, resp.status_code
+
+            try:
+                logger.info("POST(file) %s -> %s", path, resp.status_code)
+                return resp.json(), resp.status_code
+            except ValueError:
+                logger.info("POST(file) %s -> %s (non-JSON body)", path, resp.status_code)
+                return resp.text, resp.status_code
 
     async def _sleep_backoff(self, attempt: int, resp: Optional[httpx.Response] = None) -> None:
         logger = self.logger

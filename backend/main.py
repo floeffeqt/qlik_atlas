@@ -235,7 +235,7 @@ async def _execute_fetch_job(
         await _append_log(job_id, f"Job gestartet · {len(steps)} Schritt(e) geplant")
 
         await _append_log(job_id, f"Lade Credentials für Projekt {project_id}…")
-        await _load_project_creds_to_env(project_id, actor_user_id=actor_user_id, actor_role=actor_role)
+        creds = await _load_project_creds(project_id, actor_user_id=actor_user_id, actor_role=actor_role)
         await _append_log(job_id, "✓ Credentials geladen")
 
         cleared = {
@@ -268,30 +268,30 @@ async def _execute_fetch_job(
             await _update_job(job_id, currentStep=step)
 
             if step == "spaces":
-                spaces_cache, result = await _run_spaces_step()
+                spaces_cache, result = await _run_spaces_step(creds)
                 await _append_log(job_id, f"✓ {result.get('count', 0)} Spaces geladen")
             elif step == "apps":
-                apps_cache, result = await _run_apps_step(request)
+                apps_cache, result = await _run_apps_step(request, creds)
                 await _append_log(job_id, f"✓ {result.get('count', 0)} Apps geladen")
             elif step == "data-connections":
-                data_connections_cache, result = await _run_data_connections_step()
+                data_connections_cache, result = await _run_data_connections_step(creds)
                 await _append_log(job_id, f"✓ {result.get('count', 0)} Datenverbindungen geladen")
             elif step == "reloads":
-                reloads_cache, result = await _run_reloads_step()
+                reloads_cache, result = await _run_reloads_step(creds)
                 await _append_log(job_id, f"Reloads geladen: {result.get('count', 0)}")
             elif step == "audits":
-                audits_cache, result = await _run_audits_step()
+                audits_cache, result = await _run_audits_step(creds)
                 await _append_log(job_id, f"Audits geladen: {result.get('count', 0)}")
             elif step == "licenses-consumption":
-                licenses_consumption_cache, result = await _run_licenses_consumption_step()
+                licenses_consumption_cache, result = await _run_licenses_consumption_step(creds)
                 await _append_log(job_id, f"License Consumption geladen: {result.get('count', 0)}")
             elif step == "licenses-status":
-                licenses_status_cache, result = await _run_licenses_status_step()
+                licenses_status_cache, result = await _run_licenses_status_step(creds)
                 await _append_log(job_id, f"License Status geladen: {result.get('count', 0)}")
             elif step == "app-data-metadata":
                 if apps_cache is None:
                     raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'app-data-metadata'")
-                app_data_metadata_cache, result = await _run_app_data_metadata_step(apps_cache)
+                app_data_metadata_cache, result = await _run_app_data_metadata_step(apps_cache, creds)
                 await _append_log(
                     job_id,
                     f"App Data Metadata geladen: {result.get('success', 0)} erfolgreich, {result.get('failed', 0)} fehlgeschlagen",
@@ -299,7 +299,7 @@ async def _execute_fetch_job(
             elif step == "lineage":
                 if apps_cache is None:
                     raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'lineage'")
-                lineage_payloads_cache, result = await _run_lineage_step(request, apps_cache)
+                lineage_payloads_cache, result = await _run_lineage_step(request, apps_cache, creds)
                 await _append_log(job_id, f"✓ Lineage für {len(apps_cache)} Apps berechnet")
             elif step == "app-edges":
                 if apps_cache is None:
@@ -307,6 +307,7 @@ async def _execute_fetch_job(
                 app_edges_payloads, result = await _run_app_edges_step(
                     request,
                     apps_cache,
+                    creds,
                     lineage_payloads=lineage_payloads_cache,
                 )
                 edges = result.get("appEdges", {}).get("edges", 0)
@@ -317,7 +318,7 @@ async def _execute_fetch_job(
             elif step == "usage":
                 if apps_cache is None:
                     raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'usage'")
-                usage_payloads, result = await _run_usage_step(request, apps_cache)
+                usage_payloads, result = await _run_usage_step(request, apps_cache, creds)
                 await _append_log(job_id, f"✓ Usage-Daten geladen")
             else:
                 return
@@ -387,10 +388,11 @@ async def _execute_fetch_job(
         )
 
 
-async def _load_project_creds_to_env(project_id: int, *, actor_user_id: int, actor_role: str) -> None:
-    """Load credentials from a project's customer into os.environ for the duration of a fetch."""
+async def _load_project_creds(project_id: int, *, actor_user_id: int, actor_role: str) -> "QlikCredentials":
+    """Load and return credentials from a project's customer — never stored in os.environ."""
     from app.database import AsyncSessionLocal
     from app.models import Customer, Project
+    from shared.qlik_client import QlikCredentials
     from sqlalchemy import select
     async with AsyncSessionLocal() as session:
         await apply_rls_context(session, actor_user_id, actor_role)
@@ -402,9 +404,10 @@ async def _load_project_creds_to_env(project_id: int, *, actor_user_id: int, act
         customer = cust_result.scalar_one_or_none()
         if not customer:
             raise RuntimeError(f"customer {project.customer_id} not found for project {project_id}")
-        os.environ["QLIK_TENANT_URL"] = customer.tenant_url
-        os.environ["QLIK_API_KEY"] = customer.api_key
+        tenant_url = customer.tenant_url
+        api_key = customer.api_key
         logger.info("Loaded credentials for project %s from customer '%s'", project_id, customer.name)
+        return QlikCredentials(tenant_url=tenant_url, api_key=api_key)
 
 
 
