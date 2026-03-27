@@ -8,7 +8,7 @@ tags:
   - schema
   - erd
   - postgres
-updated: 2026-03-16
+updated: 2026-03-26
 owners: []
 source_of_truth: no
 related_specs:
@@ -29,7 +29,7 @@ related_docs:
 ## Sources (Code-First)
 
 - Primar: `backend/app/models.py`
-- Migrationen/Policies: `backend/alembic/versions/0006_user_customer_access_and_rls.py`, `backend/alembic/versions/0007_db_runtime_source_tables.py` sowie spaetere Erweiterungs-Migrationen (`0009` bis `0012`, `0019`, `0020`)
+- Migrationen/Policies: `backend/alembic/versions/0006_user_customer_access_and_rls.py`, `backend/alembic/versions/0007_db_runtime_source_tables.py` sowie spaetere Erweiterungs-Migrationen (`0009` bis `0012`, `0019`, `0020`, `0021`)
 
 ## Important Note
 
@@ -65,6 +65,13 @@ related_docs:
 | `lineage_edges` | `(project_id, edge_id)` | `project_id -> projects.id` | Graph-Edges |
 | `script_git_mappings` | `(project_id, app_id)` | `project_id -> projects.id` | Mapping: Qlik App <-> Git-Repository/Datei fuer Script-Sync |
 | `script_deployments` | `id` | `project_id -> projects.id`, `triggered_by -> users.id` | Audit-Log fuer Script Sync/Publish Operationen |
+| `tasks` | `id` | `project_id -> projects.id`, `assignee_id -> users.id` | Projekt-Tasks mit Status-Tracking (open/in_progress/review/done) |
+| `doc_entries` | `id` | `project_id -> projects.id`, `author_id -> users.id` | Aenderungsprotokoll (change/decision/note/incident) |
+| `node_comments` | `id` | `project_id -> projects.id`, `author_id -> users.id`, `assignee_id -> users.id` | Kommentare auf Lineage-Graph-Knoten |
+| `app_readmes` | `id` | `project_id -> projects.id`, `last_edited_by -> users.id` | Markdown-Readme pro Qlik App (UNIQUE project_id + qlik_app_id) |
+| `tags` | `id` | `customer_id -> customers.id`, `created_by -> users.id` | Customer-scoped Tags fuer Task-Kategorisierung (UNIQUE customer_id + name) |
+| `task_tags` | `(task_id, tag_id)` | `task_id -> tasks.id`, `tag_id -> tags.id` | Many-to-Many Join-Tabelle: Tasks <-> Tags |
+| `doc_templates` | `id` | `project_id -> projects.id` (nullable) | Wiederverwendbare Markdown-Templates (global oder projekt-spezifisch) |
 
 ## Key Design Pattern
 
@@ -173,6 +180,20 @@ related_docs:
 - `script_git_mappings.project_id -> projects.id`
 - `script_deployments.project_id -> projects.id`
 - `script_deployments.triggered_by -> users.id`
+- `tasks.project_id -> projects.id`
+- `tasks.assignee_id -> users.id`
+- `doc_entries.project_id -> projects.id`
+- `doc_entries.author_id -> users.id`
+- `node_comments.project_id -> projects.id`
+- `node_comments.author_id -> users.id`
+- `node_comments.assignee_id -> users.id`
+- `app_readmes.project_id -> projects.id`
+- `app_readmes.last_edited_by -> users.id`
+- `tags.customer_id -> customers.id`
+- `tags.created_by -> users.id`
+- `task_tags.task_id -> tasks.id`
+- `task_tags.tag_id -> tags.id`
+- `doc_templates.project_id -> projects.id`
 
 ## Logical Relationships (Not DB-FK Enforced)
 
@@ -198,6 +219,18 @@ related_docs:
 - `script_deployments` <-> `script_git_mappings`
 - Logischer Bezug ueber `project_id` + `app_id` (kein FK)
 - Audit-Trail fuer jede Script Sync/Publish Operation (direction, commit SHA, Hashes, Status)
+
+- `tasks` <-> `qlik_apps`
+- Logischer Bezug ueber `project_id` + `qlik_app_id` (kein FK, Composite PK in qlik_apps)
+
+- `doc_entries` <-> `qlik_apps`
+- Logischer Bezug ueber `project_id` + `qlik_app_id` (kein FK)
+
+- `node_comments` <-> `lineage_nodes`
+- Logischer Bezug ueber `project_id` + `lineage_node_id` (kein FK, Composite PK in lineage_nodes)
+
+- `app_readmes` <-> `qlik_apps`
+- Logischer Bezug ueber `project_id` + `qlik_app_id` (kein FK, UNIQUE Constraint)
 
 ## Mermaid ERD (High-Level)
 
@@ -226,6 +259,23 @@ erDiagram
     QLIK_APPS ||--|| QLIK_APP_SCRIPTS : "logical via (project_id, app_id)"
     QLIK_APPS ||--o| SCRIPT_GIT_MAPPINGS : "logical via (project_id, app_id)"
     USERS ||--o{ SCRIPT_DEPLOYMENTS : triggers
+
+    PROJECTS ||--o{ TASKS : contains
+    PROJECTS ||--o{ DOC_ENTRIES : contains
+    PROJECTS ||--o{ NODE_COMMENTS : contains
+    PROJECTS ||--o{ APP_READMES : contains
+    USERS ||--o{ TASKS : assigned
+    USERS ||--o{ DOC_ENTRIES : authored
+    USERS ||--o{ NODE_COMMENTS : "authored/assigned"
+    USERS ||--o{ APP_READMES : "last edited"
+    QLIK_APPS ||--o{ TASKS : "logical via (project_id, qlik_app_id)"
+    QLIK_APPS ||--o| APP_READMES : "logical via (project_id, qlik_app_id)"
+    LINEAGE_NODES ||--o{ NODE_COMMENTS : "logical via (project_id, lineage_node_id)"
+
+    CUSTOMERS ||--o{ TAGS : "customer-scoped"
+    TASKS ||--o{ TASK_TAGS : has
+    TAGS ||--o{ TASK_TAGS : has
+    PROJECTS ||--o{ DOC_TEMPLATES : "optional scope"
 ```
 
 ### `customers` (Git-Integration, ab Migration 0020)
@@ -253,6 +303,7 @@ erDiagram
 - Relevante Tabellen wurden ueber Migrationen mit Policies versehen (u. a. `customers`, `projects`, `qlik_apps`, `lineage_nodes`, `lineage_edges` sowie Runtime-Tabellen aus `0007`).
 - Migration `0019`: Korrektur aller 17 project-scoped `_project_inherited_select` Policies mit `app_has_customer_access()` Check.
 - Migration `0020`: RLS Policies fuer `script_git_mappings` und `script_deployments` (gleicher Pattern: admin OR customer access).
+- Migration `0021`: RLS Policies fuer `tasks`, `doc_entries`, `node_comments`, `app_readmes` (gleicher Pattern).
 - Fuer UI/Runtime-Reads ist deshalb nicht nur das Schema, sondern auch der gesetzte DB-Context (User/Rolle) relevant.
 
 ## Where To Inspect Live Schema (Without Data)
@@ -307,3 +358,79 @@ erDiagram
 - Frontend: `script-sync.html` (Admin-Seite)
 - Mapping-CRUD, Drift-Check, Stats-Karten, Deployment-History
 - Projekt/Kunden-Selektion ueber globale Focus-Selectors
+
+## Project Collaboration Tables (ab Migration 0021)
+
+### `tasks`
+- Projekt-Tasks mit optionalem Qlik-App-Bezug und Subtask-Hierarchie
+- Spalten: `title` (VARCHAR 255), `description` (TEXT), `status`, `priority`, `assignee_id`, `due_date`, `estimated_minutes`, `app_link` (TEXT)
+- `qlik_app_id`: logische Referenz auf `qlik_apps.app_id` (kein FK wegen Composite PK)
+- `parent_task_id`: Self-FK fuer Subtask-Hierarchie (`tasks.id`, ON DELETE CASCADE)
+- Enum-Werte `status`: `open`, `in_progress`, `review`, `done`
+- Enum-Werte `priority`: `critical`, `high`, `medium`, `low`
+- DB-Trigger `trg_tasks_updated_at` setzt `updated_at` automatisch bei UPDATE
+
+### `tags`
+- Customer-scoped Tags fuer Task-Kategorisierung
+- Spalten: `customer_id` (FK), `name` (VARCHAR 50), `color` (VARCHAR 7, default `#888780`), `created_by` (FK -> users.id)
+- UNIQUE Constraint auf `(customer_id, name)`
+- Kein RLS (customer-scoped, kein project_id)
+
+### `task_tags`
+- Many-to-Many Join-Tabelle zwischen Tasks und Tags
+- Composite PK: `(task_id, tag_id)`
+- ON DELETE CASCADE auf beide FK
+- Kein RLS (abgeleitet ueber Task-RLS)
+
+### `doc_entries`
+- Aenderungsprotokoll / Entscheidungslog pro Projekt
+- Enum-Werte `entry_type`: `change`, `decision`, `note`, `incident`
+- `entry_date`: Datum des Eintrags (DEFAULT CURRENT_DATE)
+- `qlik_app_id`: optionaler App-Bezug (logisch, kein FK)
+
+### `node_comments`
+- Kommentare auf Lineage-Graph-Knoten
+- `lineage_node_id`: logische Referenz auf `lineage_nodes.node_id` (kein FK wegen Composite PK)
+- `author_id` + `assignee_id`: getrennte User-Referenzen fuer Autor und Zugewiesenen
+- Enum-Werte `comment_type`: `technical`, `business`, `issue`
+
+### `app_readmes`
+- Markdown-Dokumentation pro Qlik App oder Projekt-README (dual use via `readme_type`)
+- Spalten: `content_md` (TEXT), `readme_type`, `last_edited_by` (FK -> users.id)
+- Enum-Werte `readme_type`: `app_readme`, `project_readme`
+- UNIQUE Constraint auf `(project_id, qlik_app_id)` (partial, WHERE qlik_app_id IS NOT NULL)
+- DB-Trigger `trg_app_readmes_updated_at` setzt `updated_at` automatisch bei UPDATE
+
+### `doc_templates`
+- Wiederverwendbare Markdown-Templates fuer doc_entries, node_comments, und readmes
+- Spalten: `template_type` (VARCHAR 50), `name` (VARCHAR 255), `content_md` (TEXT), `required_fields` (JSONB, default `[]`), `is_default` (BOOLEAN, default false)
+- `project_id`: nullable FK — NULL = globales Template, gesetzt = projekt-spezifisches Override
+- Enum-Werte `template_type`: `node_comment`, `readme`, `doc_entry_change`, `doc_entry_decision`, `doc_entry_note`, `doc_entry_incident`, `app_readme`, `project_readme`
+- Migration 0021 seeded 8 globale Default-Templates
+
+### Trigger-Funktion
+- `public.set_updated_at()`: Wiederverwendbare PL/pgSQL-Funktion fuer `updated_at`-Trigger
+- Anwendbar auf alle Tabellen mit `updated_at`-Spalte
+
+### RLS
+- 4 project-scoped Tabellen (`tasks`, `doc_entries`, `node_comments`, `app_readmes`): `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`
+- Policy-Pattern: `app_is_admin() OR app_has_customer_access(p.customer_id)` (wie alle project-scoped Tabellen)
+- `tags`: kein RLS (customer-scoped, Zugriff ueber Customer-Kontext)
+- `task_tags`: kein RLS (abgeleitete Sichtbarkeit ueber Tasks)
+- `doc_templates`: kein RLS (globale + projekt-spezifische Templates fuer alle sichtbar)
+
+### API-Endpunkte (backend/app/collab/routes.py)
+
+`project_id` ist optional (†) in markierten Endpunkten. Ohne `project_id` werden alle Projekte des Users aggregiert (RLS-gefiltert). Responses enthalten dann `project_name`/`customer_name`.
+
+- Tags: `GET/POST /api/tags`, `PUT/DELETE /api/tags/{tag_id}`
+- Tasks: `GET/POST /api/tasks` †, `GET/PUT /api/tasks/{task_id}`
+- Task-Tags: `POST /api/task-tags`, `DELETE /api/task-tags/{task_id}/{tag_id}`
+- Log Entries: `GET/POST /api/log-entries` † (offset-Pagination), `GET /api/log-entries/{entry_id}`
+- Node Comments: `GET /api/node-comments`, `GET /api/node-comments/counts`, `POST /api/node-comments`
+- Readmes: `GET/POST /api/readmes`, `PUT /api/readmes/{readme_id}`
+- Templates: `GET /api/templates?type=`
+- Dashboard: `GET /api/dashboard/metrics` †
+- Apps ohne README: `GET /api/apps/without-readme` †
+- Qlik Apps Lookup: `GET /api/qlik-apps`, `GET /api/qlik-apps/{app_id}`
+- Projekt-Mitglieder: `GET /api/projects/{project_id}/members`

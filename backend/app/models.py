@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Column,
+    Date,
     Integer,
     BigInteger,
     Float,
@@ -8,11 +9,13 @@ from sqlalchemy import (
     func,
     Boolean,
     Text,
+    text,
     ForeignKey,
     PrimaryKeyConstraint,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from sqlalchemy.orm import relationship
 from .database import Base
 from .credentials_crypto import encrypt_credential, decrypt_credential
 
@@ -569,4 +572,106 @@ class ScriptDeployment(Base):
     triggered_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     version_message = Column(Text, nullable=True)
     error_detail = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# Project collaboration tables (migration 0021)
+# ---------------------------------------------------------------------------
+
+
+class Task(Base):
+    """Project task, optionally linked to a Qlik app."""
+    __tablename__ = "tasks"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    qlik_app_id = Column(String(100), nullable=True, index=True)
+    parent_task_id = Column(Integer, ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(50), nullable=False, server_default="open")
+    priority = Column(String(20), nullable=False, server_default="medium")
+    assignee_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    due_date = Column(Date, nullable=True)
+    estimated_minutes = Column(Integer, nullable=True)
+    app_link = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    parent_task = relationship("Task", remote_side=[id], back_populates="subtasks")
+    subtasks = relationship("Task", back_populates="parent_task")
+    tags = relationship("Tag", secondary="task_tags", back_populates="tasks")
+
+
+class Tag(Base):
+    """Customer-scoped tag for categorising tasks."""
+    __tablename__ = "tags"
+    __table_args__ = (UniqueConstraint("customer_id", "name", name="uq_tags_customer_name"),)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(50), nullable=False)
+    color = Column(String(7), nullable=False, server_default="#888780")
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    tasks = relationship("Task", secondary="task_tags", back_populates="tags")
+    customer = relationship("Customer")
+
+
+class TaskTag(Base):
+    """Join table linking tasks to tags (many-to-many)."""
+    __tablename__ = "task_tags"
+    __table_args__ = (PrimaryKeyConstraint("task_id", "tag_id"),)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    tag_id = Column(Integer, ForeignKey("tags.id", ondelete="CASCADE"), nullable=False, index=True)
+
+
+class DocEntry(Base):
+    """Change log / decision / note / incident entry for a project."""
+    __tablename__ = "doc_entries"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    qlik_app_id = Column(String(100), nullable=True, index=True)
+    author_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    entry_type = Column(String(50), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    entry_date = Column(Date, nullable=False, server_default=func.current_date())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class NodeComment(Base):
+    """Comment on a lineage graph node, optionally assigned to a user."""
+    __tablename__ = "node_comments"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    lineage_node_id = Column(Text, nullable=True, index=True)
+    author_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    assignee_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    comment_type = Column(String(30), nullable=False, server_default="technical")
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AppReadme(Base):
+    """Markdown readme per Qlik app or project (dual use via readme_type)."""
+    __tablename__ = "app_readmes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    qlik_app_id = Column(String(100), nullable=True, index=True)
+    readme_type = Column(String(30), nullable=False, server_default="app_readme")
+    content_md = Column(Text, nullable=True)
+    last_edited_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DocTemplate(Base):
+    """Reusable markdown template for doc_entries, node_comments, and readmes."""
+    __tablename__ = "doc_templates"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_type = Column(String(50), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    content_md = Column(Text, nullable=False)
+    required_fields = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    is_default = Column(Boolean, nullable=False, server_default=text("false"))
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

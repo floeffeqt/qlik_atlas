@@ -403,6 +403,51 @@
     }
     .detail-extra[open] summary { color: #cbe9ff; }
 
+    /* ── COMMENT PANEL ── */
+    #commentPanel {
+      position: absolute; top: 0; right: 0; width: 380px; max-width: 90vw; height: 100%;
+      background: rgba(10,18,42,0.95); border-left: 1px solid rgba(56,189,248,0.28);
+      backdrop-filter: blur(20px); z-index: 60; transform: translateX(100%);
+      transition: transform 0.25s ease; display: flex; flex-direction: column; overflow: hidden;
+    }
+    #commentPanel.open { transform: translateX(0); }
+    .cp-header { padding: 1rem 1.25rem; border-bottom: 1px solid rgba(56,189,248,0.18); flex-shrink: 0; }
+    .cp-close { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .cp-close:hover { color: var(--text); }
+    .cp-node-name { font-size: 1rem; font-weight: 700; margin-bottom: 0.15rem; }
+    .cp-node-type { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .cp-filters { display: flex; gap: 0.3rem; padding: 0.6rem 1.25rem; border-bottom: 1px solid rgba(56,189,248,0.12); flex-shrink: 0; flex-wrap: wrap; }
+    .cp-filter-pill { padding: 0.2rem 0.55rem; border-radius: 100px; font-size: 0.68rem; font-weight: 600; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .cp-filter-pill.active { border-color: var(--accent); color: var(--accent); background: rgba(56,189,248,0.1); }
+    .cp-filter-pill:hover { background: rgba(255,255,255,0.08); }
+    .cp-list { flex: 1; overflow-y: auto; padding: 0.75rem 1.25rem; }
+    .cp-comment { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 0.65rem 0; }
+    .cp-comment:last-child { border-bottom: none; }
+    .cp-comment-head { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
+    .cp-comment-type { display: inline-flex; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; }
+    .cp-comment-type.technical { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .cp-comment-type.business { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .cp-comment-type.issue { background: rgba(239,68,68,0.15); color: #f87171; }
+    .cp-comment-author { font-size: 0.72rem; color: var(--text-muted); }
+    .cp-comment-body { font-size: 0.82rem; line-height: 1.55; color: rgba(255,255,255,0.85); }
+    .cp-comment-body p { margin: 0.2rem 0; }
+    .cp-comment-meta { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem; }
+    .cp-avatar { width: 20px; height: 20px; border-radius: 50%; background: rgba(56,189,248,0.2); color: #7dd3fc; display: inline-flex; align-items: center; justify-content: center; font-size: 0.5rem; font-weight: 700; flex-shrink: 0; }
+    .cp-empty { text-align: center; padding: 2rem 1rem; color: var(--text-dim); font-size: 0.82rem; }
+    .cp-add-area { padding: 0.75rem 1.25rem; border-top: 1px solid rgba(56,189,248,0.18); flex-shrink: 0; }
+    .cp-add-btn { width: 100%; padding: 0.5rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+    .cp-add-btn:hover { opacity: 0.9; }
+    .cp-form { display: none; }
+    .cp-form.open { display: block; }
+    .cp-form select, .cp-form input { width: 100%; padding: 0.45rem 0.6rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff; font-size: 0.8rem; outline: none; margin-bottom: 0.5rem; }
+    .cp-form select option { background: #0a1230; }
+    .cp-form label { font-size: 0.7rem; color: var(--text-muted); display: block; margin-bottom: 0.2rem; }
+    .cp-form-actions { display: flex; gap: 0.4rem; justify-content: flex-end; margin-top: 0.5rem; }
+    .cp-form-cancel { padding: 0.35rem 0.7rem; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; }
+    .cp-form-save { padding: 0.35rem 0.7rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; border-radius: 6px; color: #fff; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+    .detail-comments-btn { display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.75rem; padding: 0.4rem 0.8rem; background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3); border-radius: var(--radius-sm); color: #7dd3fc; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .detail-comments-btn:hover { background: rgba(56,189,248,0.2); }
+
     /* ── LEGEND ── */
     #legend {
       position: absolute;
@@ -593,6 +638,40 @@
     <div id="detailRows"></div>
   </div>
 
+  <!-- Comment Panel -->
+  <div id="commentPanel">
+    <div class="cp-header">
+      <button class="cp-close" id="cpClose">&#x2715;</button>
+      <div class="cp-node-name" id="cpNodeName">—</div>
+      <div class="cp-node-type" id="cpNodeType">—</div>
+    </div>
+    <div class="cp-filters">
+      <span class="cp-filter-pill active" data-cp-filter="">Alle</span>
+      <span class="cp-filter-pill" data-cp-filter="technical">Technical</span>
+      <span class="cp-filter-pill" data-cp-filter="business">Business</span>
+      <span class="cp-filter-pill" data-cp-filter="issue">Issue</span>
+    </div>
+    <div class="cp-list" id="cpList"></div>
+    <div class="cp-add-area">
+      <button class="cp-add-btn" id="cpAddBtn">+ Kommentar</button>
+      <div class="cp-form" id="cpForm">
+        <div style="margin-bottom:0.5rem">
+          <label for="cpCommentType">Typ</label>
+          <select id="cpCommentType"><option value="technical">Technical</option><option value="business">Business</option><option value="issue">Issue</option></select>
+        </div>
+        <div style="margin-bottom:0.5rem">
+          <label for="cpAssignee">Assignee (optional)</label>
+          <select id="cpAssignee"><option value="">—</option></select>
+        </div>
+        <div id="cpEditorContainer"></div>
+        <div class="cp-form-actions">
+          <button type="button" class="cp-form-cancel" id="cpFormCancel">Abbrechen</button>
+          <button type="button" class="cp-form-save" id="cpFormSave">Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Legend -->
   <div id="legend">
     <div class="legend-title">Node types</div>
@@ -619,6 +698,7 @@
 <!-- D3 v7 from CDN -->
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script src="/assets/atlas-shared.js"></script>
+<script src="/assets/markdownEditor.js"></script>
 <script>
   window.AtlasShared.requireAuth({ emailElementId: 'userEmail' });
   window.AtlasShared.bindLogout('logoutBtn');
@@ -2383,8 +2463,18 @@
     if (extraRows) {
       rows += '<details class="detail-extra"><summary>Weitere Informationen</summary>' + extraRows + '</details>';
     }
+    // Comment button
+    var commentCount = (nodeCommentCounts[nodeId] || {}).total || 0;
+    rows += '<button class="detail-comments-btn" id="detailCommentsBtn" data-node-id="' + escHtml(nodeId) + '">'
+      + 'Kommentare' + (commentCount ? ' (' + commentCount + ')' : '')
+      + '</button>';
+
     document.getElementById('detailRows').innerHTML = rows;
     document.getElementById('detailPanel').classList.add('show');
+
+    // Bind comments button
+    var cb = document.getElementById('detailCommentsBtn');
+    if (cb) cb.addEventListener('click', function() { openCommentPanel(d); });
   }
 
   function detailRow(key, val) {
@@ -2571,6 +2661,227 @@
   if (window.visualViewport && typeof window.visualViewport.addEventListener === 'function') {
     window.visualViewport.addEventListener('resize', scheduleGraphResizeReflow);
   }
+
+  /* ── NODE COMMENTS SYSTEM ── */
+  var nodeCommentCounts = {}; // { nodeId: { total, dominant, technical, business, issue } }
+  var cpCurrentNodeId = '';
+  var cpCurrentNodeDatum = null;
+  var cpFilter = '';
+  var cpEditor = null;
+
+  var COMMENT_TYPE_COLORS = { technical: '#7dd3fc', business: '#4ade80', issue: '#f87171' };
+
+  function timeAgo(d) {
+    if (!d) return '';
+    var diff = Date.now() - new Date(d).getTime();
+    var m = Math.floor(diff / 60000);
+    if (m < 1) return 'gerade eben';
+    if (m < 60) return 'vor ' + m + ' Min.';
+    var h = Math.floor(m / 60);
+    if (h < 24) return 'vor ' + h + ' Std.';
+    var days = Math.floor(h / 24);
+    if (days === 1) return 'gestern';
+    if (days < 7) return 'vor ' + days + ' Tagen';
+    var w = Math.floor(days / 7);
+    return w < 5 ? 'vor ' + w + ' Wochen' : 'vor ' + Math.floor(days / 30) + ' Monaten';
+  }
+
+  function cpAvatarHtml(user) {
+    if (!user) return '';
+    var n = user.display_name || user.email || '';
+    var i = n.split(/[\s@]/).filter(Boolean).slice(0, 2).map(function(s) { return s[0].toUpperCase(); }).join('');
+    return '<span class="cp-avatar" title="' + escHtml(n) + '">' + escHtml(i || '?') + '</span>';
+  }
+
+  async function loadCommentCounts() {
+    var projectId = requireLineageProject();
+    if (!projectId) return;
+    try {
+      var res = await window.AtlasShared.apiFetch('/api/node-comments/counts?project_id=' + encodeURIComponent(projectId));
+      if (!res.ok) return;
+      var data = await res.json();
+      nodeCommentCounts = {};
+      (Array.isArray(data) ? data : []).forEach(function(item) {
+        var nid = String(item.lineage_node_id || item.node_id || '');
+        if (!nid) return;
+        var counts = { total: item.total || 0, technical: item.technical || 0, business: item.business || 0, issue: item.issue || 0 };
+        counts.dominant = counts.issue > 0 ? 'issue' : counts.business > 0 ? 'business' : 'technical';
+        nodeCommentCounts[nid] = counts;
+      });
+    } catch (e) {}
+  }
+
+  function renderCommentBadges() {
+    if (!nodesLayer) return;
+    nodesLayer.selectAll('.comment-badge-group').remove();
+    nodesLayer.selectAll('g').each(function(d) {
+      if (!d || !d.id) return;
+      var counts = nodeCommentCounts[String(d.id)];
+      if (!counts || !counts.total) return;
+      var g = d3.select(this).append('g').attr('class', 'comment-badge-group').attr('transform', 'translate(10,-12)');
+      g.append('circle')
+        .attr('r', 7)
+        .attr('fill', COMMENT_TYPE_COLORS[counts.dominant] || '#7dd3fc')
+        .attr('fill-opacity', 0.9)
+        .attr('stroke', 'rgba(10,18,42,0.8)')
+        .attr('stroke-width', 1.5);
+      g.append('text')
+        .text(counts.total > 9 ? '9+' : String(counts.total))
+        .attr('text-anchor', 'middle')
+        .attr('dy', 3.2)
+        .attr('font-size', '7px')
+        .attr('font-weight', 700)
+        .attr('fill', '#fff')
+        .style('pointer-events', 'none');
+    });
+  }
+
+  // Wrap renderGraph to add badges after each render
+  var _origRenderGraph = renderGraph;
+  renderGraph = function(data) {
+    _origRenderGraph(data);
+    renderCommentBadges();
+  };
+
+  async function openCommentPanel(nodeDatum) {
+    cpCurrentNodeDatum = nodeDatum;
+    cpCurrentNodeId = String((nodeDatum && nodeDatum.id) || '');
+    cpFilter = '';
+
+    document.getElementById('cpNodeName').textContent = graphNodeDisplayLabel(nodeDatum) || nodeDatum.label || cpCurrentNodeId;
+    document.getElementById('cpNodeType').textContent = (nodeDatum.type || 'unknown').toUpperCase();
+    document.querySelectorAll('.cp-filter-pill').forEach(function(p) { p.classList.toggle('active', p.getAttribute('data-cp-filter') === ''); });
+    document.getElementById('cpForm').classList.remove('open');
+    document.getElementById('cpAddBtn').style.display = '';
+    document.getElementById('commentPanel').classList.add('open');
+
+    await loadCommentList();
+  }
+
+  function closeCommentPanel() {
+    document.getElementById('commentPanel').classList.remove('open');
+    if (cpEditor) { cpEditor.destroy(); cpEditor = null; }
+  }
+  document.getElementById('cpClose').addEventListener('click', closeCommentPanel);
+
+  // Close panel on click outside
+  document.addEventListener('click', function(e) {
+    var panel = document.getElementById('commentPanel');
+    if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('#detailPanel') && !e.target.closest('g.node')) {
+      closeCommentPanel();
+    }
+  });
+
+  // Filter pills
+  document.querySelector('.cp-filters').addEventListener('click', function(e) {
+    var pill = e.target.closest('.cp-filter-pill');
+    if (!pill) return;
+    cpFilter = pill.getAttribute('data-cp-filter') || '';
+    document.querySelectorAll('.cp-filter-pill').forEach(function(p) { p.classList.toggle('active', p.getAttribute('data-cp-filter') === cpFilter); });
+    loadCommentList();
+  });
+
+  async function loadCommentList() {
+    var el = document.getElementById('cpList');
+    if (!cpCurrentNodeId) { el.innerHTML = ''; return; }
+    try {
+      var url = '/api/node-comments?lineage_node_id=' + encodeURIComponent(cpCurrentNodeId);
+      if (cpFilter) url += '&comment_type=' + encodeURIComponent(cpFilter);
+      var res = await window.AtlasShared.apiFetch(url);
+      if (!res.ok) throw new Error();
+      var comments = await res.json();
+      comments = Array.isArray(comments) ? comments : (comments.items || []);
+      if (!comments.length) {
+        el.innerHTML = '<div class="cp-empty">Noch keine Kommentare' + (cpFilter ? ' vom Typ ' + cpFilter : '') + '.</div>';
+        return;
+      }
+      el.innerHTML = comments.map(function(c) {
+        var authorName = c.author ? (c.author.display_name || c.author.email || '') : '';
+        return '<div class="cp-comment">'
+          + '<div class="cp-comment-head">'
+          + '<span class="cp-comment-type ' + escHtml(c.comment_type || 'technical') + '">' + escHtml(c.comment_type || 'technical') + '</span>'
+          + (authorName ? cpAvatarHtml(c.author) + '<span class="cp-comment-author">' + escHtml(authorName) + '</span>' : '')
+          + '<span class="cp-comment-author" style="margin-left:auto">' + timeAgo(c.created_at) + '</span>'
+          + '</div>'
+          + '<div class="cp-comment-body">' + (window.AtlasMarkdownEditor ? window.AtlasMarkdownEditor.renderMarkdown(c.content || '') : escHtml(c.content || '')) + '</div>'
+          + (c.assignee ? '<div class="cp-comment-meta">' + cpAvatarHtml(c.assignee) + '<span style="font-size:0.7rem;color:var(--text-muted)">Zugewiesen</span></div>' : '')
+          + '</div>';
+      }).join('');
+    } catch (e) {
+      el.innerHTML = '<div class="cp-empty">Fehler beim Laden</div>';
+    }
+  }
+
+  // Add comment
+  document.getElementById('cpAddBtn').addEventListener('click', function() {
+    this.style.display = 'none';
+    document.getElementById('cpForm').classList.add('open');
+    // Load assignees
+    var projectId = requireLineageProject();
+    if (projectId) {
+      window.AtlasShared.apiFetch('/api/projects/' + encodeURIComponent(projectId) + '/members')
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(users) {
+          users = Array.isArray(users) ? users : [];
+          document.getElementById('cpAssignee').innerHTML = '<option value="">—</option>' + users.map(function(u) { return '<option value="' + u.id + '">' + escHtml(u.display_name || u.email) + '</option>'; }).join('');
+        }).catch(function() {});
+    }
+    // Load template
+    var type = document.getElementById('cpCommentType').value;
+    loadCommentTemplate(type);
+  });
+
+  document.getElementById('cpCommentType').addEventListener('change', function() {
+    loadCommentTemplate(this.value);
+  });
+
+  async function loadCommentTemplate(type) {
+    if (cpEditor) cpEditor.destroy();
+    var tpl = '';
+    try {
+      var r = await window.AtlasShared.apiFetch('/api/templates?type=node_comment_' + encodeURIComponent(type));
+      if (r.ok) { var d = await r.json(); tpl = d.body || d.content || d.template || ''; }
+    } catch (e) {}
+    cpEditor = window.AtlasMarkdownEditor.create('cpEditorContainer', { initialValue: tpl, placeholder: 'Kommentar schreiben…', toolbar: true });
+  }
+
+  document.getElementById('cpFormCancel').addEventListener('click', function() {
+    document.getElementById('cpForm').classList.remove('open');
+    document.getElementById('cpAddBtn').style.display = '';
+    if (cpEditor) { cpEditor.destroy(); cpEditor = null; }
+  });
+
+  document.getElementById('cpFormSave').addEventListener('click', async function() {
+    if (!cpEditor || !cpCurrentNodeId) return;
+    var content = cpEditor.getValue().trim();
+    if (!content) { showToast('Bitte Inhalt eingeben'); return; }
+    var projectId = requireLineageProject();
+    var body = {
+      project_id: parseInt(projectId, 10),
+      lineage_node_id: cpCurrentNodeId,
+      comment_type: document.getElementById('cpCommentType').value,
+      assignee_id: document.getElementById('cpAssignee').value ? parseInt(document.getElementById('cpAssignee').value, 10) : null,
+      content: content
+    };
+    try {
+      var res = await window.AtlasShared.apiFetch('/api/node-comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error();
+      document.getElementById('cpForm').classList.remove('open');
+      document.getElementById('cpAddBtn').style.display = '';
+      if (cpEditor) { cpEditor.destroy(); cpEditor = null; }
+      showToast('Kommentar gespeichert');
+      await Promise.all([loadCommentList(), loadCommentCounts()]);
+      renderCommentBadges();
+    } catch (e) { showToast('Fehler beim Speichern'); }
+  });
+
+  // Override loadGraph to also load comment counts
+  var _origLoadGraph = loadGraph;
+  loadGraph = async function() {
+    await _origLoadGraph();
+    await loadCommentCounts();
+    renderCommentBadges();
+  };
 
   loadFocusSelectors().then(function() {
     loadGraph();

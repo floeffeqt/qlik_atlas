@@ -8,7 +8,7 @@ tags:
   - architecture
   - onboarding
   - docs
-updated: 2026-02-25
+updated: 2026-03-26
 owners: []
 source_of_truth: yes
 related_specs:
@@ -33,6 +33,7 @@ related_docs:
 - Produktanforderungen/Sicherheits-/Testing-Regeln werden ueber zentrale `general` Specs und projektspezifische Specs in `.product-specs/` gesteuert.
 - Projektdokumentation startet ueber `docs/INDEX.md`, verweist aber aktuell noch auf bestehende Root-Dokumente als Hauptquellen.
 - Laufende Architekturmigration: User-facing Runtime-Reads sind DB-only (RLS-scoped); Fetch-Jobs laufen standardmaessig DB-first ohne lokale Fetch-Artefakte.
+- Collaboration-Modul (ab Migration 0021): Tasks, Tags, Doc Entries, Node Comments, App Readmes, Doc Templates — Backend unter `backend/app/collab/`, 25 API-Endpunkte unter `/api`, Frontend-Integration in Dashboard, App-Detail, Projekte, Lineage.
 
 ## Key Facts
 

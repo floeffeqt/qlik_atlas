@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="de" style="background:#1a1a2e;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Detail – Atlas</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --accent: #667eea;
+      --accent2: #764ba2;
+      --text: #fff;
+      --text-muted: rgba(255,255,255,0.5);
+      --text-dim: rgba(255,255,255,0.3);
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --radius: 14px;
+      --radius-sm: 8px;
+      --pri-critical: #E24B4A;
+      --pri-high: #EF9F27;
+      --pri-medium: #378ADD;
+      --pri-low: #B4B2A9;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); }
+
+    /* ── NAV ── */
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
+    .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
+    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
+    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
+    .nav-link:hover, .nav-link.active { color: var(--text); background: var(--surface-hover); }
+    .nav-link.active { color: var(--accent); }
+    .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; }
+    .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); }
+    .nav-project-select option { background: #1a1a2e; }
+    .nav-spacer { flex: 1; }
+    .nav-user { display: flex; align-items: center; gap: 0.75rem; }
+    .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
+    .btn-sm { padding: 0.4rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
+    .btn-sm:hover { background: var(--surface-hover); color: var(--text); }
+
+    /* ── LAYOUT ── */
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    /* ── APP HEADER ── */
+    .app-header { margin-bottom: 1.5rem; }
+    .app-breadcrumb { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .app-breadcrumb a { color: var(--accent); text-decoration: none; }
+    .app-breadcrumb a:hover { text-decoration: underline; }
+    .app-name { font-size: 1.5rem; font-weight: 700; }
+    .app-id { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.15rem; }
+
+    /* ── TABS ── */
+    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
+    .tab-btn { padding: 0.65rem 1.2rem; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── COMMON ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; backdrop-filter: blur(10px); }
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 1.1rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { opacity: 0.9; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .section-title { font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+
+    /* ── BADGE & TAGS ── */
+    .badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem; border-radius: 100px; font-size: 0.68rem; font-weight: 600; flex-shrink: 0; }
+    .badge-open { background: rgba(55,138,221,0.15); color: #60a5fa; }
+    .badge-in_progress { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .badge-review { background: rgba(168,85,247,0.15); color: #c084fc; }
+    .badge-done { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-green { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-red { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-gray { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+    .tag-pill { display: inline-flex; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; }
+    .avatar { width: 24px; height: 24px; border-radius: 50%; background: rgba(102,126,234,0.25); color: #a5b4fc; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; flex-shrink: 0; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* ── TASK TABLE ── */
+    .task-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer; transition: background 0.1s; }
+    .task-row:hover { background: rgba(255,255,255,0.03); }
+    .task-row:last-child { border-bottom: none; }
+    .task-pri { width: 3px; height: 28px; border-radius: 2px; flex-shrink: 0; }
+    .task-pri.critical { background: var(--pri-critical); }
+    .task-pri.high { background: var(--pri-high); }
+    .task-pri.medium { background: var(--pri-medium); }
+    .task-pri.low { background: var(--pri-low); }
+    .task-body { flex: 1; min-width: 0; }
+    .task-title { font-size: 0.84rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .task-meta { font-size: 0.72rem; color: var(--text-muted); display: flex; gap: 0.5rem; margin-top: 0.15rem; flex-wrap: wrap; align-items: center; }
+    .task-overdue { color: var(--error); }
+
+    /* ── FILTER BAR ── */
+    .filter-bar { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+    .filter-bar select { height: 28px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #fff; border-radius: 6px; padding: 0 0.5rem; font-size: 0.72rem; outline: none; }
+    .filter-bar select option { background: #1a1a2e; }
+
+    /* ── DOC ROWS ── */
+    .doc-row { display: flex; align-items: flex-start; gap: 0.55rem; padding: 0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer; transition: background 0.1s; }
+    .doc-row:hover { background: rgba(255,255,255,0.03); }
+    .doc-row:last-child { border-bottom: none; }
+    .doc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 0.35rem; }
+    .doc-dot.change { background: #60a5fa; }
+    .doc-dot.decision { background: #4ade80; }
+    .doc-dot.incident { background: #f87171; }
+    .doc-dot.note { background: rgba(255,255,255,0.35); }
+    .doc-body { flex: 1; min-width: 0; }
+    .doc-title { font-size: 0.84rem; font-weight: 500; }
+    .doc-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .doc-group-header { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); padding: 0.6rem 0 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+    /* ── README TAB ── */
+    .readme-banner { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-size: 0.82rem; color: #fbbf24; margin-bottom: 1rem; }
+    .readme-status { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem; }
+
+    /* ── DATASOURCE CHIPS ── */
+    .ds-section { margin-bottom: 1rem; }
+    .ds-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .ds-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+    .ds-hint { font-size: 0.7rem; color: var(--text-dim); }
+    .ds-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .ds-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.28rem 0.6rem; border-radius: 100px; font-size: 0.72rem; font-weight: 500; cursor: pointer; transition: all 0.15s; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: var(--text-muted); user-select: none; }
+    .ds-chip:hover { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); }
+    .ds-chip.selected { border-color: rgba(102,126,234,0.5); background: rgba(102,126,234,0.12); color: #a5b4fc; }
+    .ds-chip .ds-icon { font-size: 0.65rem; opacity: 0.6; }
+    .ds-chip.selected .ds-icon { opacity: 1; }
+    .ds-chip .ds-check { font-size: 0.6rem; display: none; }
+    .ds-chip.selected .ds-check { display: inline; }
+    .ds-insert-btn { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.85rem; margin-top: 0.5rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+    .ds-insert-btn:hover { opacity: 0.9; }
+    .ds-insert-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── TASK DETAIL PANEL ── */
+    .task-panel { position: fixed; top: 60px; right: 0; width: 420px; max-width: 90vw; height: calc(100vh - 60px); background: rgba(12,18,45,0.97); border-left: 1px solid var(--border); backdrop-filter: blur(20px); z-index: 150; transform: translateX(100%); transition: transform 0.25s ease; padding: 1.5rem; overflow-y: auto; }
+    .task-panel.open { transform: translateX(0); }
+    .task-panel-close { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .task-panel-close:hover { color: var(--text); }
+    .panel-field { margin-bottom: 0.75rem; }
+    .panel-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 0.2rem; }
+    .panel-value { font-size: 0.85rem; }
+    .panel-subtasks { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+    .panel-subtask { font-size: 0.8rem; padding: 0.3rem 0; display: flex; align-items: center; gap: 0.4rem; }
+
+    /* ── DOC SIDEBAR ── */
+    .doc-sidebar { position: fixed; top: 60px; right: 0; width: 420px; max-width: 90vw; height: calc(100vh - 60px); background: rgba(12,18,45,0.97); border-left: 1px solid var(--border); backdrop-filter: blur(20px); z-index: 150; transform: translateX(100%); transition: transform 0.25s ease; padding: 1.5rem; overflow-y: auto; }
+    .doc-sidebar.open { transform: translateX(0); }
+    .doc-sidebar-close { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .doc-sidebar-type { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.3rem; }
+    .doc-sidebar-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .doc-sidebar-meta { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem; }
+    .doc-sidebar-content { font-size: 0.85rem; line-height: 1.65; color: rgba(255,255,255,0.85); }
+    .doc-sidebar-content h2 { font-size: 1rem; margin: 0.75rem 0 0.35rem; }
+    .doc-sidebar-content p { margin: 0.35rem 0; }
+    .doc-sidebar-content code { background: rgba(255,255,255,0.08); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.8rem; }
+    .doc-sidebar-content table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+    .doc-sidebar-content th, .doc-sidebar-content td { border: 1px solid rgba(255,255,255,0.12); padding: 0.3rem 0.5rem; font-size: 0.78rem; }
+    .doc-sidebar-content th { background: rgba(255,255,255,0.05); }
+
+    /* ── MODAL ── */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: flex-start; justify-content: center; padding-top: 5vh; overflow-y: auto; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.75rem; width: 100%; max-width: 600px; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.5); margin-bottom: 2rem; }
+    .modal-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 1.25rem; }
+    .modal-close { position: absolute; top: 0.85rem; right: 0.85rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .modal-close:hover { color: var(--text); }
+    .form-group { margin-bottom: 1rem; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    label { display: block; color: rgba(255,255,255,0.7); font-size: 0.78rem; font-weight: 500; margin-bottom: 0.35rem; }
+    input[type="text"], input[type="url"], input[type="date"], input[type="number"], select, textarea {
+      width: 100%; padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-size: 0.85rem; outline: none; transition: border-color 0.2s; font-family: inherit;
+    }
+    input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.25); }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    select option { background: #1a1a2e; }
+    textarea { resize: vertical; min-height: 70px; }
+    .modal-footer { display: flex; gap: 0.65rem; justify-content: flex-end; margin-top: 1.25rem; }
+    .btn-modal-cancel { padding: 0.55rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.82rem; cursor: pointer; }
+    .btn-modal-cancel:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-modal-save { padding: 0.55rem 1.15rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+    .btn-modal-save:hover { opacity: 0.9; }
+    .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .alert { border-radius: var(--radius-sm); padding: 0.55rem 0.8rem; font-size: 0.82rem; margin-bottom: 0.75rem; display: none; }
+    .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
+
+    /* ── TAG SELECT ── */
+    .tag-select-wrap { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.5rem; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; min-height: 38px; align-items: center; }
+    .tag-add-btn { font-size: 0.72rem; color: var(--accent); cursor: pointer; padding: 0.15rem 0.4rem; border: 1px dashed rgba(102,126,234,0.4); border-radius: 4px; background: none; }
+    .tag-add-btn:hover { border-color: var(--accent); }
+    .tag-dropdown { position: absolute; background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem; max-height: 180px; overflow-y: auto; z-index: 10; min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .tag-dropdown-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.78rem; }
+    .tag-dropdown-item:hover { background: rgba(255,255,255,0.08); }
+    .tag-create-inline { display: flex; gap: 0.35rem; align-items: center; margin-top: 0.4rem; }
+    .tag-create-inline input[type="text"] { width: 120px; padding: 0.3rem 0.5rem; font-size: 0.75rem; }
+    .tag-create-inline input[type="color"] { width: 30px; height: 28px; padding: 0; border: none; background: none; cursor: pointer; }
+
+    .empty-state { text-align: center; padding: 2rem 1rem; color: var(--text-dim); font-size: 0.82rem; }
+    .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.35; }
+    .empty-action { color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+    /* ── TOAST ── */
+    #toast { position: fixed; top: 1rem; right: 1.5rem; background: rgba(30,40,70,0.95); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.65rem 1rem; font-size: 0.82rem; color: var(--text); backdrop-filter: blur(10px); opacity: 0; transform: translateY(-10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; max-width: 340px; z-index: 500; }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    .admin-fab { position: fixed; bottom: 1.5rem; left: 1.5rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; text-decoration: none; font-size: 0.85rem; font-weight: 600; border-radius: var(--radius-sm); z-index: 90; display: none; }
+  </style>
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/">
+    <div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>
+    Atlas
+  </a>
+  <div class="nav-links">
+    <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/">Dashboard</a>
+    <a class="nav-link" href="/analytics.html">Analytics</a>
+    <a class="nav-link" href="/lineage.html">Lineage</a>
+    <a class="nav-link" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/theme-builder.html">Theme</a>
+  </div>
+  <div class="nav-project-badge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">…</option></select>
+  </div>
+  <div class="nav-project-badge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">…</option></select>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-user">
+    <span class="nav-user-email" id="userEmail">—</span>
+    <button class="btn-sm" id="logoutBtn">Sign out</button>
+  </div>
+</nav>
+
+<main>
+  <!-- App header -->
+  <div class="app-header">
+    <div class="app-breadcrumb"><a href="/">Dashboard</a> / <a href="/projects.html">Projekte</a> / <span id="appBreadcrumb">App</span></div>
+    <div class="app-name" id="appName">—</div>
+    <div class="app-id" id="appIdLabel">—</div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="tasks">Tasks</button>
+    <button class="tab-btn" data-tab="changelog">Logs</button>
+    <button class="tab-btn" data-tab="readme">README</button>
+  </div>
+
+  <!-- Tab: Tasks -->
+  <div class="tab-content active" id="tab-tasks">
+    <div class="section-header">
+      <span class="section-title">Tasks für diese App</span>
+      <button class="btn-primary" id="btnNewAppTask">+ Task für diese App</button>
+    </div>
+    <div class="filter-bar">
+      <select id="tFilterStatus"><option value="">Alle Status</option><option value="open">Open</option><option value="in_progress">In Bearb.</option><option value="review">Review</option><option value="done">Done</option></select>
+      <select id="tFilterPriority"><option value="">Alle Prios</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+      <select id="tFilterTag"><option value="">Alle Tags</option></select>
+    </div>
+    <div id="appTasksList"></div>
+  </div>
+
+  <!-- Tab: Changelog -->
+  <div class="tab-content" id="tab-changelog">
+    <div class="section-header">
+      <span class="section-title">Logs</span>
+      <button class="btn-primary" id="btnNewAppDoc" style="background:linear-gradient(135deg,#14b8a6,#0d9488)">+ Eintrag</button>
+    </div>
+    <div id="appDocsList"></div>
+  </div>
+
+  <!-- Tab: README -->
+  <div class="tab-content" id="tab-readme">
+    <div class="readme-banner" id="readmeBanner" style="display:none">Noch kein README vorhanden. Beginne jetzt mit der Dokumentation dieser App.</div>
+    <div class="readme-status" id="readmeStatus"></div>
+    <div class="ds-section" id="dsSection" style="display:none">
+      <div class="ds-header">
+        <span class="ds-title">Datenquellen (Lineage)</span>
+        <span class="ds-hint">— Quellen an-/abwählen, dann in README einfügen</span>
+      </div>
+      <div class="ds-chips" id="dsChips"></div>
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
+        <button class="ds-insert-btn" id="dsSelectAll">Alle auswählen</button>
+        <button class="ds-insert-btn" id="dsInsertBtn" disabled>In README einfügen</button>
+      </div>
+    </div>
+    <div id="readmeEditorContainer"></div>
+  </div>
+</main>
+
+<!-- Task Panel (slide-in) -->
+<div class="task-panel" id="taskPanel">
+  <button class="task-panel-close" id="taskPanelClose">&#x2715;</button>
+  <div id="taskPanelContent"></div>
+</div>
+
+<!-- Doc Sidebar -->
+<div class="doc-sidebar" id="docSidebar">
+  <button class="doc-sidebar-close" id="docSidebarClose">&#x2715;</button>
+  <div class="doc-sidebar-type" id="sidebarType"></div>
+  <div class="doc-sidebar-title" id="sidebarTitle"></div>
+  <div class="doc-sidebar-meta" id="sidebarMeta"></div>
+  <div class="doc-sidebar-content" id="sidebarContent"></div>
+</div>
+
+<!-- Task Modal -->
+<div class="modal-backdrop" id="taskModal">
+  <div class="modal">
+    <button class="modal-close" id="taskModalClose">&#x2715;</button>
+    <div class="modal-title">Neuer Task</div>
+    <div class="alert alert-error" id="taskError"></div>
+    <form id="taskForm">
+      <div class="form-group">
+        <label for="taskTitle">Titel *</label>
+        <input type="text" id="taskTitle" required placeholder="Task-Titel" />
+      </div>
+      <div class="form-group">
+        <label for="taskDesc">Beschreibung</label>
+        <textarea id="taskDesc" rows="3" placeholder="Optional"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label for="taskStatus">Status</label><select id="taskStatus"><option value="open">Open</option><option value="in_progress">In Bearb.</option><option value="review">Review</option><option value="done">Done</option></select></div>
+        <div class="form-group"><label for="taskPriority">Priorität</label><select id="taskPriority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
+      </div>
+      <div class="form-group" style="position:relative">
+        <label>Tags</label>
+        <div class="tag-select-wrap" id="taskTagsWrap"><button type="button" class="tag-add-btn" id="taskTagAddBtn">+ Tag</button></div>
+        <div class="tag-dropdown" id="taskTagDropdown" style="display:none"></div>
+        <div class="tag-create-inline" id="taskTagCreate" style="display:none">
+          <input type="text" id="newTagName" placeholder="Tag-Name" />
+          <input type="color" id="newTagColor" value="#667eea" />
+          <button type="button" class="btn-sm" id="newTagSave">OK</button>
+          <button type="button" class="btn-sm" id="newTagCancel" style="color:var(--text-dim)">×</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label for="taskAssignee">Zuweisen an</label><select id="taskAssignee"><option value="">—</option></select></div>
+        <div class="form-group"><label for="taskDueDate">Fälligkeit</label><input type="date" id="taskDueDate" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label for="taskMinutes">Geschätzte Min.</label><input type="number" id="taskMinutes" min="0" /></div>
+        <div class="form-group"><label for="taskParent">Parent Task</label><select id="taskParent"><option value="">—</option></select></div>
+      </div>
+      <div class="form-group"><label for="taskAppLink">App-Link</label><input type="url" id="taskAppLink" placeholder="https://..." /></div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="taskCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save">Task erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Doc Entry Modal -->
+<div class="modal-backdrop" id="docModal">
+  <div class="modal" style="max-width:720px">
+    <button class="modal-close" id="docModalClose">&#x2715;</button>
+    <div class="modal-title">Neuer Log-Eintrag</div>
+    <div class="alert alert-error" id="docError"></div>
+    <form id="docForm">
+      <div class="form-row">
+        <div class="form-group"><label for="docType">Typ</label><select id="docType"><option value="change">Change</option><option value="decision">Decision</option><option value="note" selected>Note</option><option value="incident">Incident</option></select></div>
+        <div class="form-group"><label for="docDate">Datum</label><input type="date" id="docDate" /></div>
+      </div>
+      <div class="form-group"><label>Inhalt</label><div id="docEditorContainer"></div></div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="docCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save">Erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
+<div id="toast"></div>
+
+<script src="/assets/atlas-shared.js"></script>
+<script src="/assets/markdownEditor.js"></script>
+<script>
+(function () {
+  var apiFetch = window.AtlasShared.apiFetch;
+  var escHtml = window.AtlasShared.escapeHtml;
+  var showToast = function (m, d) { window.AtlasShared.showToast(m, d || 4000, 'toast'); };
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
+  window.AtlasShared.bindLogout('logoutBtn');
+
+  var params = new URLSearchParams(window.location.search);
+  var projectId = params.get('project') || '';
+  var appId = params.get('app_id') || '';
+  var initialTab = params.get('tab') || 'tasks';
+
+  var state = window.AtlasShared.readFocusState(window.location.search);
+  if (projectId) state.project = projectId;
+  var projectsById = {}, customersById = {}, allProjects = [], allCustomers = [];
+  var allTags = [], allUsers = [];
+  var selectedTaskTags = [];
+  var appInfo = null;
+  var readmeEditor = null, readmeId = null, readmeAutoSaveTimer = null;
+
+  function projectCustomerId(p) { return window.AtlasShared.projectCustomerId(p); }
+
+  /* ── Helpers ── */
+  function timeAgo(d) { if (!d) return ''; var diff = Date.now() - new Date(d).getTime(); var m = Math.floor(diff / 60000); if (m < 1) return 'gerade eben'; if (m < 60) return 'vor ' + m + ' Min.'; var h = Math.floor(m / 60); if (h < 24) return 'vor ' + h + ' Std.'; var days = Math.floor(h / 24); if (days === 1) return 'gestern'; if (days < 7) return 'vor ' + days + ' Tagen'; var w = Math.floor(days / 7); if (w < 5) return 'vor ' + w + ' Wochen'; return 'vor ' + Math.floor(days / 30) + ' Monaten'; }
+  function fmtDate(d) { return d ? new Date(d).toLocaleDateString('de-DE') : '—'; }
+  function isOverdue(d) { if (!d) return false; var t = new Date(); t.setHours(0,0,0,0); return new Date(d) < t; }
+  function avatarHtml(u) { if (!u) return ''; var n = u.display_name || u.email || ''; var i = n.split(/[\s@]/).filter(Boolean).slice(0,2).map(function(s){return s[0].toUpperCase();}).join(''); return '<span class="avatar" title="'+escHtml(n)+'">'+escHtml(i||'?')+'</span>'; }
+  function statusBadge(s) { var l = {open:'Open',in_progress:'In Bearb.',review:'Review',done:'Done'}; return '<span class="badge badge-'+(s||'open')+'">'+escHtml(l[s]||s||'open')+'</span>'; }
+  function tagPill(t) { return '<span class="tag-pill" style="background:'+escHtml(t.color)+'22;color:'+escHtml(t.color)+'">'+escHtml(t.name)+'</span>'; }
+  function typeColor(t) { return {change:'open',decision:'green',incident:'red'}[t] || 'gray'; }
+
+  /* ── Tab switching ── */
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
+      this.classList.add('active');
+      document.getElementById('tab-' + this.getAttribute('data-tab')).classList.add('active');
+      var u = new URLSearchParams(window.location.search);
+      u.set('tab', this.getAttribute('data-tab'));
+      history.replaceState(null, '', '/app-detail.html?' + u.toString());
+    });
+  });
+
+  /* ── Load nav selectors ── */
+  async function loadNav() {
+    var [pRes, cRes] = await Promise.all([apiFetch('/api/projects'), apiFetch('/api/customers/names')]);
+    allProjects = pRes.ok ? await pRes.json() : []; allCustomers = cRes.ok ? await cRes.json() : [];
+    allProjects = Array.isArray(allProjects) ? allProjects : [];
+    allCustomers = Array.isArray(allCustomers) ? allCustomers : [];
+    allProjects.forEach(function (p) { projectsById[String(p.id)] = p; });
+    allCustomers.forEach(function (c) { customersById[String(c.id)] = c; });
+    if (state.project && projectsById[state.project]) {
+      var cid = projectCustomerId(projectsById[state.project]);
+      if (cid) state.customer = String(cid);
+    }
+    // Render selectors (read-only context on this page)
+    var cSel = document.getElementById('navCustomerSelect');
+    cSel.innerHTML = allCustomers.map(function (c) { return '<option value="'+c.id+'"'+(String(c.id)===state.customer?' selected':'')+'>'+escHtml(c.name)+'</option>'; }).join('');
+    var pSel = document.getElementById('navProjectSelect');
+    var fp = allProjects.filter(function (p) { return String(projectCustomerId(p)) === state.customer; });
+    pSel.innerHTML = fp.map(function (p) { return '<option value="'+p.id+'"'+(String(p.id)===state.project?' selected':'')+'>'+escHtml(p.name)+'</option>'; }).join('');
+    window.AtlasShared.updateNavProjectContext(state.project, state.customer, 'a.nav-link');
+  }
+
+  /* ── Load app info ── */
+  async function loadAppInfo() {
+    try {
+      var res = await apiFetch('/api/qlik-apps/' + encodeURIComponent(appId) + '?project_id=' + encodeURIComponent(projectId));
+      if (res.ok) appInfo = await res.json();
+    } catch (e) {}
+    var name = appInfo ? (appInfo.name || appInfo.app_name || appId) : appId;
+    document.getElementById('appName').textContent = name;
+    document.getElementById('appBreadcrumb').textContent = name;
+    document.getElementById('appIdLabel').textContent = 'App ID: ' + appId;
+    document.title = name + ' – Atlas';
+  }
+
+  /* ── Load tags ── */
+  async function loadTags() {
+    if (!state.customer) return;
+    var res = await apiFetch('/api/tags?customer_id=' + encodeURIComponent(state.customer));
+    allTags = res.ok ? await res.json() : [];
+    allTags = Array.isArray(allTags) ? allTags : [];
+    document.getElementById('tFilterTag').innerHTML = '<option value="">Alle Tags</option>' + allTags.map(function (t) { return '<option value="'+t.id+'">'+escHtml(t.name)+'</option>'; }).join('');
+  }
+
+  /* ── Tasks Tab ── */
+  async function loadAppTasks() {
+    var el = document.getElementById('appTasksList');
+    var url = '/api/tasks?qlik_app_id=' + encodeURIComponent(appId) + '&project_id=' + encodeURIComponent(projectId);
+    var sf = document.getElementById('tFilterStatus').value;
+    var pf = document.getElementById('tFilterPriority').value;
+    var tf = document.getElementById('tFilterTag').value;
+    if (sf) url += '&status=' + sf;
+    if (pf) url += '&priority=' + pf;
+    if (tf) url += '&tag=' + tf;
+    try {
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var tasks = await res.json();
+      tasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
+      if (!tasks.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x2705;</div>Noch keine Tasks für diese App.<br><span class="empty-action" id="emptyTaskAction">+ Task erstellen</span></div>'; var ea = document.getElementById('emptyTaskAction'); if (ea) ea.addEventListener('click', openTaskModal); return; }
+      el.innerHTML = tasks.map(function (t) {
+        var tags = (t.tags || []).map(tagPill).join(' ');
+        var od = isOverdue(t.due_date) && t.status !== 'done';
+        return '<div class="task-row" data-task-id="'+t.id+'">'
+          +'<div class="task-pri '+(t.priority||'medium')+'"></div>'
+          +statusBadge(t.status)
+          +'<div class="task-body"><div class="task-title">'+escHtml(t.title)+'</div>'
+          +'<div class="task-meta">'+tags
+          +(t.due_date?'<span class="'+(od?'task-overdue':'')+'">'+fmtDate(t.due_date)+'</span>':'')
+          +(t.estimated_minutes?'<span>~'+t.estimated_minutes+' Min.</span>':'')
+          +'</div></div>'
+          +(t.assignee?avatarHtml(t.assignee):'')
+          +'</div>';
+      }).join('');
+    } catch (e) { el.innerHTML = '<div class="empty-state">Fehler beim Laden</div>'; }
+  }
+
+  document.getElementById('tFilterStatus').addEventListener('change', loadAppTasks);
+  document.getElementById('tFilterPriority').addEventListener('change', loadAppTasks);
+  document.getElementById('tFilterTag').addEventListener('change', loadAppTasks);
+
+  /* ── Task detail panel ── */
+  document.getElementById('appTasksList').addEventListener('click', async function (e) {
+    var row = e.target.closest('.task-row');
+    if (!row) return;
+    var tid = row.getAttribute('data-task-id');
+    try {
+      var res = await apiFetch('/api/tasks/' + tid);
+      if (!res.ok) throw new Error();
+      var t = await res.json();
+      var html = '<h3 style="font-size:1.1rem;margin-bottom:1rem">'+escHtml(t.title)+'</h3>'
+        +'<div class="panel-field"><div class="panel-label">STATUS</div><div class="panel-value">'+statusBadge(t.status)+'</div></div>'
+        +'<div class="panel-field"><div class="panel-label">PRIORITÄT</div><div class="panel-value"><div class="task-pri '+(t.priority||'medium')+'" style="display:inline-block;width:3px;height:16px;border-radius:2px;vertical-align:middle;margin-right:6px"></div>'+escHtml(t.priority||'medium')+'</div></div>'
+        +(t.assignee?'<div class="panel-field"><div class="panel-label">ZUGEWIESEN AN</div><div class="panel-value">'+avatarHtml(t.assignee)+' '+escHtml(t.assignee.display_name||t.assignee.email)+'</div></div>':'')
+        +(t.due_date?'<div class="panel-field"><div class="panel-label">FÄLLIGKEIT</div><div class="panel-value'+(isOverdue(t.due_date)?' task-overdue':'')+'">'+fmtDate(t.due_date)+'</div></div>':'')
+        +(t.estimated_minutes?'<div class="panel-field"><div class="panel-label">GESCHÄTZTE ZEIT</div><div class="panel-value">'+t.estimated_minutes+' Min.</div></div>':'')
+        +(t.description?'<div class="panel-field"><div class="panel-label">BESCHREIBUNG</div><div class="panel-value" style="font-size:0.82rem;line-height:1.5;color:var(--text-muted)">'+escHtml(t.description)+'</div></div>':'')
+        +((t.tags&&t.tags.length)?'<div class="panel-field"><div class="panel-label">TAGS</div><div class="panel-value">'+t.tags.map(tagPill).join(' ')+'</div></div>':'')
+        +(t.app_link?'<div class="panel-field"><div class="panel-label">APP-LINK</div><div class="panel-value"><a href="'+escHtml(t.app_link)+'" target="_blank" style="color:var(--accent)">'+escHtml(t.app_link)+'</a></div></div>':'');
+      // Subtasks
+      if (t.subtasks && t.subtasks.length) {
+        html += '<div class="panel-subtasks"><div class="panel-label" style="margin-bottom:0.4rem">SUBTASKS</div>';
+        t.subtasks.forEach(function (s) { html += '<div class="panel-subtask">'+statusBadge(s.status)+' '+escHtml(s.title)+'</div>'; });
+        html += '</div>';
+      }
+      document.getElementById('taskPanelContent').innerHTML = html;
+      document.getElementById('taskPanel').classList.add('open');
+    } catch (e) { showToast('Task konnte nicht geladen werden'); }
+  });
+  document.getElementById('taskPanelClose').addEventListener('click', function () { document.getElementById('taskPanel').classList.remove('open'); });
+  document.addEventListener('click', function (e) {
+    var p = document.getElementById('taskPanel');
+    if (p.classList.contains('open') && !p.contains(e.target) && !e.target.closest('.task-row')) p.classList.remove('open');
+  });
+
+  /* ── Changelog Tab ── */
+  async function loadAppDocs() {
+    var el = document.getElementById('appDocsList');
+    try {
+      var res = await apiFetch('/api/log-entries?qlik_app_id=' + encodeURIComponent(appId) + '&project_id=' + encodeURIComponent(projectId));
+      if (!res.ok) throw new Error();
+      var docs = await res.json();
+      docs = Array.isArray(docs) ? docs : (docs.items || []);
+      if (!docs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4DD;</div>Noch keine Einträge.<br><span class="empty-action" id="emptyDocAction">+ Eintrag erstellen</span></div>'; var ea = document.getElementById('emptyDocAction'); if (ea) ea.addEventListener('click', function () { openDocModal(); }); return; }
+      // Group: today / this week / older
+      var now = new Date();
+      var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      var weekStart = todayStart - (now.getDay() * 86400000);
+      var groups = { today: [], thisWeek: [], older: [] };
+      docs.forEach(function (d) {
+        var ts = new Date(d.created_at || d.entry_date).getTime();
+        if (ts >= todayStart) groups.today.push(d);
+        else if (ts >= weekStart) groups.thisWeek.push(d);
+        else groups.older.push(d);
+      });
+      var html = '';
+      function renderGroup(label, items) {
+        if (!items.length) return '';
+        var h = '<div class="doc-group-header">' + label + '</div>';
+        items.forEach(function (d) {
+          h += '<div class="doc-row" data-doc-id="'+d.id+'">'
+            +'<div class="doc-dot '+(d.entry_type||'note')+'"></div>'
+            +'<div class="doc-body"><div class="doc-title"><span class="badge badge-'+typeColor(d.entry_type)+'">'+escHtml(d.entry_type)+'</span> '+escHtml(d.title||d.content?.substring(0,60)||'')+'</div>'
+            +'<div class="doc-meta">'+(d.author?escHtml(d.author.display_name||d.author.email)+' · ':'')+timeAgo(d.created_at)+'</div></div></div>';
+        });
+        return h;
+      }
+      html += renderGroup('Heute', groups.today);
+      html += renderGroup('Diese Woche', groups.thisWeek);
+      html += renderGroup('Älter', groups.older);
+      el.innerHTML = html;
+    } catch (e) { el.innerHTML = '<div class="empty-state">Fehler</div>'; }
+  }
+
+  /* ── Doc click → sidebar ── */
+  document.getElementById('appDocsList').addEventListener('click', async function (e) {
+    var row = e.target.closest('.doc-row');
+    if (!row) return;
+    try {
+      var res = await apiFetch('/api/log-entries/' + row.getAttribute('data-doc-id'));
+      if (!res.ok) throw new Error();
+      var doc = await res.json();
+      document.getElementById('sidebarType').textContent = (doc.entry_type||'note').toUpperCase();
+      document.getElementById('sidebarType').style.color = {change:'#60a5fa',decision:'#4ade80',incident:'#f87171'}[doc.entry_type]||'var(--text-muted)';
+      document.getElementById('sidebarTitle').textContent = doc.title || '(Kein Titel)';
+      document.getElementById('sidebarMeta').textContent = (doc.author?(doc.author.display_name||doc.author.email)+' · ':'')+timeAgo(doc.created_at);
+      document.getElementById('sidebarContent').innerHTML = AtlasMarkdownEditor.renderMarkdown(doc.content||'');
+      document.getElementById('docSidebar').classList.add('open');
+    } catch (e) { showToast('Eintrag konnte nicht geladen werden'); }
+  });
+  document.getElementById('docSidebarClose').addEventListener('click', function () { document.getElementById('docSidebar').classList.remove('open'); });
+
+  /* ── README Tab ── */
+  async function loadReadme() {
+    var statusEl = document.getElementById('readmeStatus');
+    var bannerEl = document.getElementById('readmeBanner');
+    try {
+      var res = await apiFetch('/api/readmes?qlik_app_id=' + encodeURIComponent(appId) + '&project_id=' + encodeURIComponent(projectId));
+      if (!res.ok) throw new Error();
+      var data = await res.json();
+      var readme = Array.isArray(data) ? data[0] : data;
+      if (readme && readme.id) {
+        readmeId = readme.id;
+        bannerEl.style.display = 'none';
+        initReadmeEditor(readme.content || '');
+        statusEl.textContent = 'Zuletzt gespeichert: ' + timeAgo(readme.updated_at);
+      } else {
+        throw new Error('empty');
+      }
+    } catch (e) {
+      readmeId = null;
+      bannerEl.style.display = 'block';
+      // Load template
+      var tpl = '';
+      try {
+        var tRes = await apiFetch('/api/templates?type=app_readme');
+        if (tRes.ok) { var td = await tRes.json(); tpl = td.body || td.content || td.template || ''; }
+      } catch (_) {}
+      initReadmeEditor(tpl);
+      statusEl.textContent = 'Nicht gespeichert — Änderungen gehen verloren';
+    }
+  }
+
+  function initReadmeEditor(content) {
+    if (readmeEditor) readmeEditor.destroy();
+    readmeEditor = AtlasMarkdownEditor.create('readmeEditorContainer', {
+      initialValue: content,
+      toolbar: true,
+      resetButton: true,
+      placeholder: 'App-Dokumentation schreiben…',
+      onChange: function () { debounceAutoSave(); },
+      onReset: async function () {
+        try {
+          var tRes = await apiFetch('/api/templates?type=app_readme');
+          if (tRes.ok) { var d = await tRes.json(); readmeEditor.setValue(d.body || d.content || d.template || ''); }
+        } catch (e) {}
+      }
+    });
+  }
+
+  function debounceAutoSave() {
+    var statusEl = document.getElementById('readmeStatus');
+    statusEl.textContent = 'Nicht gespeichert — Änderungen gehen verloren';
+    clearTimeout(readmeAutoSaveTimer);
+    readmeAutoSaveTimer = setTimeout(saveReadme, 2000);
+  }
+
+  async function saveReadme() {
+    var statusEl = document.getElementById('readmeStatus');
+    if (!readmeEditor) return;
+    var content = readmeEditor.getValue();
+    statusEl.textContent = 'Wird gespeichert...';
+    try {
+      if (readmeId) {
+        var res = await apiFetch('/api/readmes/' + readmeId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: content }) });
+        if (!res.ok) throw new Error();
+      } else {
+        var res = await apiFetch('/api/readmes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: parseInt(projectId, 10), qlik_app_id: appId, readme_type: 'app_readme', content: content }) });
+        if (!res.ok) throw new Error();
+        var saved = await res.json();
+        readmeId = saved.id;
+        document.getElementById('readmeBanner').style.display = 'none';
+      }
+      statusEl.textContent = 'Gespeichert vor wenigen Sekunden';
+    } catch (e) {
+      statusEl.textContent = 'Fehler beim Speichern';
+    }
+  }
+
+  /* ── Datasource Chips (Lineage) ── */
+  var _dsNodes = [];       // all downstream source nodes
+  var _dsSelected = {};    // { nodeId: true/false }
+
+  var DS_TYPE_ICONS = {
+    db: '&#x1F5C4;', table: '&#x1F4CB;', qvd: '&#x1F4E6;',
+    dataset: '&#x1F4CA;', file: '&#x1F4C4;', other: '&#x2699;'
+  };
+
+  async function loadDatasourceChips() {
+    var section = document.getElementById('dsSection');
+    var chipsEl = document.getElementById('dsChips');
+    try {
+      var res = await apiFetch('/api/graph/app/' + encodeURIComponent(appId) + '?depth=1');
+      if (!res.ok) throw new Error();
+      var graph = await res.json();
+      // Find the app root node
+      var appNodeIds = {};
+      (graph.nodes || []).forEach(function (n) {
+        if (n.type === 'app') appNodeIds[n.id] = true;
+      });
+      // Downstream = sources feeding into this app: edges where target is app node
+      // These are nodes connected via incoming edges to the app
+      var sourceNodeIds = {};
+      (graph.edges || []).forEach(function (e) {
+        if (appNodeIds[e.target]) sourceNodeIds[e.source] = true;
+        // Also include nodes feeding into tables that feed the app
+        if (appNodeIds[e.source]) return; // skip outgoing
+      });
+      // Also collect all non-app nodes as potential sources
+      _dsNodes = (graph.nodes || []).filter(function (n) {
+        return !appNodeIds[n.id] && (n.type === 'db' || n.type === 'table' || n.type === 'qvd' || n.type === 'dataset' || n.type === 'file' || n.type === 'other');
+      }).sort(function (a, b) {
+        // Put direct sources first, then by type, then label
+        var aDir = sourceNodeIds[a.id] ? 0 : 1;
+        var bDir = sourceNodeIds[b.id] ? 0 : 1;
+        if (aDir !== bDir) return aDir - bDir;
+        if (a.type !== b.type) return a.type.localeCompare(b.type);
+        return (a.label || '').localeCompare(b.label || '');
+      });
+      if (!_dsNodes.length) { section.style.display = 'none'; return; }
+      // Pre-select direct sources
+      _dsSelected = {};
+      _dsNodes.forEach(function (n) { _dsSelected[n.id] = !!sourceNodeIds[n.id]; });
+      renderDsChips();
+      section.style.display = '';
+    } catch (e) {
+      section.style.display = 'none';
+    }
+  }
+
+  function renderDsChips() {
+    var chipsEl = document.getElementById('dsChips');
+    var btn = document.getElementById('dsInsertBtn');
+    chipsEl.innerHTML = _dsNodes.map(function (n) {
+      var sel = _dsSelected[n.id] ? ' selected' : '';
+      var icon = DS_TYPE_ICONS[n.type] || DS_TYPE_ICONS.other;
+      var chipLabel = (n.label && n.label !== n.id) ? escHtml(n.label) + ' <span style="opacity:0.45;font-size:0.64rem">' + escHtml(n.id) + '</span>' : escHtml(n.id);
+      return '<span class="ds-chip' + sel + '" data-node-id="' + escHtml(n.id) + '" title="' + escHtml(n.type + ': ' + (n.label || '') + ' (' + n.id + ')') + '">'
+        + '<span class="ds-check">&#x2713;</span>'
+        + '<span class="ds-icon">' + icon + '</span>'
+        + chipLabel
+        + '</span>';
+    }).join('');
+    var anySelected = Object.keys(_dsSelected).some(function (k) { return _dsSelected[k]; });
+    btn.disabled = !anySelected;
+    var allSelected = _dsNodes.length > 0 && _dsNodes.every(function (n) { return _dsSelected[n.id]; });
+    var selAllBtn = document.getElementById('dsSelectAll');
+    if (selAllBtn) selAllBtn.textContent = allSelected ? 'Alle abwählen' : 'Alle auswählen';
+  }
+
+  document.getElementById('dsChips').addEventListener('click', function (e) {
+    var chip = e.target.closest('.ds-chip');
+    if (!chip) return;
+    var nid = chip.getAttribute('data-node-id');
+    _dsSelected[nid] = !_dsSelected[nid];
+    renderDsChips();
+  });
+
+  document.getElementById('dsSelectAll').addEventListener('click', function () {
+    var allSelected = _dsNodes.every(function (n) { return _dsSelected[n.id]; });
+    _dsNodes.forEach(function (n) { _dsSelected[n.id] = !allSelected; });
+    renderDsChips();
+    this.textContent = allSelected ? 'Alle auswählen' : 'Alle abwählen';
+  });
+
+  document.getElementById('dsInsertBtn').addEventListener('click', function () {
+    if (!readmeEditor) return;
+    var selected = _dsNodes.filter(function (n) { return _dsSelected[n.id]; });
+    if (!selected.length) return;
+    var md = '\n\n## Datenquellen\n\n'
+      + '| Typ | Name | Node-ID |\n'
+      + '|-----|------|---------|\n'
+      + selected.map(function (n) {
+          return '| ' + escHtml(n.type) + ' | ' + escHtml(n.label || n.id) + ' | `' + escHtml(n.id) + '` |';
+        }).join('\n')
+      + '\n';
+    var current = readmeEditor.getValue();
+    // Replace existing Datenquellen section or append
+    var dsRegex = /\n*## Datenquellen\n[\s\S]*?(?=\n## |\n*$)/;
+    if (dsRegex.test(current)) {
+      readmeEditor.setValue(current.replace(dsRegex, md));
+    } else {
+      readmeEditor.setValue(current + md);
+    }
+    showToast(selected.length + ' Datenquelle(n) eingefügt');
+  });
+
+  /* ── Task Modal ── */
+  function openTaskModal() {
+    document.getElementById('taskForm').reset();
+    document.getElementById('taskError').style.display = 'none';
+    selectedTaskTags = [];
+    renderTaskTags();
+    // Load users
+    apiFetch('/api/projects/' + encodeURIComponent(projectId) + '/members').then(function(r){return r.ok?r.json():[];}).then(function(u){
+      allUsers = Array.isArray(u)?u:[];
+      document.getElementById('taskAssignee').innerHTML = '<option value="">—</option>' + allUsers.map(function(u){return '<option value="'+u.id+'">'+escHtml(u.display_name||u.email)+'</option>';}).join('');
+    }).catch(function(){});
+    // Load parent tasks
+    apiFetch('/api/tasks?project_id='+encodeURIComponent(projectId)+'&status=open').then(function(r){return r.ok?r.json():[];}).then(function(t){
+      t = Array.isArray(t)?t:(t.items||[]);
+      document.getElementById('taskParent').innerHTML = '<option value="">—</option>' + t.map(function(t){return '<option value="'+t.id+'">'+escHtml(t.title)+'</option>';}).join('');
+    }).catch(function(){});
+    document.getElementById('taskModal').classList.add('open');
+  }
+
+  function closeTaskModal() { document.getElementById('taskModal').classList.remove('open'); }
+  document.getElementById('taskModalClose').addEventListener('click', closeTaskModal);
+  document.getElementById('taskCancel').addEventListener('click', closeTaskModal);
+  document.getElementById('btnNewAppTask').addEventListener('click', openTaskModal);
+
+  /* ── Tag selection (shared pattern) ── */
+  function renderTaskTags() {
+    var wrap = document.getElementById('taskTagsWrap');
+    wrap.innerHTML = selectedTaskTags.map(function(t){
+      return '<span class="tag-pill" style="background:'+escHtml(t.color)+'22;color:'+escHtml(t.color)+'">'+escHtml(t.name)+' <span class="tag-rm" data-tid="'+t.id+'" style="cursor:pointer;opacity:0.6">×</span></span>';
+    }).join('') + '<button type="button" class="tag-add-btn" id="taskTagAddBtn">+ Tag</button>';
+    wrap.querySelector('#taskTagAddBtn').addEventListener('click', openTagDD);
+    wrap.querySelectorAll('.tag-rm').forEach(function(b){ b.addEventListener('click', function(e){ e.stopPropagation(); selectedTaskTags = selectedTaskTags.filter(function(t){return t.id!==parseInt(b.getAttribute('data-tid'),10);}); renderTaskTags(); }); });
+  }
+
+  function openTagDD() {
+    var dd = document.getElementById('taskTagDropdown');
+    var ids = selectedTaskTags.map(function(t){return t.id;});
+    dd.innerHTML = allTags.map(function(t){ return '<div class="tag-dropdown-item'+(ids.indexOf(t.id)>=0?' selected':'')+'" data-tid="'+t.id+'"><span style="width:10px;height:10px;border-radius:50%;background:'+escHtml(t.color)+';flex-shrink:0"></span>'+escHtml(t.name)+'</div>';}).join('')
+      + '<div class="tag-dropdown-item" id="ddCreate" style="color:var(--accent);font-weight:600">+ Neuen Tag</div>';
+    dd.style.display = 'block';
+    dd.querySelectorAll('[data-tid]').forEach(function(i){ i.addEventListener('click', function(){ var id=parseInt(this.getAttribute('data-tid'),10); var tag=allTags.find(function(t){return t.id===id;}); if(tag&&ids.indexOf(id)<0){selectedTaskTags.push(tag);renderTaskTags();} dd.style.display='none'; }); });
+    dd.querySelector('#ddCreate').addEventListener('click', function(){ dd.style.display='none'; document.getElementById('taskTagCreate').style.display='flex'; });
+    setTimeout(function(){ document.addEventListener('click', function h(e){ if(!dd.contains(e.target)){dd.style.display='none';document.removeEventListener('click',h);} }); },10);
+  }
+
+  document.getElementById('newTagSave').addEventListener('click', async function(){
+    var n=document.getElementById('newTagName').value.trim(), c=document.getElementById('newTagColor').value;
+    if(!n) return;
+    try{ var r=await apiFetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_id:parseInt(state.customer,10),name:n,color:c})}); if(!r.ok)throw new Error(); var t=await r.json(); allTags.push(t); selectedTaskTags.push(t); renderTaskTags(); document.getElementById('taskTagCreate').style.display='none'; document.getElementById('newTagName').value=''; }catch(e){showToast('Fehler');}
+  });
+  document.getElementById('newTagCancel').addEventListener('click', function(){ document.getElementById('taskTagCreate').style.display='none'; });
+
+  /* ── Save task ── */
+  document.getElementById('taskForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var errEl = document.getElementById('taskError');
+    errEl.style.display = 'none';
+    var body = { project_id: parseInt(projectId,10), title: document.getElementById('taskTitle').value.trim(), description: document.getElementById('taskDesc').value.trim()||null, status: document.getElementById('taskStatus').value, priority: document.getElementById('taskPriority').value, assignee_id: document.getElementById('taskAssignee').value?parseInt(document.getElementById('taskAssignee').value,10):null, due_date: document.getElementById('taskDueDate').value||null, estimated_minutes: document.getElementById('taskMinutes').value?parseInt(document.getElementById('taskMinutes').value,10):null, qlik_app_id: appId, app_link: document.getElementById('taskAppLink').value.trim()||null, parent_task_id: document.getElementById('taskParent').value?parseInt(document.getElementById('taskParent').value,10):null };
+    try {
+      var res = await apiFetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(!res.ok){var err=await res.json().catch(function(){return{};}); throw new Error(err.detail||'Fehler');}
+      var task = await res.json();
+      for(var i=0;i<selectedTaskTags.length;i++){ await apiFetch('/api/task-tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task_id:task.id,tag_id:selectedTaskTags[i].id})}); }
+      closeTaskModal(); showToast('Task erstellt'); loadAppTasks();
+    } catch(err){ errEl.textContent=err.message; errEl.style.display='block'; }
+  });
+
+  /* ── Doc Modal ── */
+  var docEditor = null;
+  function openDocModal() {
+    document.getElementById('docForm').reset();
+    document.getElementById('docError').style.display = 'none';
+    document.getElementById('docDate').value = new Date().toISOString().slice(0,10);
+    loadDocTemplate(document.getElementById('docType').value);
+    document.getElementById('docModal').classList.add('open');
+  }
+  function closeDocModal() { document.getElementById('docModal').classList.remove('open'); }
+  document.getElementById('docModalClose').addEventListener('click', closeDocModal);
+  document.getElementById('docCancel').addEventListener('click', closeDocModal);
+  document.getElementById('btnNewAppDoc').addEventListener('click', openDocModal);
+
+  async function loadDocTemplate(type) {
+    if(docEditor) docEditor.destroy();
+    var tpl='';
+    try{ var r=await apiFetch('/api/templates?type=doc_entry_'+encodeURIComponent(type)); if(r.ok){var d=await r.json(); tpl=d.body||d.content||d.template||'';} }catch(e){}
+    docEditor = AtlasMarkdownEditor.create('docEditorContainer',{initialValue:tpl,placeholder:'Inhalt…',toolbar:true});
+  }
+  document.getElementById('docType').addEventListener('change', function(){ loadDocTemplate(this.value); });
+
+  document.getElementById('docForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var errEl=document.getElementById('docError');
+    errEl.style.display='none';
+    try{
+      var r=await apiFetch('/api/log-entries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:parseInt(projectId,10),entry_type:document.getElementById('docType').value,qlik_app_id:appId,entry_date:document.getElementById('docDate').value||null,content:docEditor?docEditor.getValue():''})});
+      if(!r.ok)throw new Error((await r.json().catch(function(){return{};})).detail||'Fehler');
+      closeDocModal(); showToast('Log-Eintrag erstellt'); loadAppDocs();
+    }catch(err){ errEl.textContent=err.message; errEl.style.display='block'; }
+  });
+
+  /* ── Set initial tab ── */
+  if (initialTab && initialTab !== 'tasks') {
+    document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
+    var btn = document.querySelector('.tab-btn[data-tab="'+initialTab+'"]');
+    if (btn) btn.classList.add('active');
+    var tab = document.getElementById('tab-'+initialTab);
+    if (tab) tab.classList.add('active');
+  }
+
+  /* ── Init ── */
+  async function init() {
+    await loadNav();
+    await loadAppInfo();
+    await loadTags();
+    await Promise.all([loadAppTasks(), loadAppDocs(), loadReadme(), loadDatasourceChips()]);
+  }
+  init();
+})();
+</script>
+</body>
+</html>

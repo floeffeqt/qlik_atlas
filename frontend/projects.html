@@ -316,6 +316,16 @@
       display: none;
     }
     .admin-fab:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* ── MAIN README SECTION ── */
+    .main-readme-section { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
+    .main-readme-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .main-readme-title { font-size: 0.92rem; font-weight: 700; }
+    .main-readme-status { font-size: 0.78rem; color: var(--text-muted); }
+    .readme-banner { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-size: 0.82rem; color: #fbbf24; margin-bottom: 1rem; }
+    .readme-nav { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+    .readme-nav-btn { padding: 0.25rem 0.55rem; font-size: 0.7rem; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .readme-nav-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
   </style>
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
@@ -353,6 +363,24 @@
       <p class="page-subtitle">Lineage-Projekte verwalten und Daten laden</p>
     </div>
     <button class="btn-primary" id="newProjectBtn">+ Neues Projekt</button>
+  </div>
+
+  <!-- Main Project README -->
+  <div class="main-readme-section" id="mainReadmeSection">
+    <div class="main-readme-header">
+      <span class="main-readme-title">Projekt README</span>
+      <span class="main-readme-status" id="readmeStatus"></span>
+    </div>
+    <div class="readme-banner" id="readmeBanner" style="display:none">Dokumentiere hier Architektur, Reload-Automation und Ansprechpartner für den gesamten Tenant.</div>
+    <div class="readme-nav" id="readmeNav">
+      <button class="readme-nav-btn" data-anchor="tenant-übersicht">Tenant-Übersicht</button>
+      <button class="readme-nav-btn" data-anchor="architektur">Architektur</button>
+      <button class="readme-nav-btn" data-anchor="reload-automation">Reload-Automation</button>
+      <button class="readme-nav-btn" data-anchor="ansprechpartner">Ansprechpartner</button>
+      <button class="readme-nav-btn" data-anchor="entscheidungen">Entscheidungen</button>
+      <button class="readme-nav-btn" data-anchor="einschränkungen">Einschränkungen</button>
+    </div>
+    <div id="readmeEditorContainer"></div>
   </div>
 
   <div id="projectsWrap">
@@ -462,6 +490,7 @@
 <div id="toast"></div>
 
 <script src="/assets/atlas-shared.js"></script>
+<script src="/assets/markdownEditor.js"></script>
 <script>
   window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
   window.AtlasShared.bindLogout('logoutBtn');
@@ -1039,6 +1068,7 @@
   document.getElementById('navCustomerSelect').addEventListener('change', function() {
     focusState.customer = String(this.value || '').trim();
     renderFocusProjectSelect();
+    loadMainReadme();
   });
   document.getElementById('navProjectSelect').addEventListener('change', function() {
     focusState.project = String(this.value || '').trim();
@@ -1047,7 +1077,126 @@
     applyFocusPersistence();
     updateFocusNavLinks(focusState.project, focusState.customer);
     syncFocusInUrl(focusState.project, focusState.customer);
+    loadMainReadme();
   });
+
+  /* ── Main Project README ── */
+  var readmeEditor = null, readmeId = null, readmeAutoSaveTimer = null;
+
+  function getMainProject() {
+    if (!focusState.project) return null;
+    var p = projects.find(function(x) { return String(x.id) === String(focusState.project); });
+    return (p && p.name === 'Main') ? p : null;
+  }
+
+  async function loadMainReadme() {
+    var section = document.getElementById('mainReadmeSection');
+    var mainProj = getMainProject();
+    if (!mainProj) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+
+    var statusEl = document.getElementById('readmeStatus');
+    var bannerEl = document.getElementById('readmeBanner');
+    try {
+      var res = await apiFetch('/api/readmes?project_id=' + encodeURIComponent(mainProj.id) + '&readme_type=project_readme');
+      if (!res.ok) throw new Error();
+      var data = await res.json();
+      var readme = Array.isArray(data) ? data[0] : data;
+      if (readme && readme.id) {
+        readmeId = readme.id;
+        bannerEl.style.display = 'none';
+        initReadmeEditor(readme.content || '');
+        statusEl.textContent = 'Gespeichert';
+      } else { throw new Error('empty'); }
+    } catch (e) {
+      readmeId = null;
+      bannerEl.style.display = 'block';
+      var tpl = '';
+      try {
+        var tRes = await apiFetch('/api/templates?type=project_readme');
+        if (tRes.ok) { var d = await tRes.json(); tpl = d.body || d.content || d.template || ''; }
+      } catch (_) {}
+      initReadmeEditor(tpl);
+      statusEl.textContent = 'Nicht gespeichert';
+    }
+  }
+
+  function initReadmeEditor(content) {
+    if (readmeEditor) readmeEditor.destroy();
+    readmeEditor = AtlasMarkdownEditor.create('readmeEditorContainer', {
+      initialValue: content,
+      toolbar: true,
+      resetButton: true,
+      placeholder: 'Projekt-Dokumentation schreiben…',
+      onChange: function () { debounceReadmeSave(); },
+      onReset: async function () {
+        try {
+          var tRes = await apiFetch('/api/templates?type=project_readme');
+          if (tRes.ok) { var d = await tRes.json(); readmeEditor.setValue(d.body || d.content || d.template || ''); }
+        } catch (e) {}
+      }
+    });
+  }
+
+  function debounceReadmeSave() {
+    document.getElementById('readmeStatus').textContent = 'Nicht gespeichert — Änderungen gehen verloren';
+    clearTimeout(readmeAutoSaveTimer);
+    readmeAutoSaveTimer = setTimeout(saveReadme, 2000);
+  }
+
+  async function saveReadme() {
+    var statusEl = document.getElementById('readmeStatus');
+    if (!readmeEditor) return;
+    var mainProj = getMainProject();
+    if (!mainProj) return;
+    var content = readmeEditor.getValue();
+    statusEl.textContent = 'Wird gespeichert...';
+    try {
+      if (readmeId) {
+        var res = await apiFetch('/api/readmes/' + readmeId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: content }) });
+        if (!res.ok) throw new Error();
+      } else {
+        var res = await apiFetch('/api/readmes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: parseInt(mainProj.id, 10), readme_type: 'project_readme', content: content }) });
+        if (!res.ok) throw new Error();
+        var saved = await res.json();
+        readmeId = saved.id;
+        document.getElementById('readmeBanner').style.display = 'none';
+      }
+      statusEl.textContent = 'Gespeichert vor wenigen Sekunden';
+    } catch (e) {
+      statusEl.textContent = 'Fehler beim Speichern';
+    }
+  }
+
+  // Anchor navigation
+  document.getElementById('readmeNav').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-anchor]');
+    if (!btn || !readmeEditor) return;
+    var anchor = btn.getAttribute('data-anchor');
+    var ta = readmeEditor.getTextarea();
+    var text = ta.value;
+    var patterns = [
+      new RegExp('^#{1,3}\\s*' + anchor.replace(/-/g, '[\\s-]'), 'im'),
+      new RegExp(anchor.replace(/-/g, '[\\s-]'), 'i')
+    ];
+    for (var i = 0; i < patterns.length; i++) {
+      var match = text.match(patterns[i]);
+      if (match) {
+        var idx = text.indexOf(match[0]);
+        ta.focus();
+        ta.setSelectionRange(idx, idx + match[0].length);
+        ta.scrollTop = ta.scrollHeight * (idx / text.length);
+        break;
+      }
+    }
+  });
+
+  // Override loadData to also load readme
+  var _originalLoadData = loadData;
+  loadData = async function() {
+    await _originalLoadData();
+    await loadMainReadme();
+  };
 
   updateFocusNavLinks(focusState.project, focusState.customer);
   loadData();

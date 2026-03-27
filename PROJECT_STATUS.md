@@ -534,3 +534,52 @@ docker compose --profile test run --rm test pytest tests/test_auth.py::test_heal
 ### Geaenderte Dateien
 - `frontend/theme-builder.html` (Sub-Module Tabs, Generator UI, Farb-Algorithmus, Theme-Generierung)
 - `frontend/analytics.html`, `frontend/index.html`, `frontend/lineage.html`, `frontend/projects.html`, `frontend/script-sync.html` (Nav-Link Umbenennung)
+
+## Update (2026-03-26): Project Collaboration Module
+
+### Motivation
+- Projekt-/App-uebergreifende Zusammenarbeit: Tasks, Dokumentation, Kommentare, READMEs
+- Zentrales Dashboard mit Metriken fuer Projektleiter
+- Lineage-Graph-Annotationen fuer technische und fachliche Kommentare
+
+### Datenbank (Migration 0021 + Patch 0022)
+- 7 neue Tabellen: `tasks`, `tags`, `task_tags`, `doc_entries`, `node_comments`, `app_readmes`, `doc_templates`
+- RLS Policies fuer 4 project-scoped Tabellen (gleicher Pattern wie alle anderen)
+- Trigger `set_updated_at()` fuer `tasks` und `app_readmes`
+- 8 globale Default-Templates geseeded (node_comment, readme, doc_entry_*)
+- Patch 0022: Idempotente Drift-Korrektur (`parent_task_id`, `priority`, `readme_type`, `comment_type`, partielle Unique-Indexes)
+
+### Rename: Doku → Log
+- API-Pfade: `/api/doc-entries` → `/api/log-entries` (mit `offset`-Pagination)
+- Schemas: `DocEntryIn/Out` → `LogEntryIn/Out`
+- Metriken: `doc_entries` → `log_entries`
+- UI-Labels: "Doku-Eintrag" → "Log-Eintrag", "Aenderungslog" → "Logs"
+- DB-Tabelle `doc_entries` und Model `DocEntry` bleiben unveraendert
+
+### Backend (backend/app/collab/)
+- `schemas.py`: 17 Pydantic-Models (In/Out/Update fuer alle Entitaeten), `project_name`/`customer_name` in TaskOut, LogEntryOut, AppWithoutReadme
+- `routes.py`: 25 Endpunkte (Tags CRUD, Tasks CRUD, Task-Tags, Log Entries mit offset-Pagination, Node Comments mit Counts, Readmes, Templates, Dashboard Metrics, Apps-ohne-README, Qlik Apps Lookup, Projekt-Mitglieder)
+- `project_id` optional in: `/api/dashboard/metrics`, `/api/tasks`, `/api/log-entries`, `/api/apps/without-readme` — ohne project_id werden alle Projekte des Users aggregiert (RLS-gefiltert)
+- RLS-scoped Session Dependency (`_scoped`) mit `apply_rls_context`
+- Priority-Sortierung: `case(PRIORITY_ORDER)` mit `due_date ASC NULLS LAST`
+- Router registriert in `main.py` unter `/api`
+
+### Frontend
+- `index.html` (Dashboard): **General/Projekt Toggle** (Pill-Switch), Stats-Grid (4 Metriken), **App-Uebersicht** (Health-Tabelle: README ✓/✗, offene/erledigte Tasks, letzter Log pro App), "Meine offenen Tasks" mit Task-Detail-Popup, "Apps ohne README" (collapsible, max 5), Projektweite Tasks mit Filtern, Log Feed (vollbreite Timeline mit Pagination), Task-/Log-Modals mit Markdown-Editor. General-Ansicht zeigt Kunde/Projekt-Badges an Tasks, Log-Eintraegen und Feed-Items
+- `app-detail.html` (neu): 3 Tabs — Tasks (mit Filter, Detail-Panel), Logs (gruppiert: Heute/Diese Woche/Aelter), README (Split-View Editor mit Auto-Save, **Datenquellen-Chips** aus Lineage-Graph mit Alle-auswaehlen und Markdown-Tabellen-Injection)
+- `projects.html`: Main-Projekt README Section mit Split-View Markdown Editor, Template-Loading, Anchor-Navigation, Auto-Save (Debounce 1.5s)
+- `lineage.html`: Node-Kommentare — Badges auf Graph-Knoten, Slide-in Comment Panel, Filter nach Typ, Inline-Formular mit Template-Loading
+- `assets/markdownEditor.js` (neu): Shared Markdown Editor Modul (Toolbar, Split-View, configurable Options)
+
+### Geaenderte Dateien
+- `backend/alembic/versions/0021_project_collab.py` (Basis-Migration)
+- `backend/alembic/versions/0022_collab_patch.py` (Drift-Korrektur)
+- `backend/app/models.py` (7 neue Models)
+- `backend/app/collab/__init__.py`, `schemas.py`, `routes.py` (neues Package)
+- `backend/main.py` (Router-Registrierung)
+- `frontend/index.html` (Dashboard-Umbau + Log Feed)
+- `frontend/app-detail.html` (neue Seite)
+- `frontend/assets/markdownEditor.js` (neues Modul)
+- `frontend/projects.html` (Main-Projekt README)
+- `frontend/lineage.html` (Node-Kommentare)
+- `docs/DB_MODEL.md` (Tabellen, FKs, ERD, Enum-Werte, API-Endpunkte)
