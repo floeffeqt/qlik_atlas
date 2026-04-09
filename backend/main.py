@@ -82,6 +82,7 @@ from app.fetch_jobs.runtime import (
     _run_licenses_status_step,
     _run_lineage_step,
     _run_reloads_step,
+    _run_scripts_step,
     _run_spaces_step,
     _run_usage_step,
 )
@@ -216,6 +217,7 @@ async def _execute_fetch_job(
     licenses_consumption_cache: list[dict[str, Any]] | None = None
     licenses_status_cache: list[dict[str, Any]] | None = None
     app_data_metadata_cache: list[dict[str, Any]] | None = None
+    scripts_cache: list[dict[str, Any]] | None = None
     lineage_payloads_cache: list[dict[str, Any]] = []
     usage_payloads: list[dict[str, Any]] = []
     app_edges_payloads: list[dict[str, Any]] = []
@@ -228,6 +230,7 @@ async def _execute_fetch_job(
         "licenses-consumption": "License Consumption laden",
         "licenses-status": "License Status laden",
         "app-data-metadata": "App Data Metadata laden",
+        "scripts": "Scripts laden",
         "lineage": "Lineage berechnen",
         "app-edges": "App-Kanten berechnen",
         "usage": "Usage-Daten laden",
@@ -260,6 +263,7 @@ async def _execute_fetch_job(
             nonlocal licenses_consumption_cache
             nonlocal licenses_status_cache
             nonlocal app_data_metadata_cache
+            nonlocal scripts_cache
             nonlocal lineage_payloads_cache
             nonlocal app_edges_payloads
             nonlocal usage_payloads
@@ -297,6 +301,14 @@ async def _execute_fetch_job(
                 await _append_log(
                     job_id,
                     f"App Data Metadata geladen: {result.get('success', 0)} erfolgreich, {result.get('failed', 0)} fehlgeschlagen",
+                )
+            elif step == "scripts":
+                if apps_cache is None:
+                    raise RuntimeError("apps step data missing in DB-first mode; include 'apps' before 'scripts'")
+                scripts_cache, result = await _run_scripts_step(apps_cache, creds)
+                await _append_log(
+                    job_id,
+                    f"Scripts geladen: {result.get('success', 0)} erfolgreich, {result.get('failed', 0)} fehlgeschlagen",
                 )
             elif step == "lineage":
                 if apps_cache is None:
@@ -364,6 +376,7 @@ async def _execute_fetch_job(
             licenses_consumption_data=licenses_consumption_cache,
             licenses_status_data=licenses_status_cache,
             app_data_metadata_data=app_data_metadata_cache,
+            scripts_data=scripts_cache,
             usage_payloads=usage_payloads,
             app_edges_payloads=app_edges_payloads,
         )
@@ -371,6 +384,7 @@ async def _execute_fetch_job(
             job_id,
             f"✓ Gespeichert: {db_result.get('apps', 0)} Apps · "
             f"{db_result.get('nodes', 0)} Knoten · {db_result.get('edges', 0)} Kanten · "
+            f"{db_result.get('scripts', 0)} Scripts · "
             f"{db_result.get('reloads', 0)} Reloads · {db_result.get('audits', 0)} Audits · "
             f"{db_result.get('licenseConsumption', 0)} License-Consumption · "
             f"{db_result.get('licenseStatus', 0)} License-Status · "

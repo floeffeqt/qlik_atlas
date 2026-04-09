@@ -1,5 +1,29 @@
 # Build & Startup Issues - FIXED
 
+## [BUGFIX] 2026-04-09 Script viewer crashed with "Invalid group" for every app
+
+- Severity: high
+- Area: frontend/script-sync
+- Source: user-reported
+- Symptoms: Script Sync tab showed "Fehler: Invalid regular expression … Invalid group" for almost every app; no script content was rendered.
+- Root Cause: `applyPlainHighlights` built a `RegExp` using `(?>…)` (PCRE atomic group syntax), which is not supported in JavaScript/V8 and throws a `SyntaxError`. The `new RegExp(…)` call was placed **outside** the surrounding `try/catch`, so the exception propagated instead of falling back to the `\b…\b` pattern.
+- Fix: Moved `new RegExp(…)` inside the `try` block; removed the unsupported `(?>…)` wrapper (it was a performance hint only — not required for correctness).
+- Changed Files: `frontend/script-sync.html`
+- Verification: Manual smoke check — scripts render without error after hard-refresh; keyword highlighting (`LOAD`, `WHERE`, `HIERARCHYBELONGSTO`, …) confirmed working.
+- Residual Risk: none
+
+## [BUGFIX] 2026-04-09 Script viewer line numbers shifted after ///$tab section headers
+
+- Severity: medium
+- Area: frontend/script-sync
+- Source: proactive bug-hunt
+- Symptoms: After introducing `///$tab` section-header rendering, every script line number after a tab marker was off by 1 (or by the number of tab markers preceding it), because tab-header divs were not counted as a line.
+- Root Cause: `renderHighlightedScript` skipped incrementing `lineNum` when emitting a `sv-tab-section` div, but `///$tab` lines do occupy a real line position in the Qlik script file.
+- Fix: Added `lineNum++` after emitting the section-header div so subsequent line numbers stay consistent with the actual script.
+- Changed Files: `frontend/script-sync.html`
+- Verification: Manual smoke check with a script containing multiple `///$tab` markers confirmed that line numbers after each header are correct.
+- Residual Risk: none
+
 ## [BUGFIX] 2026-03-12 JWT access token was exposed to page JavaScript via localStorage
 
 - Severity: high

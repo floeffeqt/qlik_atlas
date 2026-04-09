@@ -15,6 +15,7 @@ FetchStep = Literal[
     "licenses-consumption",
     "licenses-status",
     "app-data-metadata",
+    "scripts",
     "lineage",
     "app-edges",
     "usage",
@@ -26,6 +27,7 @@ FETCH_STEP_ORDER: list[FetchStep] = [
     "spaces",
     "apps",
     "data-connections",
+    "scripts",
     "lineage",
     "app-edges",
     "usage",
@@ -40,6 +42,7 @@ FETCH_STEP_ALL_ORDER: list[FetchStep] = [
     "licenses-consumption",
     "licenses-status",
     "app-data-metadata",
+    "scripts",
     "lineage",
     "app-edges",
     "usage",
@@ -73,6 +76,8 @@ def _normalize_steps(steps: list[FetchStep] | None) -> list[FetchStep]:
         return list(FETCH_STEP_ALL_ORDER)
     selected = set(steps)
     if "app-data-metadata" in selected:
+        selected.add("apps")
+    if "scripts" in selected:
         selected.add("apps")
     if "app-edges" in selected:
         selected.add("lineage")

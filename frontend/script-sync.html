@@ -131,6 +131,58 @@
       z-index: 90; box-shadow: 0 4px 16px rgba(102,126,234,0.3); transition: opacity 0.2s; display: none;
     }
     .admin-fab:hover { opacity: 0.9; }
+
+    /* ── Script accordion ── */
+    .script-card { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.5rem; overflow: hidden; background: rgba(255,255,255,0.02); }
+    .script-card-header { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; cursor: pointer; user-select: none; transition: background 0.15s; }
+    .script-card-header:hover { background: rgba(255,255,255,0.04); }
+    .script-card-header.open { background: rgba(102,126,234,0.08); border-bottom: 1px solid var(--border); }
+    .sc-chevron { font-size: 0.65rem; color: var(--text-muted); transition: transform 0.2s; flex-shrink: 0; }
+    .sc-chevron.open { transform: rotate(90deg); }
+    .sc-name { font-weight: 600; font-size: 0.87rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sc-meta { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; padding-right: 0.5rem; }
+    .sc-toolbar { display: flex; gap: 0.4rem; flex-shrink: 0; }
+    .sc-body { display: none; }
+    .sc-body.open { display: block; }
+    .sc-pre {
+      margin: 0; padding: 0.75rem 0; overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+      font-size: 0.78rem; line-height: 1.6; max-height: 520px; overflow-y: auto;
+      counter-reset: line; background: rgba(10,13,30,0.5);
+    }
+    .sv-line { display: flex; }
+    .sv-line:hover { background: rgba(255,255,255,0.03); }
+    .sv-ln { display: inline-block; min-width: 3rem; padding: 0 0.75rem; text-align: right;
+      color: rgba(255,255,255,0.2); user-select: none; border-right: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+    .sv-lc { display: inline-block; padding: 0 1rem; white-space: pre; }
+
+    /* ── Qlik syntax highlighting ── */
+    .ql-kw  { color: #7c9fef; font-weight: 600; }   /* keywords  – blue    */
+    .ql-str { color: #98c379; }                       /* strings   – green   */
+    .ql-cmt { color: #5c6785; font-style: italic; }  /* comments  – gray    */
+    .ql-var { color: #e5c07b; }                       /* variables – yellow  */
+    .ql-fn  { color: #c678dd; }                       /* functions – purple  */
+    .ql-fld { color: #56b6c2; }                       /* [fields]  – teal    */
+    .ql-num { color: #d19a66; }                       /* numbers   – orange  */
+    /* ── Tab section header ── */
+    .sv-tab-section {
+      display: flex; align-items: center; gap: 0.5rem;
+      margin: 0.6rem 0 0;
+      padding: 0.25rem 0.75rem;
+      background: rgba(124,159,239,0.10);
+      border-left: 3px solid #7c9fef;
+      color: #7c9fef; font-weight: 600; font-style: normal;
+      font-size: 0.82rem; letter-spacing: 0.04em; text-transform: uppercase;
+      cursor: pointer; user-select: none;
+    }
+    .sv-tab-section::before {
+      content: '▾';
+      display: inline-block;
+      margin-right: 0.35rem;
+      transition: transform 0.15s ease;
+    }
+    .sv-tab-section.sv-closed::before { transform: rotate(-90deg); }
+    .sv-section-body.sv-collapsed { display: none; }
   </style>
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
@@ -167,7 +219,7 @@
       <h1 class="page-title">Script Sync</h1>
       <p class="page-subtitle">Git-Repository Mappings und Drift-Status fuer Qlik App Load-Scripts</p>
     </div>
-    <div style="display:flex;gap:0.5rem;">
+    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
       <button class="btn-refresh" id="refreshBtn" disabled>Drift pruefen</button>
       <button class="btn-primary" id="newMappingBtn" disabled>+ Neues Mapping</button>
     </div>
@@ -193,6 +245,22 @@
   <div class="section" id="historySection" style="display:none;">
     <div class="section-title">Deployment-History: <span id="historyAppName" style="color:var(--accent)"></span></div>
     <div id="historyWrap"></div>
+  </div>
+
+  <!-- Scripts section -->
+  <div class="section" id="scriptsSection" style="display:none;">
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+      <span>&#x1F4C4; Qlik Load Scripts</span>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <input id="scriptSearchInput" type="text" placeholder="App filtern&hellip;"
+          style="width:200px;padding:0.35rem 0.7rem;background:rgba(255,255,255,0.07);border:1px solid var(--border);border-radius:var(--radius-sm);color:#fff;font-size:0.82rem;outline:none;" />
+        <button class="btn-action" id="expandAllBtn">Alle &ouml;ffnen</button>
+        <button class="btn-action" id="collapseAllBtn">Alle schlie&szlig;en</button>
+      </div>
+    </div>
+    <div id="scriptsListWrap">
+      <div class="empty-state"><div class="empty-icon">&#x1F4C4;</div><div>Kein Projekt ausgew&auml;hlt oder noch keine Scripts abgezogen.</div></div>
+    </div>
   </div>
 </main>
 
@@ -362,10 +430,15 @@
     document.getElementById('refreshBtn').disabled = !hasProject;
     if (hasProject) {
       loadMappings();
+      loadScriptsList();
     } else {
       mappings = [];
       overviewData = [];
       renderOverview();
+      _allScriptApps = [];
+      _openScriptAppId = null;
+      document.getElementById('scriptsSection').style.display = 'none';
+      document.getElementById('scriptViewerPanel').style.display = 'none';
     }
   }
 
@@ -603,6 +676,339 @@
       showToast('Fehler: ' + (e.message || e));
     }
   }
+
+  // ══════════════════════════════════════════════════════════════
+  // Scripts Accordion
+  // ══════════════════════════════════════════════════════════════
+
+  var _allScriptApps = [];
+  var _scriptCache = {};
+  var _openCards = new Set();
+
+  async function loadScriptsList() {
+    var pid = focusState.project;
+    if (!pid) return;
+    document.getElementById('scriptsSection').style.display = '';
+
+    try {
+      var resp = await apiFetch('/api/qlik-apps?project_id=' + pid);
+      _allScriptApps = resp.ok ? await resp.json() : [];
+    } catch (e) {
+      _allScriptApps = [];
+    }
+    renderScriptAccordion('');
+  }
+
+  function renderScriptAccordion(filter) {
+    var wrap = document.getElementById('scriptsListWrap');
+    var list = _allScriptApps.filter(function(a) {
+      if (!filter) return true;
+      return (a.name || a.app_id || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1;
+    });
+
+    if (!list.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4C4;</div>'
+        + '<div>' + (filter ? 'Keine passende App gefunden.' : 'Noch keine Apps in der Datenbank. Scripts abziehen.') + '</div></div>';
+      return;
+    }
+
+    var html = '';
+    list.forEach(function(a) {
+      var appId = a.app_id;
+      var appName = a.name || appId;
+      var isOpen = _openCards.has(appId);
+      var cached = _scriptCache[appId];
+      var metaText = cached ? (cached.lines + ' Zeilen') : '';
+      var bodyContent = isOpen
+        ? (cached ? cached.html : '<div style="color:var(--text-muted);padding:1rem 1.5rem;">Lade Script&hellip;</div>')
+        : '';
+
+      html += '<div class="script-card">'
+        + '<div class="script-card-header' + (isOpen ? ' open' : '') + '" data-appid="' + escHtml(appId) + '" data-appname="' + escHtml(appName) + '">'
+        + '<span class="sc-chevron' + (isOpen ? ' open' : '') + '">&#x25B6;</span>'
+        + '<span class="sc-name">' + escHtml(appName) + '</span>'
+        + '<span class="sc-meta" id="sc-meta-' + escHtml(appId) + '">' + escHtml(metaText) + '</span>'
+        + '<div class="sc-toolbar">'
+        + '<button class="btn-action sc-copy-btn" data-appid="' + escHtml(appId) + '">Kopieren</button>'
+        + '</div>'
+        + '</div>'
+        + '<div class="sc-body' + (isOpen ? ' open' : '') + '" id="sc-body-' + escHtml(appId) + '">'
+        + bodyContent
+        + '</div>'
+        + '</div>';
+    });
+    wrap.innerHTML = html;
+
+    wrap.querySelectorAll('.script-card-header').forEach(function(hdr) {
+      hdr.addEventListener('click', function(e) {
+        if (e.target.closest && e.target.closest('.sc-toolbar')) return;
+        toggleCard(this.dataset.appid, this.dataset.appname);
+      });
+    });
+
+    wrap.querySelectorAll('.sc-copy-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        copyScript(this.dataset.appid);
+      });
+    });
+  }
+
+  async function _loadCardScript(appId) {
+    var body = document.getElementById('sc-body-' + appId);
+    var meta = document.getElementById('sc-meta-' + appId);
+
+    if (_scriptCache[appId]) {
+      if (body && _openCards.has(appId)) body.innerHTML = _scriptCache[appId].html;
+      if (meta) meta.textContent = _scriptCache[appId].lines + ' Zeilen';
+      return;
+    }
+
+    try {
+      var resp = await apiFetch('/api/app/' + encodeURIComponent(appId) + '/script');
+      if (resp.status === 404) {
+        if (body) body.innerHTML = '<div style="color:var(--text-muted);padding:1rem 1.5rem;">Kein Script in der Datenbank. Bitte zuerst &quot;Scripts abziehen&quot;.</div>';
+        return;
+      }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      var scriptText = data.script || '';
+      var lines = scriptText.split('\n').length;
+      var fetchedAt = data.fetched_at ? fmtDate(data.fetched_at) : '';
+      var preHtml = '<pre class="sc-pre">' + renderHighlightedScript(scriptText) + '</pre>';
+      if (fetchedAt) {
+        preHtml = '<div style="font-size:0.75rem;color:var(--text-muted);padding:0.5rem 1rem 0;">Abgezogen: ' + escHtml(fetchedAt) + '</div>' + preHtml;
+      }
+      _scriptCache[appId] = { html: preHtml, lines: lines, text: scriptText };
+      if (_openCards.has(appId)) {
+        if (body) body.innerHTML = preHtml;
+        if (meta) meta.textContent = lines + ' Zeilen';
+      }
+    } catch (e) {
+      if (body) body.innerHTML = '<div style="color:#f87171;padding:1rem 1.5rem;">Fehler: ' + escHtml(e.message || String(e)) + '</div>';
+    }
+  }
+
+  function toggleCard(appId) {
+    if (_openCards.has(appId)) {
+      _openCards.delete(appId);
+    } else {
+      _openCards.add(appId);
+    }
+    renderScriptAccordion(document.getElementById('scriptSearchInput').value);
+    if (_openCards.has(appId)) {
+      _loadCardScript(appId);
+    }
+  }
+
+  function copyScript(appId) {
+    var cached = _scriptCache[appId];
+    if (!cached) { showToast('Script noch nicht geladen'); return; }
+    navigator.clipboard.writeText(cached.text).then(function() {
+      showToast('Script kopiert \u2713');
+    }).catch(function() {
+      showToast('Kopieren fehlgeschlagen');
+    });
+  }
+
+  document.getElementById('scriptSearchInput').addEventListener('input', function() {
+    renderScriptAccordion(this.value);
+  });
+
+  document.getElementById('expandAllBtn').addEventListener('click', function() {
+    var filter = document.getElementById('scriptSearchInput').value;
+    var visible = _allScriptApps.filter(function(a) {
+      if (!filter) return true;
+      return (a.name || a.app_id || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1;
+    });
+    visible.forEach(function(a) { _openCards.add(a.app_id); });
+    renderScriptAccordion(filter);
+    visible.forEach(function(a) { _loadCardScript(a.app_id); });
+  });
+
+  document.getElementById('collapseAllBtn').addEventListener('click', function() {
+    _openCards.clear();
+    renderScriptAccordion(document.getElementById('scriptSearchInput').value);
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // Qlik Load Script — Syntax Highlighter
+  // ══════════════════════════════════════════════════════════════
+
+  var _QLIK_KW = (
+    'LOAD|RESIDENT|INLINE|CROSSTABLE|INTERVALMATCH|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|AS|DISTINCT|TOP|FIRST|'
+    + 'JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|OUTER JOIN|LEFT OUTER JOIN|RIGHT OUTER JOIN|'
+    + 'GROUP BY|ORDER BY|BY|APPLY MAP|MAPPING|'
+    + 'NOCONCATENATE|CONCATENATE|ADD LOAD|ADD FIELDS|'
+    + 'SET|LET|CALL|SUB|END SUB|NEXT|LOOP|DO|WHILE|UNTIL|'
+    + 'IF|THEN|ELSE|ELSEIF|END IF|SWITCH|CASE|DEFAULT|'
+    + 'EXIT|FOR EACH|FOR|TO|STEP|RETURN|'
+    + 'STORE|INTO|DROP TABLE|DROP FIELD|DROP TABLES|'
+    + 'TABLE|FIELD|FIELDS|TAG|UNTAG|'
+    + 'SECTION|ACCESS|APPLICATION|'
+    + 'RENAME TABLE|RENAME FIELD|'
+    + 'SELECT|SQL|CONNECT TO|DISCONNECT|BINARY|'
+    + 'QUALIFY|UNQUALIFY|NULLASVALUE|NULLASNULL|'
+    + 'HIERARCHY|HIERARCHYBELONGSTO|'
+    + 'LIKE|MATCH|WILDMATCH|MIXMATCH|INFO|'
+    + 'AUTOGENERATE|BUNDLE|FORCE BUNDLING'
+  ).split('|').sort(function(a, b) { return b.length - a.length; }); // longest first
+
+  var _QLIK_FN_RE = /\b(Abs|Fabs|Ceil|Floor|Round|Frac|Sign|Sqrt|Pow|Exp|Log|Log10|Mod|Div|Rand|RangeSum|RangeAvg|RangeMax|RangeMin|RangeCount|RangeOnly|RangeMode|RangeProduct|RangeStdev|RangeStdevp|RangeKurtosis|RangeSkew|RangeTextCount|RangeNullCount|RangeNumericCount|RangeCorr|Date|Time|Timestamp|Num|Text|Dual|IsNum|IsText|IsNull|Null|Chr|Ord|Len|Index|Left|Right|Mid|Upper|Lower|Proper|Trim|LTrim|RTrim|PurgeChar|KeepChar|Replace|Capitalize|Hash128|Hash160|Hash256|MD5|Sha256|If|Alt|IsPartialReload|Now|Today|Year|Month|Day|Week|Hour|Minute|Second|YearToDate|InYearToDate|InYear|InQuarterToDate|InQuarter|InMonthToDate|InMonth|InWeekToDate|InWeek|InDayToDate|InDay|Age|NetWorkDays|AddYears|AddMonths|YearStart|YearEnd|MonthStart|MonthEnd|QuarterStart|QuarterEnd|WeekStart|WeekEnd|DayStart|DayEnd|MakeDate|MakeTime|MakeTimestamp|Interval|Count|Sum|Avg|Max|Min|Mode|Median|Stdev|Stdevp|Kurtosis|Skew|Corr|FirstValue|LastValue|MinString|MaxString|Concat|FirstSortedValue|Top|Bottom|Above|Below|Before|After|Column|Row|RowNo|FieldRowNo|FieldValueCount|FieldValue|GetFieldSelections|GetSelectedCount|GetPossibleCount|GetExcludedCount|GetAlternativeCount|GetNotSelectedCount|GetCurrentSelections|Exists|Lookup|Peek|Previous|FieldName|FieldNumber|NoOfFields|NoOfRows|NoOfTables|TableName|TableNumber|ConnectedTables|LinkedTables|Dimension|Expression|ConcatCount|Attribute|ObjectId|ReloadTime|ComputerName|OSUser|QvVersion|GetSQLType|SubField|TextBetween|Evaluate|Variable|MustExclude|StateName)\s*\(/gi;
+
+  function tokenizeQlik(text) {
+    var tokens = [];
+    var i = 0;
+    var n = text.length;
+
+    while (i < n) {
+      // Tab section marker: ///$tab <name>
+      if (text[i] === '/' && text[i+1] === '/' && text[i+2] === '/'
+          && text.slice(i, i + 8).toLowerCase() === '///$tab ') {
+        var end0 = text.indexOf('\n', i);
+        if (end0 === -1) end0 = n;
+        tokens.push({ type: 'tab', val: text.slice(i + 8, end0).trim() });
+        i = end0;
+        continue;
+      }
+      // Line comment: // ...
+      if (text[i] === '/' && text[i + 1] === '/') {
+        var end = text.indexOf('\n', i);
+        if (end === -1) end = n;
+        tokens.push({ type: 'cmt', val: text.slice(i, end) });
+        i = end;
+        continue;
+      }
+      // Block comment: /* ... */
+      if (text[i] === '/' && text[i + 1] === '*') {
+        var end2 = text.indexOf('*/', i + 2);
+        if (end2 === -1) end2 = n - 2; else end2 += 2;
+        tokens.push({ type: 'cmt', val: text.slice(i, end2) });
+        i = end2;
+        continue;
+      }
+      // Single-quoted string
+      if (text[i] === "'") {
+        var j = i + 1;
+        while (j < n && text[j] !== "'") { if (text[j] === '\\') j++; j++; }
+        tokens.push({ type: 'str', val: text.slice(i, j + 1) });
+        i = j + 1;
+        continue;
+      }
+      // Double-quoted identifier
+      if (text[i] === '"') {
+        var j2 = text.indexOf('"', i + 1);
+        if (j2 === -1) j2 = n - 1;
+        tokens.push({ type: 'fld', val: text.slice(i, j2 + 1) });
+        i = j2 + 1;
+        continue;
+      }
+      // Bracket field name [...]
+      if (text[i] === '[') {
+        var j3 = text.indexOf(']', i);
+        if (j3 === -1) j3 = n - 1;
+        tokens.push({ type: 'fld', val: text.slice(i, j3 + 1) });
+        i = j3 + 1;
+        continue;
+      }
+      // Variable $( ... )
+      if (text[i] === '$' && text[i + 1] === '(') {
+        var depth = 1;
+        var j4 = i + 2;
+        while (j4 < n && depth > 0) {
+          if (text[j4] === '(') depth++;
+          else if (text[j4] === ')') depth--;
+          j4++;
+        }
+        tokens.push({ type: 'var', val: text.slice(i, j4) });
+        i = j4;
+        continue;
+      }
+      // Plain text run (up to next special char)
+      var j5 = i;
+      while (j5 < n && text[j5] !== '/' && text[j5] !== "'" && text[j5] !== '"'
+             && text[j5] !== '[' && text[j5] !== '$') { j5++; }
+      if (j5 === i) j5 = i + 1;
+      tokens.push({ type: 'plain', val: text.slice(i, j5) });
+      i = j5;
+    }
+    return tokens;
+  }
+
+  function applyPlainHighlights(raw) {
+    // Escape HTML first
+    var s = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Keywords (longest match first, word boundaries)
+    _QLIK_KW.forEach(function(kw) {
+      try {
+        var re = new RegExp('(?<![\\w>])(' + kw.replace(/ /g, '\\s+') + ')(?![\\w<])', 'gi');
+        s = s.replace(re, '<span class="ql-kw">$1</span>');
+      } catch(e) {
+        // Fallback for browsers without lookbehind support
+        s = s.replace(new RegExp('\\b(' + kw.replace(/ /g,'\\s+') + ')\\b', 'gi'), '<span class="ql-kw">$1</span>');
+      }
+    });
+    // Functions (name followed by open paren)
+    s = s.replace(_QLIK_FN_RE, '<span class="ql-fn">$1</span>(');
+    // Numbers
+    s = s.replace(/(?<![<"#\-])(\b\d+(?:\.\d+)?\b)/g, '<span class="ql-num">$1</span>');
+    return s;
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  var _sectionCounter = 0; // globally unique IDs across all rendered scripts
+
+  function renderHighlightedScript(text) {
+    var tokens = tokenizeQlik(text);
+    var TAB_PFX = '\x01TAB:';
+    var rawHtml = '';
+    tokens.forEach(function(t) {
+      if (t.type === 'tab')       rawHtml += TAB_PFX + esc(t.val) + '\x01';
+      else if (t.type === 'cmt')  rawHtml += '<span class="ql-cmt">'  + esc(t.val) + '</span>';
+      else if (t.type === 'str')  rawHtml += '<span class="ql-str">'  + esc(t.val) + '</span>';
+      else if (t.type === 'fld')  rawHtml += '<span class="ql-fld">'  + esc(t.val) + '</span>';
+      else if (t.type === 'var')  rawHtml += '<span class="ql-var">'  + esc(t.val) + '</span>';
+      else rawHtml += applyPlainHighlights(t.val);
+    });
+
+    var lines = rawHtml.split('\n');
+    var out = '';
+    var lineNum = 1;
+    var inSection = false;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line.indexOf(TAB_PFX) !== -1) {
+        if (inSection) { out += '</div>'; inSection = false; }
+        var label = line.replace(/.*\x01TAB:(.*?)\x01.*/, '$1');
+        var sid = 'sv-s-' + (++_sectionCounter);
+        out += '<div class="sv-tab-section" data-target="' + sid + '">' + (label || '(unnamed)') + '</div>'
+             + '<div class="sv-section-body" id="' + sid + '">';
+        inSection = true;
+        lineNum++;
+      } else {
+        out += '<div class="sv-line">'
+          + '<span class="sv-ln">' + lineNum + '</span>'
+          + '<span class="sv-lc">' + (line || ' ') + '</span>'
+          + '</div>';
+        lineNum++;
+      }
+    }
+    if (inSection) out += '</div>';
+    return out;
+  }
+
+  // Delegated click handler for collapsible section headers
+  document.addEventListener('click', function(e) {
+    var hdr = e.target.closest('.sv-tab-section');
+    if (!hdr) return;
+    var sid = hdr.getAttribute('data-target');
+    var body = sid ? document.getElementById(sid) : null;
+    if (!body) return;
+    body.classList.toggle('sv-collapsed');
+    hdr.classList.toggle('sv-closed');
+  });
 
   // ── Init ──
   loadData();

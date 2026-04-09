@@ -1018,13 +1018,17 @@ async def load_app_script_payload(session: AsyncSession, app_id: str) -> dict[st
     row = await fetch_latest_app_script_row(session, app_id=app_id)
     if not row:
         raise KeyError("app script not found")
-    payload = _safe_dict(row.data)
-    payload.setdefault("appId", app_id)
-    payload.setdefault("script", row.script)
+    payload: dict[str, Any] = {}
+    payload["appId"] = app_id
+    payload["script"] = row.script or ""
     if row.file_name:
-        payload.setdefault("fileName", row.file_name)
+        payload["fileName"] = row.file_name
     if row.source:
-        payload.setdefault("source", row.source)
+        payload["source"] = row.source
+    if row.fetched_at:
+        payload["fetched_at"] = row.fetched_at.isoformat()
+    # keep raw metadata from the data JSONB column under a nested key
+    payload["data"] = _safe_dict(row.data)
     return payload
 
 

@@ -19,6 +19,7 @@ from app.models import (
     LineageEdge,
     LineageNode,
     QlikApp,
+    QlikAppScript,
     QlikAppUsage,
     QlikAudit,
     QlikDataConnection,
@@ -743,6 +744,7 @@ async def _run_db_store_step(
     licenses_consumption_data: list[dict[str, Any]] | None = None,
     licenses_status_data: list[dict[str, Any]] | None = None,
     app_data_metadata_data: list[dict[str, Any]] | None = None,
+    scripts_data: list[dict[str, Any]] | None = None,
     usage_payloads: list[dict[str, Any]] | None = None,
     app_edges_payloads: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -1218,6 +1220,34 @@ async def _run_db_store_step(
                 update_columns=tuple(sorted({*(_to_db_column_value_map(QlikAppUsage, _usage_payload_columns({})).keys()), "data"})),
             )
 
+            script_rows: list[dict[str, Any]] = []
+            for item in scripts_data if isinstance(scripts_data, list) else []:
+                if not isinstance(item, dict):
+                    continue
+                app_id = item.get("app_id")
+                script = item.get("script")
+                if not app_id or script is None:
+                    continue
+                script_rows.append(
+                    {
+                        "project_id": project_id,
+                        "app_id": str(app_id),
+                        "script": script,
+                        "source": item.get("source") or "qlik_api",
+                        "file_name": item.get("file_name"),
+                        "data": item.get("data") or {},
+                        "fetched_at": datetime.now(timezone.utc),
+                    }
+                )
+            script_rows = _dedupe_rows_by_key(script_rows, ("project_id", "app_id"))
+            stored["scripts"] += await _execute_bulk_upsert(
+                session,
+                model=QlikAppScript,
+                rows=script_rows,
+                index_elements=("project_id", "app_id"),
+                update_columns=("script", "source", "file_name", "data", "fetched_at"),
+            )
+
             node_rows: list[dict[str, Any]] = []
             for node_id, node in snapshot.nodes.items():
                 node_payload = dict(node)
@@ -1287,6 +1317,7 @@ async def _run_db_store_step(
     except Exception as exc:
         exc_msg = str(exc)
         missing_table_markers = (
+            "qlik_app_scripts",
             "qlik_reloads",
             "qlik_audits",
             "qlik_license_consumption",

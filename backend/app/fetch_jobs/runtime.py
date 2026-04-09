@@ -15,6 +15,7 @@ from fetchers.fetch_reloads import fetch_all_reloads
 from fetchers.fetch_spaces import fetch_all_spaces
 from fetchers.fetch_usage import fetch_usage_async
 from shared.qlik_client import QlikClient, QlikCredentials
+from shared.qlik_engine_client import QlikEngineClient, QlikEngineError
 
 
 class FetchJobRequestLike(Protocol):
@@ -270,6 +271,65 @@ async def _run_app_edges_step(
         "filterSource": filter_source,
         "lineageLevel": request.lineageLevel,
         "appEdges": edges_result,
+        "storage": "db-first-memory",
+        "localArtifactWritten": False,
+    }
+
+
+def _build_engine_client(creds: QlikCredentials) -> QlikEngineClient:
+    return QlikEngineClient(
+        creds,
+        timeout=float(os.getenv("QLIK_ENGINE_TIMEOUT", "30")),
+    )
+
+
+async def _run_scripts_step(
+    apps: list[dict[str, Any]],
+    creds: QlikCredentials,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Fetch current load scripts for all apps via the Qlik Engine API (QIX/WebSocket).
+
+    Uses GetScript on the live engine — works regardless of whether script
+    versioning is enabled and requires only Can-View access to the app.
+    """
+    app_ids = sorted({str(app.get("appId")) for app in apps if isinstance(app, dict) and app.get("appId")})
+    if not app_ids:
+        return [], {"apps": 0, "success": 0, "failed": 0, "storage": "db-first-memory", "localArtifactWritten": False}
+
+    concurrency = max(1, int(os.getenv("FETCH_SCRIPTS_CONCURRENCY", "3")))
+    engine = _build_engine_client(creds)
+    semaphore = asyncio.Semaphore(concurrency)
+    results: list[dict[str, Any]] = []
+    failed = 0
+
+    async def _fetch_one(app_id: str) -> dict[str, Any] | None:
+        async with semaphore:
+            try:
+                script_text = await engine.get_script(app_id)
+                return {
+                    "app_id": app_id,
+                    "script": script_text,
+                    "source": "qlik_engine",
+                    "data": {"length": len(script_text)},
+                }
+            except QlikEngineError as exc:
+                engine._logger.warning("Script fetch failed for app %s: %s", app_id, exc)
+                return None
+            except Exception as exc:
+                engine._logger.warning("Script fetch unexpected error for app %s: %s", app_id, exc)
+                return None
+
+    fetched = await asyncio.gather(*[_fetch_one(app_id) for app_id in app_ids], return_exceptions=True)
+    for item in fetched:
+        if isinstance(item, Exception) or item is None:
+            failed += 1
+        elif isinstance(item, dict):
+            results.append(item)
+
+    return results, {
+        "apps": len(app_ids),
+        "success": len(results),
+        "failed": failed,
         "storage": "db-first-memory",
         "localArtifactWritten": False,
     }

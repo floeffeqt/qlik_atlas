@@ -583,3 +583,48 @@ docker compose --profile test run --rm test pytest tests/test_auth.py::test_heal
 - `frontend/projects.html` (Main-Projekt README)
 - `frontend/lineage.html` (Node-Kommentare)
 - `docs/DB_MODEL.md` (Tabellen, FKs, ERD, Enum-Werte, API-Endpunkte)
+
+---
+
+## Update (2026-04-08): Fetch-Job Script-Fetching
+
+### Completed
+- Fetch-Job um Schritt `"scripts"` erweitert: ruft `GET /v1/apps/{app_id}/script` via `QlikClient.get_text()` auf
+- Scripts werden per Upsert in `qlik_app_scripts` gespeichert (PK: `project_id + app_id`)
+- Concurrency konfigurierbar per `FETCH_SCRIPTS_CONCURRENCY` (Default 5)
+- Per-App Fehler werden übersprungen (Warning-Log, Counter `failed`), Job bricht nicht ab
+- `"scripts"` in `FETCH_STEP_ORDER` + `FETCH_STEP_ALL_ORDER` — Abhängigkeit auf `"apps"` wird via `_normalize_steps` erzwungen
+- `"scripts"` ist kein Independent Step (benötigt `apps_cache`)
+- Ergebnis wird im Job-Log ausgegeben: `X erfolgreich, Y fehlgeschlagen`
+- `stored["scripts"]` Counter in DB-Store-Schritt
+
+### Spec-Compliance
+- QLIK-PS-003: RLS auf `qlik_app_scripts` bereits via Migration 0019 abgedeckt (kein neues Migration nötig)
+- QLIK-PS-005: Keine lokalen Artefakte — Scripts landen direkt in PostgreSQL
+- QLIK-PS-008: Kein Migration-File nötig (Tabelle existiert seit Migration 0007)
+
+### Geänderte Dateien
+- `backend/app/fetch_jobs/contracts.py` (`"scripts"` in FetchStep, Orders, Dependency)
+- `backend/app/fetch_jobs/runtime.py` (`_run_scripts_step`)
+- `backend/app/fetch_jobs/store.py` (`QlikAppScript` Import, `scripts_data` Parameter, Upsert-Logik)
+- `backend/main.py` (Import, `scripts_cache`, `step_label`, `_run_single_step` Branch, `_run_db_store_step` Aufruf, Log)
+- `backend/tests/test_fetch_scripts.py` (neu: 7 Tests — Payload, Error-Handling, Contracts, Counter)
+
+---
+
+## Update (2026-04-08): Script Sync — Scripts-UI + Qlik Syntax Highlighting
+
+### Completed
+- **"Scripts abziehen" Button** in `script-sync.html` Header — triggert `POST /api/fetch/jobs` mit `steps: ["apps","scripts"]`
+- **Fetch-Progress-Section** — Inline-Fortschrittsbalken, Step-Anzeige, Auto-Refresh nach Abschluss
+- **Scripts-Section** — App-Liste per Projekt (via `/api/qlik-apps?project_id=X`), Filter-Input
+- **Script-Viewer** — Expandierbares Panel pro App, Syntax-Highlighting, Zeilennummern, Kopieren-Button
+- **Qlik Load Script Highlighter** (reines ES5, keine externen Libs):
+  - Tokenizer: line/block comments, single-quoted strings, `[field]`/`"field"`, `$(variable)`, plain text
+  - Keywords (blau): LOAD, FROM, WHERE, JOIN, SET, LET, IF, FOR, SUB, STORE, etc.
+  - Funktionen (lila): erkannt über Regex (Abs, Count, Sum, Date, If, Concat, …)
+  - Strings (grün), Kommentare (grau/kursiv), Variablen (gelb), [Felder] (teal), Zahlen (orange)
+  - Zeilennummern + Scrollbereich (max 600px Höhe)
+
+### Geänderte Dateien
+- `frontend/script-sync.html` (CSS, HTML, JavaScript)

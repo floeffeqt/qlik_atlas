@@ -175,8 +175,19 @@ class QlikClient:
             if resp.status_code >= 400:
                 raise QlikApiError(resp.status_code, f"HTTP {resp.status_code}", resp.text)
 
+            # Guard: reject HTML responses (login-page redirects, CDN catch-alls, etc.)
+            content_type = resp.headers.get("content-type", "")
+            text = resp.text
+            if "text/html" in content_type or text.lstrip().lower().startswith("<!doctype html"):
+                raise QlikApiError(
+                    resp.status_code,
+                    f"Expected plain text but received HTML (content-type: {content_type!r}). "
+                    "Check tenant URL and API key.",
+                    text[:200],
+                )
+
             logger.info("GET(text) %s -> %s", path, resp.status_code)
-            return resp.text, resp.status_code
+            return text, resp.status_code
 
     async def post_file(
         self,
