@@ -114,7 +114,9 @@ async def _task_out(t: Task, session: AsyncSession, *, include_context: bool = F
             id=s.id, project_id=s.project_id, qlik_app_id=s.qlik_app_id,
             parent_task_id=s.parent_task_id, title=s.title, description=s.description,
             status=s.status, priority=s.priority, assignee_id=s.assignee_id,
-            due_date=iso_or_empty(s.due_date), estimated_minutes=s.estimated_minutes,
+            start_date=iso_or_empty(s.start_date), start_time=s.start_time.strftime('%H:%M') if s.start_time else None,
+            due_date=iso_or_empty(s.due_date),   end_time=s.end_time.strftime('%H:%M')   if s.end_time   else None,
+            estimated_minutes=s.estimated_minutes,
             app_link=s.app_link, created_at=iso_or_empty(s.created_at),
             updated_at=iso_or_empty(s.updated_at),
         ))
@@ -129,7 +131,9 @@ async def _task_out(t: Task, session: AsyncSession, *, include_context: bool = F
         parent_task_id=t.parent_task_id, title=t.title, description=t.description,
         status=t.status, priority=t.priority, assignee_id=t.assignee_id,
         assignee=_user_ref(assignee),
-        due_date=iso_or_empty(t.due_date), estimated_minutes=t.estimated_minutes,
+        start_date=iso_or_empty(t.start_date), start_time=t.start_time.strftime('%H:%M') if t.start_time else None,
+        due_date=iso_or_empty(t.due_date),     end_time=t.end_time.strftime('%H:%M')   if t.end_time   else None,
+        estimated_minutes=t.estimated_minutes,
         app_link=t.app_link, tags=tags, subtasks=subtasks,
         created_at=iso_or_empty(t.created_at), updated_at=iso_or_empty(t.updated_at),
     )
@@ -201,6 +205,7 @@ PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 @router.get("/tasks", response_model=list[TaskOut])
 async def list_tasks(
     project_id: int | None = Query(default=None),
+    customer_id: int | None = Query(default=None),
     qlik_app_id: str | None = Query(default=None),
     assignee: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
@@ -212,6 +217,8 @@ async def list_tasks(
     q = select(Task)
     if project_id is not None:
         q = q.where(Task.project_id == project_id)
+    if customer_id is not None:
+        q = q.join(Project, Task.project_id == Project.id).where(Project.customer_id == customer_id)
     if qlik_app_id:
         q = q.where(Task.qlik_app_id == qlik_app_id)
     if assignee == "me":
@@ -251,7 +258,9 @@ async def create_task(
         project_id=payload.project_id, title=payload.title.strip(),
         description=payload.description, status=payload.status,
         priority=payload.priority, assignee_id=payload.assignee_id,
-        due_date=payload.due_date, estimated_minutes=payload.estimated_minutes,
+        start_date=payload.start_date, start_time=payload.start_time,
+        due_date=payload.due_date,     end_time=payload.end_time,
+        estimated_minutes=payload.estimated_minutes,
         qlik_app_id=payload.qlik_app_id, app_link=payload.app_link,
         parent_task_id=payload.parent_task_id,
     )
@@ -272,8 +281,8 @@ async def update_task(
     if not task:
         raise HTTPException(status_code=404, detail="task not found")
     for field in ("title", "description", "status", "priority", "assignee_id",
-                  "due_date", "estimated_minutes", "qlik_app_id", "app_link",
-                  "parent_task_id"):
+                  "start_date", "start_time", "due_date", "end_time",
+                  "estimated_minutes", "qlik_app_id", "app_link", "parent_task_id"):
         val = getattr(payload, field)
         if val is not None:
             setattr(task, field, val.strip() if isinstance(val, str) else val)
@@ -302,6 +311,17 @@ async def unlink_task_tag(task_id: int, tag_id: int, session: AsyncSession = Dep
 #  LOG ENTRIES
 # =====================================================================
 
+def _log_entry_out(d: DocEntry, author: User | None, *, project_name: str | None = None, customer_name: str | None = None) -> LogEntryOut:
+    return LogEntryOut(
+        id=d.id, project_id=d.project_id, project_name=project_name, customer_name=customer_name,
+        qlik_app_id=d.qlik_app_id,
+        author_id=d.author_id, author=_user_ref(author),
+        entry_type=d.entry_type, content=d.content,
+        warum=d.warum, betrifft=d.betrifft,
+        entry_date=iso_or_empty(d.entry_date), created_at=iso_or_empty(d.created_at),
+    )
+
+
 @router.get("/log-entries", response_model=list[LogEntryOut])
 async def list_log_entries(
     project_id: int | None = Query(default=None),
@@ -324,13 +344,7 @@ async def list_log_entries(
         pname, cname = (None, None)
         if include_ctx:
             pname, cname = await _project_context(session, d.project_id)
-        out.append(LogEntryOut(
-            id=d.id, project_id=d.project_id, project_name=pname, customer_name=cname,
-            qlik_app_id=d.qlik_app_id,
-            author_id=d.author_id, author=_user_ref(author),
-            entry_type=d.entry_type, content=d.content,
-            entry_date=iso_or_empty(d.entry_date), created_at=iso_or_empty(d.created_at),
-        ))
+        out.append(_log_entry_out(d, author, project_name=pname, customer_name=cname))
     return out
 
 
@@ -341,12 +355,7 @@ async def get_log_entry(entry_id: int, session: AsyncSession = Depends(_scoped))
     if not d:
         raise HTTPException(status_code=404, detail="log entry not found")
     author = await _load_user(session, d.author_id)
-    return LogEntryOut(
-        id=d.id, project_id=d.project_id, qlik_app_id=d.qlik_app_id,
-        author_id=d.author_id, author=_user_ref(author),
-        entry_type=d.entry_type, content=d.content,
-        entry_date=iso_or_empty(d.entry_date), created_at=iso_or_empty(d.created_at),
-    )
+    return _log_entry_out(d, author)
 
 
 @router.post("/log-entries", response_model=LogEntryOut, status_code=status.HTTP_201_CREATED)
@@ -357,7 +366,8 @@ async def create_log_entry(
 ):
     entry = DocEntry(
         project_id=payload.project_id, entry_type=payload.entry_type,
-        content=payload.content, qlik_app_id=payload.qlik_app_id,
+        content=payload.content, warum=payload.warum, betrifft=payload.betrifft,
+        qlik_app_id=payload.qlik_app_id,
         entry_date=payload.entry_date or date.today(),
         author_id=_user_id(current_user),
     )
@@ -365,12 +375,7 @@ async def create_log_entry(
     await session.commit()
     await session.refresh(entry)
     author = await _load_user(session, entry.author_id)
-    return LogEntryOut(
-        id=entry.id, project_id=entry.project_id, qlik_app_id=entry.qlik_app_id,
-        author_id=entry.author_id, author=_user_ref(author),
-        entry_type=entry.entry_type, content=entry.content,
-        entry_date=iso_or_empty(entry.entry_date), created_at=iso_or_empty(entry.created_at),
-    )
+    return _log_entry_out(entry, author)
 
 
 # =====================================================================
@@ -781,10 +786,11 @@ async def apps_health(
 @router.get("/qlik-apps")
 async def list_qlik_apps(
     project_id: int = Query(...),
+    limit: int = Query(default=500, ge=1, le=2000),
     session: AsyncSession = Depends(_scoped),
 ):
     q = await session.execute(
-        select(QlikApp).where(QlikApp.project_id == project_id).order_by(QlikApp.name_value)
+        select(QlikApp).where(QlikApp.project_id == project_id).order_by(QlikApp.name_value).limit(limit)
     )
     return [
         {"app_id": a.app_id, "name": a.name_value or a.app_name or a.app_id, "project_id": a.project_id}

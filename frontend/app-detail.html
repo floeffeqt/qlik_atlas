@@ -331,7 +331,7 @@
       </div>
       <div class="form-group">
         <label for="taskDesc">Beschreibung</label>
-        <textarea id="taskDesc" rows="3" placeholder="Optional"></textarea>
+        <textarea id="taskDesc" rows="3" placeholder="Was soll gemacht werden? Akzeptanzkriterien, Hinweise…"></textarea>
       </div>
       <div class="form-row">
         <div class="form-group"><label for="taskStatus">Status</label><select id="taskStatus"><option value="open">Open</option><option value="in_progress">In Bearb.</option><option value="review">Review</option><option value="done">Done</option></select></div>
@@ -356,6 +356,7 @@
         <div class="form-group"><label for="taskMinutes">Geschätzte Min.</label><input type="number" id="taskMinutes" min="0" /></div>
         <div class="form-group"><label for="taskParent">Parent Task</label><select id="taskParent"><option value="">—</option></select></div>
       </div>
+      <div class="form-group"><label for="taskAppSelect">Betroffene App</label><select id="taskAppSelect"><option value="">— Keine spezifische App —</option></select></div>
       <div class="form-group"><label for="taskAppLink">App-Link</label><input type="url" id="taskAppLink" placeholder="https://..." /></div>
       <div class="modal-footer">
         <button type="button" class="btn-modal-cancel" id="taskCancel">Abbrechen</button>
@@ -376,6 +377,7 @@
         <div class="form-group"><label for="docType">Typ</label><select id="docType"><option value="change">Change</option><option value="decision">Decision</option><option value="note" selected>Note</option><option value="incident">Incident</option></select></div>
         <div class="form-group"><label for="docDate">Datum</label><input type="date" id="docDate" /></div>
       </div>
+      <div class="form-group"><label for="docAppSelect">Betroffene App</label><select id="docAppSelect"><option value="">— Keine spezifische App —</option></select></div>
       <div class="form-group"><label>Inhalt</label><div id="docEditorContainer"></div></div>
       <div class="modal-footer">
         <button type="button" class="btn-modal-cancel" id="docCancel">Abbrechen</button>
@@ -390,6 +392,7 @@
 
 <script src="/assets/atlas-shared.js"></script>
 <script src="/assets/markdownEditor.js"></script>
+<script src="/assets/smartCompose.js"></script>
 <script>
 (function () {
   var apiFetch = window.AtlasShared.apiFetch;
@@ -408,6 +411,7 @@
   var projectsById = {}, customersById = {}, allProjects = [], allCustomers = [];
   var allTags = [], allUsers = [];
   var selectedTaskTags = [];
+  var allProjectApps = []; // { app_id, name, space_name }
   var appInfo = null;
   var readmeEditor = null, readmeId = null, readmeAutoSaveTimer = null;
 
@@ -550,13 +554,16 @@
   });
 
   /* ── Changelog Tab ── */
+  var _docCache = {}; // id → full doc object, populated on list load
   async function loadAppDocs() {
     var el = document.getElementById('appDocsList');
     try {
-      var res = await apiFetch('/api/log-entries?qlik_app_id=' + encodeURIComponent(appId) + '&project_id=' + encodeURIComponent(projectId));
+      var res = await apiFetch('/api/log-entries?project_id=' + encodeURIComponent(projectId));
       if (!res.ok) throw new Error();
       var docs = await res.json();
       docs = Array.isArray(docs) ? docs : (docs.items || []);
+      _docCache = {};
+      docs.forEach(function (d) { _docCache[d.id] = d; });
       if (!docs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4DD;</div>Noch keine Einträge.<br><span class="empty-action" id="emptyDocAction">+ Eintrag erstellen</span></div>'; var ea = document.getElementById('emptyDocAction'); if (ea) ea.addEventListener('click', function () { openDocModal(); }); return; }
       // Group: today / this week / older
       var now = new Date();
@@ -574,10 +581,15 @@
         if (!items.length) return '';
         var h = '<div class="doc-group-header">' + label + '</div>';
         items.forEach(function (d) {
+          var preview = d.content ? escHtml(d.content.substring(0, 60)) + (d.content.length > 60 ? '…' : '') : '';
           h += '<div class="doc-row" data-doc-id="'+d.id+'">'
             +'<div class="doc-dot '+(d.entry_type||'note')+'"></div>'
-            +'<div class="doc-body"><div class="doc-title"><span class="badge badge-'+typeColor(d.entry_type)+'">'+escHtml(d.entry_type)+'</span> '+escHtml(d.title||d.content?.substring(0,60)||'')+'</div>'
-            +'<div class="doc-meta">'+(d.author?escHtml(d.author.display_name||d.author.email)+' · ':'')+timeAgo(d.created_at)+'</div></div></div>';
+            +'<div class="doc-body"><div class="doc-title"><span class="badge badge-'+typeColor(d.entry_type)+'">'+escHtml(d.entry_type)+'</span> '+preview+'</div>'
+            +'<div class="doc-meta">'
+            +(d.entry_date?escHtml(fmtDate(d.entry_date))+' · ':'')
+            +(d.author?escHtml(d.author.display_name||d.author.email)+' · ':'')
+            +(d.qlik_app_id?'<span style="opacity:0.65;font-style:italic">'+escHtml(appNameById(d.qlik_app_id))+'</span>':'Kein App-Bezug')
+            +'</div></div></div>';
         });
         return h;
       }
@@ -593,14 +605,30 @@
     var row = e.target.closest('.doc-row');
     if (!row) return;
     try {
-      var res = await apiFetch('/api/log-entries/' + row.getAttribute('data-doc-id'));
-      if (!res.ok) throw new Error();
-      var doc = await res.json();
+      var docId = row.getAttribute('data-doc-id');
+      var doc = _docCache[docId];
+      if (!doc) {
+        var res = await apiFetch('/api/log-entries/' + docId);
+        if (!res.ok) throw new Error();
+        doc = await res.json();
+        _docCache[docId] = doc;
+      }
       document.getElementById('sidebarType').textContent = (doc.entry_type||'note').toUpperCase();
       document.getElementById('sidebarType').style.color = {change:'#60a5fa',decision:'#4ade80',incident:'#f87171'}[doc.entry_type]||'var(--text-muted)';
-      document.getElementById('sidebarTitle').textContent = doc.title || '(Kein Titel)';
-      document.getElementById('sidebarMeta').textContent = (doc.author?(doc.author.display_name||doc.author.email)+' · ':'')+timeAgo(doc.created_at);
-      document.getElementById('sidebarContent').innerHTML = AtlasMarkdownEditor.renderMarkdown(doc.content||'');
+      document.getElementById('sidebarTitle').textContent = doc.entry_date || '';
+      document.getElementById('sidebarMeta').textContent = (doc.author?(doc.author.display_name||doc.author.email)+' · ':'')+(doc.qlik_app_id?appNameById(doc.qlik_app_id)+' · ':'')+timeAgo(doc.created_at);
+      var sideHtml = '';
+      if (doc.content) {
+        sideHtml += '<div class="sc-field" style="margin-bottom:0.8rem">'
+          + '<div class="sc-label">Was</div>'
+          + '<div style="color:rgba(255,255,255,0.88);font-size:0.88rem;line-height:1.55;white-space:pre-wrap">'+escHtml(doc.content)+'</div></div>';
+      }
+      if (doc.warum) {
+        sideHtml += '<div class="sc-field" style="margin-bottom:0.8rem">'
+          + '<div class="sc-label">Warum / Begründung</div>'
+          + '<div style="color:rgba(255,255,255,0.7);font-size:0.85rem;line-height:1.55;white-space:pre-wrap">'+escHtml(doc.warum)+'</div></div>';
+      }
+      document.getElementById('sidebarContent').innerHTML = sideHtml || '<span style="opacity:0.4">Kein Inhalt</span>';
       document.getElementById('docSidebar').classList.add('open');
     } catch (e) { showToast('Eintrag konnte nicht geladen werden'); }
   });
@@ -639,18 +667,10 @@
 
   function initReadmeEditor(content) {
     if (readmeEditor) readmeEditor.destroy();
-    readmeEditor = AtlasMarkdownEditor.create('readmeEditorContainer', {
+    readmeEditor = AtlasSmartCompose.readme('readmeEditorContainer', {
+      readmeType: 'app_readme',
       initialValue: content,
-      toolbar: true,
-      resetButton: true,
-      placeholder: 'App-Dokumentation schreiben…',
       onChange: function () { debounceAutoSave(); },
-      onReset: async function () {
-        try {
-          var tRes = await apiFetch('/api/templates?type=app_readme');
-          if (tRes.ok) { var d = await tRes.json(); readmeEditor.setValue(d.body || d.content || d.template || ''); }
-        } catch (e) {}
-      }
     });
   }
 
@@ -773,23 +793,39 @@
     if (!readmeEditor) return;
     var selected = _dsNodes.filter(function (n) { return _dsSelected[n.id]; });
     if (!selected.length) return;
-    var md = '\n\n## Datenquellen\n\n'
-      + '| Typ | Name | Node-ID |\n'
+    var tableText = '| Typ | Name | Node-ID |\n'
       + '|-----|------|---------|\n'
       + selected.map(function (n) {
           return '| ' + escHtml(n.type) + ' | ' + escHtml(n.label || n.id) + ' | `' + escHtml(n.id) + '` |';
-        }).join('\n')
-      + '\n';
-    var current = readmeEditor.getValue();
-    // Replace existing Datenquellen section or append
-    var dsRegex = /\n*## Datenquellen\n[\s\S]*?(?=\n## |\n*$)/;
-    if (dsRegex.test(current)) {
-      readmeEditor.setValue(current.replace(dsRegex, md));
-    } else {
-      readmeEditor.setValue(current + md);
-    }
-    showToast(selected.length + ' Datenquelle(n) eingefügt');
+        }).join('\n');
+    readmeEditor.insertSection('datenquellen', tableText);
+    showToast(selected.length + ' Datenquelle(n) in Abschnitt eingefügt');
   });
+
+  /* ── Project Apps loader (for app-select in Task + Log modals) ── */
+  async function loadProjectApps() {
+    if (!projectId) return;
+    try {
+      var res = await apiFetch('/api/qlik-apps?project_id=' + encodeURIComponent(projectId) + '&limit=500');
+      if (!res.ok) return;
+      var data = await res.json();
+      var list = Array.isArray(data) ? data : (data.items || []);
+      allProjectApps = list.map(window.AtlasShared.normalizeAppItem).sort(function (a, b) {
+        var sc = a.space_name.localeCompare(b.space_name);
+        return sc !== 0 ? sc : a.name.localeCompare(b.name);
+      });
+    } catch (e) { /* non-critical */ }
+  }
+
+  function appNameById(id) {
+    if (!id) return '';
+    var a = allProjectApps.find(function (a) { return a.app_id === id; });
+    return a ? a.name : id;
+  }
+
+  function buildAppSelectOptions(selectedId) {
+    return window.AtlasShared.buildGroupedAppSelectOptions(allProjectApps, selectedId);
+  }
 
   /* ── Task Modal ── */
   function openTaskModal() {
@@ -797,6 +833,8 @@
     document.getElementById('taskError').style.display = 'none';
     selectedTaskTags = [];
     renderTaskTags();
+    // Populate app select (pre-select current app)
+    document.getElementById('taskAppSelect').innerHTML = buildAppSelectOptions(appId);
     // Load users
     apiFetch('/api/projects/' + encodeURIComponent(projectId) + '/members').then(function(r){return r.ok?r.json():[];}).then(function(u){
       allUsers = Array.isArray(u)?u:[];
@@ -848,7 +886,8 @@
     e.preventDefault();
     var errEl = document.getElementById('taskError');
     errEl.style.display = 'none';
-    var body = { project_id: parseInt(projectId,10), title: document.getElementById('taskTitle').value.trim(), description: document.getElementById('taskDesc').value.trim()||null, status: document.getElementById('taskStatus').value, priority: document.getElementById('taskPriority').value, assignee_id: document.getElementById('taskAssignee').value?parseInt(document.getElementById('taskAssignee').value,10):null, due_date: document.getElementById('taskDueDate').value||null, estimated_minutes: document.getElementById('taskMinutes').value?parseInt(document.getElementById('taskMinutes').value,10):null, qlik_app_id: appId, app_link: document.getElementById('taskAppLink').value.trim()||null, parent_task_id: document.getElementById('taskParent').value?parseInt(document.getElementById('taskParent').value,10):null };
+    var selectedAppId = document.getElementById('taskAppSelect').value || appId || null;
+    var body = { project_id: parseInt(projectId,10), title: document.getElementById('taskTitle').value.trim(), description: document.getElementById('taskDesc').value.trim()||null, status: document.getElementById('taskStatus').value, priority: document.getElementById('taskPriority').value, assignee_id: document.getElementById('taskAssignee').value?parseInt(document.getElementById('taskAssignee').value,10):null, due_date: document.getElementById('taskDueDate').value||null, estimated_minutes: document.getElementById('taskMinutes').value?parseInt(document.getElementById('taskMinutes').value,10):null, qlik_app_id: selectedAppId, app_link: document.getElementById('taskAppLink').value.trim()||null, parent_task_id: document.getElementById('taskParent').value?parseInt(document.getElementById('taskParent').value,10):null };
     try {
       var res = await apiFetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(!res.ok){var err=await res.json().catch(function(){return{};}); throw new Error(err.detail||'Fehler');}
@@ -864,7 +903,8 @@
     document.getElementById('docForm').reset();
     document.getElementById('docError').style.display = 'none';
     document.getElementById('docDate').value = new Date().toISOString().slice(0,10);
-    loadDocTemplate(document.getElementById('docType').value);
+    document.getElementById('docAppSelect').innerHTML = buildAppSelectOptions(appId);
+    initDocEditor();
     document.getElementById('docModal').classList.add('open');
   }
   function closeDocModal() { document.getElementById('docModal').classList.remove('open'); }
@@ -872,21 +912,33 @@
   document.getElementById('docCancel').addEventListener('click', closeDocModal);
   document.getElementById('btnNewAppDoc').addEventListener('click', openDocModal);
 
-  async function loadDocTemplate(type) {
-    if(docEditor) docEditor.destroy();
-    var tpl='';
-    try{ var r=await apiFetch('/api/templates?type=doc_entry_'+encodeURIComponent(type)); if(r.ok){var d=await r.json(); tpl=d.body||d.content||d.template||'';} }catch(e){}
-    docEditor = AtlasMarkdownEditor.create('docEditorContainer',{initialValue:tpl,placeholder:'Inhalt…',toolbar:true});
+  function initDocEditor() {
+    if (docEditor) docEditor.destroy();
+    docEditor = AtlasSmartCompose.log('docEditorContainer', {});
   }
-  document.getElementById('docType').addEventListener('change', function(){ loadDocTemplate(this.value); });
+  document.getElementById('docType').addEventListener('change', function () {
+    // Re-init clears the fields when the type changes
+    if (docEditor) docEditor.clear();
+  });
 
   document.getElementById('docForm').addEventListener('submit', async function(e){
     e.preventDefault();
     var errEl=document.getElementById('docError');
     errEl.style.display='none';
     try{
-      var r=await apiFetch('/api/log-entries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:parseInt(projectId,10),entry_type:document.getElementById('docType').value,qlik_app_id:appId,entry_date:document.getElementById('docDate').value||null,content:docEditor?docEditor.getValue():''})});
-      if(!r.ok)throw new Error((await r.json().catch(function(){return{};})).detail||'Fehler');
+      var logAppId = document.getElementById('docAppSelect').value || appId || null;
+      var vals = docEditor ? docEditor.getValues() : { was: '', warum: null };
+      var payload = {
+        project_id:  parseInt(projectId, 10),
+        entry_type:  document.getElementById('docType').value,
+        qlik_app_id: logAppId,
+        betrifft:    logAppId ? appNameById(logAppId) : null,
+        entry_date:  document.getElementById('docDate').value || null,
+        content:     vals.was,
+        warum:       vals.warum,
+      };
+      var r = await apiFetch('/api/log-entries', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      if(!r.ok) throw new Error((await r.json().catch(function(){return{};})).detail||'Fehler');
       closeDocModal(); showToast('Log-Eintrag erstellt'); loadAppDocs();
     }catch(err){ errEl.textContent=err.message; errEl.style.display='block'; }
   });
@@ -906,7 +958,7 @@
     await loadNav();
     await loadAppInfo();
     await loadTags();
-    await Promise.all([loadAppTasks(), loadAppDocs(), loadReadme(), loadDatasourceChips()]);
+    await Promise.all([loadAppTasks(), loadAppDocs(), loadReadme(), loadDatasourceChips(), loadProjectApps()]);
   }
   init();
 })();

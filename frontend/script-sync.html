@@ -183,6 +183,43 @@
     }
     .sv-tab-section.sv-closed::before { transform: rotate(-90deg); }
     .sv-section-body.sv-collapsed { display: none; }
+
+    /* ── Tabs (reuse app-detail.html pattern) ── */
+    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.75rem; }
+    .tab-btn { padding: 0.65rem 1.25rem; font-size: 0.875rem; font-weight: 500; color: var(--text-muted); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Master Items specific ── */
+    .mi-step { counter-increment: mi-step; }
+    .mi-step-label { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.6rem; }
+    .mi-app-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .mi-app-row select { flex: 1; min-width: 200px; max-width: 380px; padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; font-size: 0.875rem; outline: none; }
+    .mi-app-row select:focus { border-color: var(--accent); }
+    .mi-app-row select option { background: #1a1a2e; }
+    .mi-result-box { margin-top: 1rem; padding: 0.9rem 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--radius-sm); }
+    .mi-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.75rem; }
+    .mi-type-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 0.6rem; text-align: center; }
+    .mi-type-card .val { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+    .mi-type-card .lbl { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .mi-diff-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.75rem; }
+    .mi-diff-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .mi-diff-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .mi-diff-table tr:last-child td { border-bottom: none; }
+    .badge-new { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-existing { background: rgba(148,163,184,0.12); color: #94a3b8; }
+    .badge-conflict { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .mi-opts { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: 0.75rem; align-items: flex-start; }
+    .mi-opts label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: rgba(255,255,255,0.75); cursor: pointer; font-weight: normal; }
+    .mi-opts input[type=checkbox], .mi-opts input[type=radio] { width: auto; padding: 0; cursor: pointer; accent-color: var(--accent); }
+    .mi-import-result { margin-top: 1rem; }
+    .mi-import-result table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .mi-import-result th { text-align: left; color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+    .mi-import-result td { padding: 0.4rem 0.5rem; }
+    .mi-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(102,126,234,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
@@ -214,14 +251,36 @@
 </nav>
 
 <main>
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="scriptsync">Script Sync</button>
+    <button class="tab-btn" data-tab="masteritems">Master Items</button>
+  </div>
+
+  <!-- ════════════════════════════════ TAB: Script Sync ════════════════════════════════ -->
+  <div class="tab-content active" id="tab-scriptsync">
   <div class="page-header">
     <div>
       <h1 class="page-title">Script Sync</h1>
       <p class="page-subtitle">Git-Repository Mappings und Drift-Status fuer Qlik App Load-Scripts</p>
     </div>
     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+      <button class="btn-refresh" id="btnFetchScripts" disabled style="display:none;">&#x2193; Scripts abziehen</button>
       <button class="btn-refresh" id="refreshBtn" disabled>Drift pruefen</button>
       <button class="btn-primary" id="newMappingBtn" disabled>+ Neues Mapping</button>
+    </div>
+  </div>
+
+  <!-- Fetch progress -->
+  <div id="fetchProgressSection" style="display:none;margin-bottom:1rem;">
+    <div style="background:rgba(102,126,234,0.08);border:1px solid rgba(102,126,234,0.25);border-radius:10px;padding:0.85rem 1.1rem;display:flex;align-items:center;gap:0.85rem;">
+      <div style="flex:1;">
+        <div style="font-size:0.8rem;font-weight:600;color:#a5b4fc;margin-bottom:0.35rem;" id="fetchProgressLabel">Fetch-Job läuft…</div>
+        <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden;">
+          <div id="fetchProgressBar" style="height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:3px;width:0%;transition:width 0.4s ease;"></div>
+        </div>
+      </div>
+      <span id="fetchProgressStatus" style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;"></span>
     </div>
   </div>
 
@@ -262,6 +321,98 @@
       <div class="empty-state"><div class="empty-icon">&#x1F4C4;</div><div>Kein Projekt ausgew&auml;hlt oder noch keine Scripts abgezogen.</div></div>
     </div>
   </div>
+
+  </div><!-- end tab-scriptsync -->
+
+  <!-- ════════════════════════════════ TAB: Master Items ════════════════════════════════ -->
+  <div class="tab-content" id="tab-masteritems">
+
+    <!-- Schritt 1: Quell-App exportieren -->
+    <div class="section mi-step">
+      <div class="section-title">1 &mdash; Quell-App exportieren</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">W&auml;hle die App, aus der Master Dimensions, Measures und Visualizations ausgelesen werden sollen.</p>
+      <div class="mi-app-row">
+        <select id="miSourceApp"><option value="">App w&auml;hlen&hellip;</option></select>
+        <button class="btn-primary" id="miExportBtn" disabled>Exportieren</button>
+      </div>
+      <div id="miExportResult" style="display:none;" class="mi-result-box">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;" id="miExportMeta"></div>
+        <div class="mi-type-grid">
+          <div class="mi-type-card"><div class="val" id="miExportDimCount">–</div><div class="lbl">Dimensions</div></div>
+          <div class="mi-type-card"><div class="val" id="miExportMeasCount">–</div><div class="lbl">Measures</div></div>
+          <div class="mi-type-card"><div class="val" id="miExportVizCount">–</div><div class="lbl">Visualizations</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail-Fenster: Properties der exportierten Master Items -->
+    <div class="section" id="miDetailSection" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div class="section-title" style="margin:0;">Master Item Properties</div>
+        <input id="miDetailSearch" type="text" placeholder="Filtern&hellip;"
+          style="width:200px;padding:0.35rem 0.7rem;background:rgba(255,255,255,0.07);border:1px solid var(--border);border-radius:var(--radius-sm);color:#fff;font-size:0.82rem;outline:none;" />
+      </div>
+      <!-- Mini-Tab-Bar (gleicher Pattern wie app-detail.html) -->
+      <div class="tab-bar" style="margin-bottom:1rem;">
+        <button class="tab-btn active" data-mi-tab="dimensions">Dimensionen <span class="badge badge-existing" id="miTabCountDim" style="margin-left:0.3rem">0</span></button>
+        <button class="tab-btn" data-mi-tab="measures">Kennzahlen <span class="badge badge-existing" id="miTabCountMeas" style="margin-left:0.3rem">0</span></button>
+        <button class="tab-btn" data-mi-tab="visualizations">Visualisierungen <span class="badge badge-existing" id="miTabCountViz" style="margin-left:0.3rem">0</span></button>
+      </div>
+      <div id="miDetailBody"></div>
+    </div>
+
+    <!-- Schritt 2: Ziel-App vergleichen -->
+    <div class="section mi-step" id="miDiffSection" style="opacity:0.4;pointer-events:none;">
+      <div class="section-title">2 &mdash; Ziel-App vergleichen</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">W&auml;hle die App, in die sp&auml;ter importiert werden soll. Der Diff zeigt, was neu, gleich oder abweichend ist.</p>
+      <div class="mi-app-row">
+        <select id="miTargetApp"><option value="">App w&auml;hlen&hellip;</option></select>
+        <button class="btn-refresh" id="miDiffBtn" disabled>Vergleichen</button>
+      </div>
+      <div id="miDiffResult" style="display:none;" class="mi-result-box">
+        <table class="mi-diff-table" id="miDiffTable">
+          <thead><tr><th>Typ</th><th><span class="badge badge-new">Neu</span></th><th><span class="badge badge-existing">Gleich</span></th><th><span class="badge badge-conflict">Konflikt</span></th></tr></thead>
+          <tbody id="miDiffBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Schritt 3: Import -->
+    <div class="section mi-step" id="miImportSection" style="opacity:0.4;pointer-events:none;">
+      <div class="section-title">3 &mdash; Importieren</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;">Konfiguriere den Import und starte ihn. Bestehende Items werden niemals gel&ouml;scht.</p>
+      <div class="mi-opts">
+        <div>
+          <div style="font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;font-weight:700;letter-spacing:0.05em;margin-bottom:0.4rem;">Typen</div>
+          <label><input type="checkbox" id="miOptDim" checked /> Dimensions</label>
+          <label style="margin-left:0.9rem"><input type="checkbox" id="miOptMeas" checked /> Measures</label>
+          <label style="margin-left:0.9rem"><input type="checkbox" id="miOptViz" checked /> Visualizations</label>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;font-weight:700;letter-spacing:0.05em;margin-bottom:0.4rem;">Duplikate</div>
+          <label><input type="radio" name="miDup" id="miDupSkip" value="skip" checked /> &Uuml;berspringen</label>
+          <label style="margin-left:0.9rem"><input type="radio" name="miDup" id="miDupOverwrite" value="overwrite" /> &Uuml;berschreiben</label>
+        </div>
+        <div style="margin-top:0.1rem;">
+          <label><input type="checkbox" id="miOptDryRun" /> <strong>Dry Run</strong> (simulieren, nichts schreiben)</label>
+        </div>
+      </div>
+      <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+        <button class="btn-primary" id="miImportBtn">Importieren</button>
+        <span id="miImportSpinner" style="display:none;font-size:0.8rem;color:var(--text-muted);"><span class="mi-spinner"></span>L&auml;uft&hellip;</span>
+      </div>
+      <div id="miImportResult" style="display:none;" class="mi-result-box mi-import-result">
+        <div id="miImportResultHead" style="font-size:0.82rem;font-weight:600;margin-bottom:0.6rem;"></div>
+        <table>
+          <thead><tr><th>Typ</th><th>Importiert</th><th>&Uuml;berschrieben</th><th>&Uuml;bersprungen</th></tr></thead>
+          <tbody id="miImportBody"></tbody>
+        </table>
+        <div id="miImportErrors" style="margin-top:0.6rem;"></div>
+      </div>
+    </div>
+
+  </div><!-- end tab-masteritems -->
+
 </main>
 
 <!-- Create/Edit Mapping Modal -->
@@ -303,6 +454,13 @@
 <script>
   window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
   window.AtlasShared.bindLogout('logoutBtn');
+
+  // Show "Scripts abziehen" only for admins
+  var _currentUser = window.AtlasShared.getCachedUser ? window.AtlasShared.getCachedUser() : null;
+  if (_currentUser && _currentUser.role === 'admin') {
+    var _fetchBtn = document.getElementById('btnFetchScripts');
+    if (_fetchBtn) _fetchBtn.style.display = '';
+  }
 
   function showToast(msg, dur) { window.AtlasShared.showToast(msg, dur, 'toast'); }
   async function apiFetch(path, opts) { return window.AtlasShared.apiFetch(path, opts); }
@@ -428,6 +586,8 @@
     var hasProject = pid && pid !== '';
     document.getElementById('newMappingBtn').disabled = !hasProject;
     document.getElementById('refreshBtn').disabled = !hasProject;
+    var fetchBtn = document.getElementById('btnFetchScripts');
+    if (fetchBtn) fetchBtn.disabled = !hasProject;
     if (hasProject) {
       loadMappings();
       loadScriptsList();
@@ -438,7 +598,8 @@
       _allScriptApps = [];
       _openScriptAppId = null;
       document.getElementById('scriptsSection').style.display = 'none';
-      document.getElementById('scriptViewerPanel').style.display = 'none';
+      var vp = document.getElementById('scriptViewerPanel');
+      if (vp) vp.style.display = 'none';
     }
   }
 
@@ -471,6 +632,87 @@
       document.getElementById('refreshBtn').textContent = 'Drift pruefen';
     }
   }
+
+  // ── Fetch Scripts Job ──
+  var _fetchPollTimer = null;
+
+  async function startFetchScripts() {
+    var pid = focusState.project;
+    if (!pid) return;
+    var btn = document.getElementById('btnFetchScripts');
+    btn.disabled = true;
+    btn.textContent = 'Läuft…';
+    try {
+      var resp = await apiFetch('/api/fetch/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: parseInt(pid, 10), steps: ['apps', 'scripts'] }),
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var job = await resp.json();
+      pollFetchJob(job.jobId || job.job_id);
+    } catch (e) {
+      showToast('Fehler: ' + (e.message || e));
+      btn.disabled = false;
+      btn.textContent = '↓ Scripts abziehen';
+    }
+  }
+
+  function pollFetchJob(jobId) {
+    var progressSection = document.getElementById('fetchProgressSection');
+    var label = document.getElementById('fetchProgressLabel');
+    var bar = document.getElementById('fetchProgressBar');
+    var statusEl = document.getElementById('fetchProgressStatus');
+    progressSection.style.display = '';
+    var stepOrder = ['apps', 'scripts'];
+    var stepIdx = 0;
+
+    function tick() {
+      apiFetch('/api/fetch/jobs/' + encodeURIComponent(jobId)).then(function(r) {
+        return r.json();
+      }).then(function(job) {
+        var status = job.status;
+        var step = job.currentStep || '';
+
+        // Progress bar: roughly estimate based on step
+        var idx = stepOrder.indexOf(step);
+        var pct = idx >= 0 ? Math.round(((idx + 0.5) / stepOrder.length) * 100) : 50;
+        if (status === 'done' || status === 'success') pct = 100;
+
+        bar.style.width = pct + '%';
+        label.textContent = step ? ('Schritt: ' + step) : 'Fetch-Job läuft…';
+        statusEl.textContent = status;
+
+        if (status === 'running' || status === 'pending') {
+          _fetchPollTimer = setTimeout(tick, 1500);
+        } else {
+          // finished
+          var btn = document.getElementById('btnFetchScripts');
+          btn.disabled = false;
+          btn.textContent = '↓ Scripts abziehen';
+          if (status === 'done' || status === 'success') {
+            label.textContent = 'Scripts erfolgreich abgezogen';
+            statusEl.textContent = 'Fertig';
+            setTimeout(function() { progressSection.style.display = 'none'; }, 3000);
+            loadScriptsList();
+            showToast('Scripts abgezogen');
+          } else {
+            label.textContent = 'Fetch-Job beendet: ' + status;
+            bar.style.background = '#f87171';
+          }
+        }
+      }).catch(function(e) {
+        statusEl.textContent = 'Fehler';
+        label.textContent = 'Konnte Status nicht abrufen';
+        var btn = document.getElementById('btnFetchScripts');
+        btn.disabled = false;
+        btn.textContent = '↓ Scripts abziehen';
+      });
+    }
+    tick();
+  }
+
+  document.getElementById('btnFetchScripts').addEventListener('click', startFetchScripts);
 
   // ── Rendering ──
   function renderOverview() {
@@ -1008,6 +1250,368 @@
     if (!body) return;
     body.classList.toggle('sv-collapsed');
     hdr.classList.toggle('sv-closed');
+  });
+
+  // ── Tab switching (page-level only; mini-tabs use data-mi-tab) ──
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab-btn[data-tab]').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+      this.classList.add('active');
+      document.getElementById('tab-' + this.getAttribute('data-tab')).classList.add('active');
+      if (this.getAttribute('data-tab') === 'masteritems') populateMiAppSelects();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // Master Items
+  // ══════════════════════════════════════════════════════════════
+
+  var _miExportData = null; // stores last export result
+
+  function populateMiAppSelects() {
+    var pid = focusState.project;
+    if (!pid) return;
+    apiFetch('/api/qlik-apps?project_id=' + pid).then(function(r) {
+      return r.ok ? r.json() : [];
+    }).then(function(apps) {
+      apps = Array.isArray(apps) ? apps : [];
+      var opts = apps.map(function(a) {
+        return '<option value="' + escHtml(a.app_id) + '">' + escHtml(a.name || a.app_id) + '</option>';
+      }).join('');
+      var placeholder = '<option value="">App w\u00e4hlen\u2026</option>';
+      document.getElementById('miSourceApp').innerHTML = placeholder + opts;
+      document.getElementById('miTargetApp').innerHTML = placeholder + opts;
+      document.getElementById('miExportBtn').disabled = !apps.length;
+      document.getElementById('miDiffBtn').disabled = !apps.length;
+    }).catch(function() {});
+  }
+
+  document.getElementById('miSourceApp').addEventListener('change', function() {
+    document.getElementById('miExportBtn').disabled = !this.value;
+    // Reset downstream steps
+    _miExportData = null;
+    document.getElementById('miExportResult').style.display = 'none';
+    document.getElementById('miDetailSection').style.display = 'none';
+    _miDetailOpenSet.clear();
+    setMiSectionEnabled('miDiffSection', false);
+    setMiSectionEnabled('miImportSection', false);
+    document.getElementById('miDiffResult').style.display = 'none';
+    document.getElementById('miImportResult').style.display = 'none';
+  });
+
+  document.getElementById('miTargetApp').addEventListener('change', function() {
+    document.getElementById('miDiffBtn').disabled = !this.value;
+  });
+
+  function setMiSectionEnabled(id, enabled) {
+    var el = document.getElementById(id);
+    el.style.opacity = enabled ? '1' : '0.4';
+    el.style.pointerEvents = enabled ? '' : 'none';
+  }
+
+  document.getElementById('miExportBtn').addEventListener('click', async function() {
+    var appId = document.getElementById('miSourceApp').value;
+    var pid = focusState.project;
+    if (!appId || !pid) return;
+    this.disabled = true;
+    this.innerHTML = '<span class="mi-spinner"></span>Exportieren\u2026';
+    document.getElementById('miExportResult').style.display = 'none';
+    setMiSectionEnabled('miDiffSection', false);
+    setMiSectionEnabled('miImportSection', false);
+
+    // Fire app-list refresh in parallel so newly created apps appear in target dropdown
+    apiFetch('/api/fetch/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: parseInt(pid, 10), steps: ['apps'] }),
+    }).then(function(r) {
+      return r.ok ? r.json() : null;
+    }).then(function(job) {
+      if (!job) return;
+      var jobId = job.jobId || job.job_id;
+      function pollApps() {
+        apiFetch('/api/fetch/jobs/' + encodeURIComponent(jobId)).then(function(r) { return r.json(); }).then(function(j) {
+          if (j.status === 'running' || j.status === 'pending') { setTimeout(pollApps, 1500); return; }
+          if (j.status === 'done' || j.status === 'success') { populateMiAppSelects(); return; }
+          console.warn('App-Listen-Refresh fehlgeschlagen:', j.status, j);
+        }).catch(function() {});
+      }
+      pollApps();
+    }).catch(function() {});
+
+    try {
+      var resp = await apiFetch('/api/master-items/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: parseInt(pid, 10), app_id: appId }),
+      });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'HTTP ' + resp.status);
+      }
+      _miExportData = await resp.json();
+      document.getElementById('miExportDimCount').textContent = (_miExportData.dimensions || []).length;
+      document.getElementById('miExportMeasCount').textContent = (_miExportData.measures || []).length;
+      document.getElementById('miExportVizCount').textContent = (_miExportData.visualizations || []).length;
+      document.getElementById('miExportMeta').textContent = 'Exportiert um ' + new Date(_miExportData.exported_at).toLocaleString('de-DE');
+      document.getElementById('miExportResult').style.display = '';
+      setMiSectionEnabled('miDiffSection', true);
+      showMiDetail();
+      showToast('Export abgeschlossen');
+    } catch (e) {
+      showToast('Export fehlgeschlagen: ' + e.message, 6000);
+    } finally {
+      this.disabled = false;
+      this.textContent = 'Exportieren';
+    }
+  });
+
+  document.getElementById('miDiffBtn').addEventListener('click', async function() {
+    var sourceId = document.getElementById('miSourceApp').value;
+    var targetId = document.getElementById('miTargetApp').value;
+    var pid = focusState.project;
+    if (!sourceId || !targetId || !pid) return;
+    if (sourceId === targetId) { showToast('Quell- und Ziel-App d\u00fcrfen nicht identisch sein.'); return; }
+    this.disabled = true;
+    this.innerHTML = '<span class="mi-spinner"></span>Vergleichen\u2026';
+    document.getElementById('miDiffResult').style.display = 'none';
+    setMiSectionEnabled('miImportSection', false);
+    try {
+      var resp = await apiFetch('/api/master-items/diff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: parseInt(pid, 10), source_app_id: sourceId, target_app_id: targetId, source_export: _miExportData || undefined }),
+      });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'HTTP ' + resp.status);
+      }
+      var diff = await resp.json();
+      var types = [['dimensions','Dimensions'],['measures','Measures'],['visualizations','Visualizations']];
+      var rows = types.map(function(t) {
+        var d = diff[t[0]] || {};
+        return '<tr>'
+          + '<td style="font-weight:600">' + escHtml(t[1]) + '</td>'
+          + '<td><span class="badge badge-new">' + (d.new || 0) + ' neu</span></td>'
+          + '<td><span class="badge badge-existing">' + (d.existing || 0) + ' gleich</span></td>'
+          + '<td><span class="badge badge-conflict">' + (d.conflict || 0) + ' Konflikt</span></td>'
+          + '</tr>';
+      }).join('');
+      document.getElementById('miDiffBody').innerHTML = rows;
+      document.getElementById('miDiffResult').style.display = '';
+      setMiSectionEnabled('miImportSection', true);
+      showToast('Vergleich abgeschlossen');
+    } catch (e) {
+      showToast('Vergleich fehlgeschlagen: ' + e.message, 6000);
+    } finally {
+      this.disabled = false;
+      this.textContent = 'Vergleichen';
+    }
+  });
+
+  document.getElementById('miImportBtn').addEventListener('click', async function() {
+    var sourceId = document.getElementById('miSourceApp').value;
+    var targetId = document.getElementById('miTargetApp').value;
+    var pid = focusState.project;
+    if (!sourceId || !targetId || !pid) return;
+    var types = [];
+    if (document.getElementById('miOptDim').checked)  types.push('dimensions');
+    if (document.getElementById('miOptMeas').checked) types.push('measures');
+    if (document.getElementById('miOptViz').checked)  types.push('visualizations');
+    if (!types.length) { showToast('Mindestens einen Typ ausw\u00e4hlen.'); return; }
+    var onDuplicate = document.querySelector('input[name="miDup"]:checked').value;
+    var dryRun = document.getElementById('miOptDryRun').checked;
+
+    document.getElementById('miImportBtn').disabled = true;
+    document.getElementById('miImportSpinner').style.display = '';
+    document.getElementById('miImportResult').style.display = 'none';
+    try {
+      var resp = await apiFetch('/api/master-items/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: parseInt(pid, 10),
+          source_app_id: sourceId,
+          target_app_id: targetId,
+          options: { types: types, on_duplicate: onDuplicate, dry_run: dryRun },
+        }),
+      });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'HTTP ' + resp.status);
+      }
+      var result = await resp.json();
+      document.getElementById('miImportResultHead').textContent = dryRun ? 'Dry Run — keine \u00c4nderungen geschrieben' : 'Import abgeschlossen';
+      var typeRows = ['dimensions','measures','visualizations'].map(function(t) {
+        return '<tr>'
+          + '<td style="font-weight:600">' + escHtml(t.charAt(0).toUpperCase() + t.slice(1)) + '</td>'
+          + '<td style="color:#4ade80">' + ((result.imported || {})[t] || 0) + '</td>'
+          + '<td style="color:#a5b4fc">' + ((result.overwritten || {})[t] || 0) + '</td>'
+          + '<td style="color:#94a3b8">' + ((result.skipped || {})[t] || 0) + '</td>'
+          + '</tr>';
+      }).join('');
+      document.getElementById('miImportBody').innerHTML = typeRows;
+      var errHtml = '';
+      if (result.errors && result.errors.length) {
+        errHtml = '<div style="font-size:0.78rem;color:#f87171;margin-top:0.5rem;">'
+          + result.errors.slice(0, 5).map(function(e) {
+              return escHtml('[' + e.type + '] ' + e.title + ': ' + e.error);
+            }).join('<br>') + '</div>';
+      }
+      document.getElementById('miImportErrors').innerHTML = errHtml;
+      document.getElementById('miImportResult').style.display = '';
+      showToast(dryRun ? 'Dry Run abgeschlossen' : 'Import abgeschlossen');
+    } catch (e) {
+      showToast('Import fehlgeschlagen: ' + e.message, 6000);
+    } finally {
+      document.getElementById('miImportBtn').disabled = false;
+      document.getElementById('miImportSpinner').style.display = 'none';
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // Master Items — Properties Detail Window
+  // ══════════════════════════════════════════════════════════════
+
+  var _miDetailType = 'dimensions';
+  var _miDetailOpenSet = new Set();
+
+  function showMiDetail() {
+    if (!_miExportData) return;
+    document.getElementById('miDetailSection').style.display = '';
+    document.getElementById('miTabCountDim').textContent = (_miExportData.dimensions || []).length;
+    document.getElementById('miTabCountMeas').textContent = (_miExportData.measures || []).length;
+    document.getElementById('miTabCountViz').textContent = (_miExportData.visualizations || []).length;
+    _miDetailType = 'dimensions';
+    document.querySelectorAll('[data-mi-tab]').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-mi-tab') === 'dimensions');
+    });
+    _miDetailOpenSet.clear();
+    renderMiDetail('dimensions', document.getElementById('miDetailSearch').value);
+  }
+
+  function getMiItemTitle(type, item) {
+    if (item.title) return item.title;
+    var p = item.properties || {};
+    if (type === 'dimensions' || type === 'measures')
+      return (p.qMetaDef && p.qMetaDef.title) || (p.qInfo && p.qInfo.qId) || '(unbenannt)';
+    return (p.qMeta && p.qMeta.title) || (p.qInfo && p.qInfo.qId) || '(unbenannt)';
+  }
+
+  function renderMiDetailBody(type, item) {
+    var p = item.properties || {};
+    var rows = [];
+    if (type === 'dimensions') {
+      var d = p.qDim || {}, dm = p.qMetaDef || {};
+      rows.push(['Titel', item.title || dm.title || '\u2013']);
+      rows.push(['Feld', (d.qFieldDefs || []).join(', ') || '\u2013']);
+      var lbl = (d.qFieldLabels && d.qFieldLabels[0]) || d.qAlias || '';
+      rows.push(['Label', lbl || '\u2013']);
+      rows.push(['Beschreibung', dm.description || '\u2013']);
+    } else if (type === 'measures') {
+      var ms = p.qMeasure || {}, mm = p.qMetaDef || {};
+      rows.push(['Titel', item.title || mm.title || '\u2013']);
+      rows.push(['Label', ms.qLabel || '\u2013']);
+      rows.push(['Formel', ms.qDef || '\u2013']);
+      rows.push(['Beschreibung', mm.description || '\u2013']);
+    } else {
+      var vi = p.qInfo || {}, vm = p.qMeta || {};
+      rows.push(['Titel', item.title || vm.title || '\u2013']);
+      rows.push(['Typ', vi.qType || '\u2013']);
+      rows.push(['Beschreibung', vm.description || '\u2013']);
+    }
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">';
+    rows.forEach(function(r) {
+      if (r[1] === undefined || r[1] === null) return;
+      html += '<tr>'
+        + '<td style="color:var(--text-muted);width:150px;padding:0.3rem 0.6rem 0.3rem 1rem;vertical-align:top;white-space:nowrap;">' + escHtml(r[0]) + '</td>'
+        + '<td style="padding:0.3rem 0.6rem;font-family:\'Courier New\',monospace;font-size:0.78rem;word-break:break-all;">' + escHtml(String(r[1])) + '</td>'
+        + '</tr>';
+    });
+    html += '</table>';
+    var jid = 'mi-j-' + Math.random().toString(36).slice(2, 8);
+    html += '<div style="margin:0.5rem 1rem 0.5rem;">'
+      + '<button class="btn-action mi-json-toggle" data-target="' + jid + '" style="font-size:0.72rem;">Raw JSON</button>'
+      + '<pre id="' + jid + '" style="display:none;margin-top:0.5rem;padding:0.6rem;background:rgba(0,0,0,0.3);border-radius:6px;font-size:0.71rem;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;">'
+      + escHtml(JSON.stringify(item, null, 2)) + '</pre></div>';
+    return html;
+  }
+
+  function renderMiDetail(type, filter) {
+    _miDetailType = type;
+    var items = (_miExportData && _miExportData[type]) || [];
+    var lf = (filter || '').toLowerCase();
+    if (lf) items = items.filter(function(it) { return getMiItemTitle(type, it).toLowerCase().indexOf(lf) !== -1; });
+    var body = document.getElementById('miDetailBody');
+    if (!items.length) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>'
+        + (lf ? 'Keine Treffer.' : 'Keine Items in dieser Kategorie.') + '</div></div>';
+      return;
+    }
+    var html = '';
+    items.forEach(function(item, idx) {
+      var title = getMiItemTitle(type, item);
+      var key = type + ':' + idx;
+      var isOpen = _miDetailOpenSet.has(key);
+      html += '<div class="script-card">'
+        + '<div class="script-card-header' + (isOpen ? ' open' : '') + '" data-mi-card="' + escHtml(key) + '">'
+        + '<span class="sc-chevron' + (isOpen ? ' open' : '') + '">&#x25B6;</span>'
+        + '<span class="sc-name">' + escHtml(title) + '</span>'
+        + '</div>'
+        + '<div class="sc-body' + (isOpen ? ' open' : '') + '">'
+        + (isOpen ? renderMiDetailBody(type, item) : '')
+        + '</div></div>';
+    });
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-mi-card]').forEach(function(hdr) {
+      hdr.addEventListener('click', function() {
+        var key2 = this.getAttribute('data-mi-card');
+        var parts = key2.split(':');
+        var t = parts[0], i = parseInt(parts[1], 10);
+        var wasOpen = _miDetailOpenSet.has(key2);
+        if (wasOpen) _miDetailOpenSet.delete(key2); else _miDetailOpenSet.add(key2);
+        var chevron = this.querySelector('.sc-chevron');
+        var bodyEl = this.nextElementSibling;
+        if (wasOpen) {
+          this.classList.remove('open');
+          if (chevron) chevron.classList.remove('open');
+          bodyEl.classList.remove('open');
+          bodyEl.innerHTML = '';
+        } else {
+          this.classList.add('open');
+          if (chevron) chevron.classList.add('open');
+          bodyEl.classList.add('open');
+          var allItems = (_miExportData && _miExportData[t]) || [];
+          bodyEl.innerHTML = renderMiDetailBody(t, allItems[i]);
+          bodyEl.querySelectorAll('.mi-json-toggle').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var pre = document.getElementById(this.getAttribute('data-target'));
+              if (!pre) return;
+              var hidden = pre.style.display === 'none';
+              pre.style.display = hidden ? '' : 'none';
+              this.textContent = hidden ? 'JSON verbergen' : 'Raw JSON';
+            });
+          });
+        }
+      });
+    });
+  }
+
+  // Mini-tab switching inside detail section
+  document.querySelectorAll('[data-mi-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var t = this.getAttribute('data-mi-tab');
+      document.querySelectorAll('[data-mi-tab]').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      _miDetailOpenSet.clear();
+      renderMiDetail(t, document.getElementById('miDetailSearch').value);
+    });
+  });
+
+  document.getElementById('miDetailSearch').addEventListener('input', function() {
+    renderMiDetail(_miDetailType, this.value);
   });
 
   // ── Init ──

@@ -7,11 +7,10 @@ import zipfile
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models import Customer, Project
 from shared.qlik_client import QlikClient, QlikApiError
+from ..qlik_deps import resolve_project_creds
 from .schemas import ThemeBuildRequest, ThemeUploadRequest, slugify_theme_name
 
 logger = logging.getLogger("atlas.themes")
@@ -68,28 +67,9 @@ async def upload_theme_to_qlik(
     actor_role: str,
 ) -> dict[str, Any]:
     """Build theme ZIP and upload it to the project's Qlik Cloud tenant."""
-    from ..database import apply_rls_context
-
-    await apply_rls_context(session, actor_user_id, actor_role)
-
-    proj_result = await session.execute(
-        select(Project).where(Project.id == payload.project_id)
-    )
-    project = proj_result.scalar_one_or_none()
-    if project is None:
-        raise ValueError(f"Project {payload.project_id} not found or not accessible")
-
-    cust_result = await session.execute(
-        select(Customer).where(Customer.id == project.customer_id)
-    )
-    customer = cust_result.scalar_one_or_none()
-    if customer is None:
-        raise ValueError("Customer for project not found")
-
-    tenant_url = customer.tenant_url
-    api_key = customer.api_key
-    if not tenant_url or not api_key:
-        raise ValueError("Customer credentials incomplete (tenant_url or api_key missing)")
+    creds = await resolve_project_creds(payload.project_id, session, actor_user_id, actor_role)
+    tenant_url = creds.tenant_url
+    api_key = creds.api_key
 
     build_req = ThemeBuildRequest(
         theme_name=payload.theme_name,

@@ -8,7 +8,7 @@ tags:
   - schema
   - erd
   - postgres
-updated: 2026-03-26
+updated: 2026-04-20
 owners: []
 source_of_truth: no
 related_specs:
@@ -42,7 +42,7 @@ related_docs:
 |---|---|---|---|
 | `users` | `id` | - | Login/Authentifizierung |
 | `refresh_tokens` | `token_id` | `user_id -> users.id`, `replaced_by_token_id -> refresh_tokens.token_id` | Persistierte Refresh-Token-Rotation fuer Browser-Sessions |
-| `customers` | `id` | - | Kunden/Tenants mit verschluesselten Qlik- und Git-Credentials |
+| `customers` | `id` | - | Kunden/Tenants mit verschluesselten Qlik-, Git- und Kunden-Link-Credentials |
 | `projects` | `id` | `customer_id -> customers.id` | Projekt-Scope fuer alle Qlik-/Lineage-Daten |
 | `user_customer_access` | `(user_id, customer_id)` | `user_id -> users.id`, `customer_id -> customers.id` | Kundenzugriff fuer Nicht-Admins |
 | `qlik_apps` | `(project_id, app_id)` | `project_id -> projects.id` | Qlik-App-Metadaten (JSONB + materialisierte Spalten) |
@@ -285,6 +285,13 @@ erDiagram
 - `git_token` (Text, nullable): AES-256-GCM verschluesselt (gleiche Crypto wie `api_key`)
 - `git_base_url` (String, nullable): Custom-URL fuer Self-hosted Instanzen
 
+### `customers` (Kunden-Link, ab Migration 0026)
+
+- `customer_link` (Text, nullable): AES-256-GCM verschluesselt (gleicher Pattern wie `api_key`, `git_token`)
+- Link zum internen Kundenordner oder externen Kunden-Ressource
+- Wird im Dashboard-Header als klickbarer Link angezeigt (nur wenn Projektebene aktiv)
+- Ueber `/api/customers/names` als entschluesselte URL an alle authentifizierten User ausgeliefert
+
 ### `script_git_mappings` (ab Migration 0020)
 
 - Mapping-Spalten: `repo_identifier`, `branch`, `file_path`
@@ -363,7 +370,10 @@ erDiagram
 
 ### `tasks`
 - Projekt-Tasks mit optionalem Qlik-App-Bezug und Subtask-Hierarchie
-- Spalten: `title` (VARCHAR 255), `description` (TEXT), `status`, `priority`, `assignee_id`, `due_date`, `estimated_minutes`, `app_link` (TEXT)
+- Spalten: `title` (VARCHAR 255), `description` (TEXT), `status`, `priority`, `assignee_id`, `start_date` (DATE, nullable), `start_time` (TIME, nullable), `due_date` (DATE, nullable), `end_time` (TIME, nullable), `estimated_minutes`, `app_link` (TEXT)
+- `start_date`: Geplantes Startdatum des Tasks; wird fuer die Gantt-Ansicht verwendet
+- `start_time` (Migration 0025): Optionale Startzeit zum `start_date` (HH:MM)
+- `end_time` (Migration 0025): Optionale Endzeit zum `due_date` (HH:MM)
 - `qlik_app_id`: logische Referenz auf `qlik_apps.app_id` (kein FK wegen Composite PK)
 - `parent_task_id`: Self-FK fuer Subtask-Hierarchie (`tasks.id`, ON DELETE CASCADE)
 - Enum-Werte `status`: `open`, `in_progress`, `review`, `done`
@@ -387,6 +397,9 @@ erDiagram
 - Enum-Werte `entry_type`: `change`, `decision`, `note`, `incident`
 - `entry_date`: Datum des Eintrags (DEFAULT CURRENT_DATE)
 - `qlik_app_id`: optionaler App-Bezug (logisch, kein FK)
+- `content` (TEXT NOT NULL): Hauptinhalt — "Was wurde gemacht/entschieden?" (SmartCompose-Feld "Was")
+- `warum` (TEXT NULLABLE): Begruendung / Kontext — "Warum / Begruendung" (Migration 0023)
+- `betrifft` (TEXT NULLABLE): Betroffene Apps oder Bereiche als Freitext (Migration 0023)
 
 ### `node_comments`
 - Kommentare auf Lineage-Graph-Knoten

@@ -1,5 +1,42 @@
 # Build & Startup Issues - FIXED
 
+## [REFACTOR] 2026-04-20 WebSocket-Duplizierung beseitigt + geteilter Credential-Resolver
+
+- Area: backend/shared, backend/app/master_items, backend/app/themes
+- Source: proactive simplify pass
+- Changes:
+  1. `master_items_sync.py` hatte ~170 Zeilen eigene WS/JSON-RPC-Logik (exakte Kopie von `qlik_engine_client.py`). Entfernt. `QlikEngineClient.open_session` + neue `EngineSession`-Klasse sind jetzt der einzige WS-Transportpfad.
+  2. `EngineSession` kapselt alle Engine-RPC-Methoden; `open_session` garantiert sauberes `ws.close()` auf allen Exit-Pfaden.
+  3. `qlik_deps.py` (neu): `resolve_project_creds()` + `CredentialsError(ValueError, status=int)` — ersetzt identischen Copy-paste-Code in `themes/service.py` und `master_items/routes.py`.
+  4. `DiffRequest.source_export: dict | None` — Frontend sendet gecachtes `_miExportData`; spart eine WS-Verbindung pro Diff-Aufruf.
+  5. `getMiItemTitle` identische branches zusammengeführt; `_strip_qinfo` auf Modulebene verschoben; `copy.deepcopy()` statt `json.loads(json.dumps())`.
+- Changed Files: `backend/shared/qlik_engine_client.py`, `backend/shared/master_items_sync.py`, `backend/app/qlik_deps.py` (neu), `backend/app/master_items/routes.py`, `backend/app/themes/service.py`, `frontend/script-sync.html`
+- Residual Risk: none
+
+## [BUGFIX] 2026-04-20 Master Items mini-tabs overwrote page-level tab state
+
+- Severity: medium
+- Area: frontend/script-sync
+- Source: proactive fix during Master Items implementation
+- Symptoms: Clicking a mini-tab inside the Properties panel (Dimensionen / Kennzahlen / Visualisierungen) would deactivate the "Master Items" page-level tab and hide the entire tab content.
+- Root Cause: Both page-level tabs and mini-tabs used the `.tab-btn` class. The page-level switcher used `querySelectorAll('.tab-btn')` which also matched mini-tabs. On mini-tab click it removed `active` from all `.tab-btn` (including the page-level one), then tried `getElementById('tab-' + null)` and threw an error.
+- Fix: Scoped the page-level listener to `querySelectorAll('.tab-btn[data-tab]')` only. Mini-tabs use `data-mi-tab` and have a dedicated separate listener.
+- Changed Files: `frontend/script-sync.html`
+- Verification: Page-level tab switching and mini-tab switching work independently without interfering.
+- Residual Risk: none
+
+## [BUGFIX] 2026-04-20 scriptViewerPanel null crash on project change
+
+- Severity: medium
+- Area: frontend/script-sync
+- Source: user-reported ("ich sehe nichts in script sync")
+- Symptoms: Switching projects caused a TypeError because `document.getElementById('scriptViewerPanel')` returned `null` (element does not exist in this page's HTML) and the code called `.style.display` on it unconditionally.
+- Root Cause: The `onProjectChanged` else-branch referenced an element from a different page version that was never added to `script-sync.html`.
+- Fix: Added null guard: `var vp = document.getElementById('scriptViewerPanel'); if (vp) vp.style.display = 'none';`
+- Changed Files: `frontend/script-sync.html`
+- Verification: Project switching no longer throws; Script Sync tab renders correctly.
+- Residual Risk: none
+
 ## [BUGFIX] 2026-04-09 Script viewer crashed with "Invalid group" for every app
 
 - Severity: high
@@ -273,3 +310,15 @@ All code should now build and run without errors. If you encounter any issues, c
   - Fetch steps now keep fetched payloads in memory and persist to PostgreSQL in the DB store step
   - Local fetch artifact writes are disabled by default (`FETCH_WRITE_LOCAL_ARTIFACTS=false`)
   - Optional compatibility/debug mode remains available via `FETCH_WRITE_LOCAL_ARTIFACTS=true`
+
+## [BUGFIX] 2026-04-13 Task-Modal öffnet PUT statt POST nach Abbrechen
+
+- Severity: medium
+- Area: frontend/index.html
+- Source: proactive bug-hunt
+- Symptoms: Klickt der User "Abbrechen" im Task-Edit-Modal und öffnet danach "Neuer Task", wird `PUT /api/tasks/{id}` statt `POST /api/tasks` aufgerufen — der neue Task überschreibt den zuletzt bearbeiteten
+- Root Cause: `_editTaskId` wurde in `closeTaskModal()` nicht zurückgesetzt; Variable blieb nach Abbrechen gesetzt
+- Fix: `_editTaskId = null` am Ende von `closeTaskModal()` ergänzt
+- Changed Files: frontend/index.html
+- Verification: Code-Review der closeTaskModal-Funktion; logischer Flow geprüft
+- Residual Risk: none

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -53,7 +53,10 @@ class TaskIn(BaseModel):
     status: str = "open"
     priority: str = "medium"
     assignee_id: Optional[int] = None
+    start_date: Optional[date] = None
+    start_time: Optional[time] = None
     due_date: Optional[date] = None
+    end_time: Optional[time] = None
     estimated_minutes: Optional[int] = None
     qlik_app_id: Optional[str] = None
     app_link: Optional[str] = None
@@ -66,7 +69,10 @@ class TaskUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     assignee_id: Optional[int] = None
+    start_date: Optional[date] = None
+    start_time: Optional[time] = None
     due_date: Optional[date] = None
+    end_time: Optional[time] = None
     estimated_minutes: Optional[int] = None
     qlik_app_id: Optional[str] = None
     app_link: Optional[str] = None
@@ -86,7 +92,10 @@ class TaskOut(BaseModel):
     priority: str
     assignee_id: Optional[int]
     assignee: Optional[UserRef] = None
+    start_date: Optional[str]
+    start_time: Optional[str]
     due_date: Optional[str]
+    end_time: Optional[str]
     estimated_minutes: Optional[int]
     app_link: Optional[str]
     tags: list[TagOut] = []
@@ -100,7 +109,9 @@ class TaskOut(BaseModel):
 class LogEntryIn(BaseModel):
     project_id: int
     entry_type: str = Field(..., min_length=1, max_length=50)
-    content: str = ""
+    content: str = ""          # "was" — what happened / was decided
+    warum: Optional[str] = None    # why / reasoning
+    betrifft: Optional[str] = None # affected apps / areas (free text)
     qlik_app_id: Optional[str] = None
     entry_date: Optional[date] = None
 
@@ -114,7 +125,9 @@ class LogEntryOut(BaseModel):
     author_id: Optional[int]
     author: Optional[UserRef] = None
     entry_type: str
-    content: str
+    content: str               # "was"
+    warum: Optional[str] = None
+    betrifft: Optional[str] = None
     entry_date: Optional[str]
     created_at: str
 

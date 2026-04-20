@@ -286,6 +286,38 @@
 
     /* ── ADMIN FAB ── */
     .admin-fab { position: fixed; bottom: 1.5rem; left: 1.5rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; text-decoration: none; font-size: 0.85rem; font-weight: 600; border-radius: var(--radius-sm); z-index: 90; box-shadow: 0 4px 16px rgba(102,126,234,0.3); display: none; }
+
+    /* ── GANTT ── */
+    .gantt-outer { overflow-x: auto; padding-bottom: 0.5rem; }
+    .gantt-inner { min-width: 820px; }
+    /* Axis */
+    .gantt-axis { display: flex; border-bottom: 2px solid var(--border); background: rgba(255,255,255,0.015); }
+    .gantt-axis-label-col { flex: 0 0 220px; min-width: 220px; display: flex; align-items: flex-end; padding: 0 0.5rem 5px; font-size: 0.62rem; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .gantt-axis-timeline { flex: 1; position: relative; }
+    .gantt-axis-months { position: relative; height: 24px; }
+    .gantt-axis-month-block { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; font-size: 0.74rem; font-weight: 600; color: var(--text); border-left: 1px solid rgba(255,255,255,0.18); padding-left: 7px; white-space: nowrap; overflow: hidden; box-sizing: border-box; }
+    .gantt-axis-days { position: relative; height: 22px; border-top: 1px solid rgba(255,255,255,0.08); }
+    .gantt-axis-tick { position: absolute; top: 0; width: 1px; height: 7px; background: rgba(255,255,255,0.18); pointer-events: none; }
+    .gantt-axis-tick.major { height: 100%; background: rgba(255,255,255,0.22); }
+    .gantt-axis-day-lbl { position: absolute; font-size: 0.62rem; color: var(--text-muted); transform: translateX(-50%); top: 6px; white-space: nowrap; pointer-events: none; }
+    /* Rows */
+    .gantt-group-header { display: flex; }
+    .gantt-group-header-label { flex: 0 0 220px; min-width: 220px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 0.6rem 0.5rem 0.2rem; background: rgba(255,255,255,0.025); }
+    .gantt-group-header-track { flex: 1; background: rgba(255,255,255,0.01); }
+    .gantt-row { display: flex; align-items: center; min-height: 34px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .gantt-row:hover { background: rgba(255,255,255,0.025); }
+    .gantt-label { flex: 0 0 220px; min-width: 220px; display: flex; align-items: center; padding: 0 0.5rem; gap: 6px; overflow: hidden; }
+    .gantt-label-text { font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gantt-done { opacity: 0.38; text-decoration: line-through; }
+    .task-pri-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .gantt-track { flex: 1; position: relative; height: 24px; }
+    .gantt-grid-line { position: absolute; top: 0; bottom: 0; width: 1px; pointer-events: none; z-index: 0; }
+    .gantt-grid-line.major { background: rgba(255,255,255,0.22); }
+    .gantt-grid-line.minor { background: rgba(255,255,255,0.09); }
+    .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: #f59e0b; opacity: 0.8; z-index: 1; pointer-events: none; }
+    .gantt-bar { position: absolute; height: 20px; top: 2px; border-radius: 4px; cursor: pointer; transition: filter 0.15s; min-width: 6px; display: flex; align-items: center; overflow: hidden; z-index: 2; }
+    .gantt-bar:hover { filter: brightness(1.2); }
+    .gantt-bar-label { font-size: 0.62rem; color: #fff; padding: 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   </style>
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
@@ -413,6 +445,24 @@
     </div>
   </div>
 
+  <!-- Gantt chart -->
+  <div class="card" id="ganttCard" style="margin-top:1rem">
+    <div class="card-header">
+      <span class="card-title">Tasks — Gantt</span>
+      <span style="font-size:0.72rem;color:var(--text-dim)" id="ganttMeta"></span>
+    </div>
+    <div style="padding:0.55rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0.6rem">
+      <span style="font-size:0.7rem;color:var(--text-muted);font-weight:600;white-space:nowrap">Gruppieren nach</span>
+      <select id="ganttGroupBy" style="height:28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:6px;padding:0 0.5rem;font-size:0.72rem;outline:none">
+        <option value="assignee">Bearbeiter</option>
+        <option value="project">Projekt</option>
+        <option value="status">Status</option>
+        <option value="priority">Priorität</option>
+      </select>
+    </div>
+    <div id="ganttBody"><div class="empty-state">Lade…</div></div>
+  </div>
+
   <!-- App Health (collapsible) -->
   <div class="card" id="appHealthCard" style="margin-top:1rem">
     <div class="card-header" style="cursor:pointer;user-select:none" onclick="toggleHealthCard()">
@@ -480,8 +530,20 @@
           <select id="taskAssignee"><option value="">— Niemand —</option></select>
         </div>
         <div class="form-group">
+          <label for="taskStartDate">Startdatum</label>
+          <input type="date" id="taskStartDate" />
+        </div>
+        <div class="form-group">
+          <label for="taskStartTime">Startzeit</label>
+          <input type="time" id="taskStartTime" />
+        </div>
+        <div class="form-group">
           <label for="taskDueDate">Fälligkeit</label>
           <input type="date" id="taskDueDate" />
+        </div>
+        <div class="form-group">
+          <label for="taskEndTime">Endzeit</label>
+          <input type="time" id="taskEndTime" />
         </div>
       </div>
       <div class="form-row">
@@ -528,13 +590,13 @@
           </select>
         </div>
         <div class="form-group">
-          <label for="docApp">App-Zuordnung</label>
-          <select id="docApp"><option value="">— Keine App —</option></select>
+          <label for="docDate">Datum</label>
+          <input type="date" id="docDate" />
         </div>
       </div>
       <div class="form-group">
-        <label for="docDate">Datum</label>
-        <input type="date" id="docDate" />
+        <label for="docApp">Betroffene App</label>
+        <select id="docApp"><option value="">— Keine spezifische App —</option></select>
       </div>
       <div class="form-group">
         <label>Inhalt (Markdown)</label>
@@ -570,6 +632,7 @@
 
 <script src="/assets/atlas-shared.js"></script>
 <script src="/assets/markdownEditor.js"></script>
+<script src="/assets/smartCompose.js"></script>
 <script>
 (function () {
   /* ── Auth / Shared ── */
@@ -659,6 +722,14 @@
     if (!appId) return '';
     var app = allApps.find(function (a) { return a.app_id === appId || String(a.id) === String(appId); });
     return app ? (app.name || app.app_id || appId) : appId;
+  }
+
+  function buildDocAppSelectOptions(selectedId) {
+    var normalized = allApps.map(window.AtlasShared.normalizeAppItem).sort(function (a, b) {
+      var sc = a.space_name.localeCompare(b.space_name);
+      return sc !== 0 ? sc : a.name.localeCompare(b.name);
+    });
+    return window.AtlasShared.buildGroupedAppSelectOptions(normalized, selectedId);
   }
 
   /* ── Render Customer/Project selectors ── */
@@ -903,7 +974,12 @@
     } else {
       var proj = projectsById[state.project];
       var cust = customersById[state.customer];
-      document.getElementById('dashTitle').textContent = (cust ? cust.name + ' — ' : '') + (proj ? proj.name : 'Dashboard');
+      var custNameHtml = cust
+        ? (cust.customer_link
+            ? '<a href="' + escHtml(cust.customer_link) + '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer" title="' + escHtml(cust.customer_link) + '">' + escHtml(cust.name) + '</a>'
+            : escHtml(cust.name))
+        : '';
+      document.getElementById('dashTitle').innerHTML = (custNameHtml ? custNameHtml + ' \u2014 ' : '') + escHtml(proj ? proj.name : 'Dashboard');
       document.getElementById('dashSubtitle').textContent = new Date().toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
   }
@@ -911,16 +987,218 @@
   /* ── Refresh all dashboard data ── */
   async function refreshDashboard() {
     updateHeader();
-    await Promise.all([loadMetrics(), loadMyTasks(), loadNoReadme(), loadProjectTasks(), loadRecentDocs(), loadAppHealth(), loadLogFeed(false)]);
+    await Promise.all([loadMetrics(), loadMyTasks(), loadNoReadme(), loadProjectTasks(), loadRecentDocs(), loadAppHealth(), loadLogFeed(false), loadGantt()]);
+  }
+
+  /* ── Gantt ── */
+  var _ganttClickBound = false;
+  var _ganttRawTasks = [];
+
+  async function loadGantt() {
+    var body = document.getElementById('ganttBody');
+    if (!state.project && !state.customer) {
+      body.innerHTML = '<div class="empty-state">Bitte Projekt oder Kunden auswählen.</div>';
+      return;
+    }
+    body.innerHTML = '<div class="empty-state">Lade…</div>';
+    var url = state.customer
+      ? '/api/tasks?customer_id=' + encodeURIComponent(state.customer)
+      : '/api/tasks?project_id=' + encodeURIComponent(state.project);
+    try {
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error('Fehler');
+      var tasks = await res.json();
+      _ganttRawTasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
+      applyGanttView();
+    } catch (e) {
+      body.innerHTML = '<div class="empty-state">' + escHtml(e.message) + '</div>';
+    }
+    if (!_ganttClickBound) {
+      _ganttClickBound = true;
+      document.getElementById('ganttBody').addEventListener('click', function (e) {
+        var bar = e.target.closest('.gantt-bar[data-task-id]');
+        if (bar) showTaskDetail(bar.getAttribute('data-task-id'));
+      });
+    }
+  }
+
+  function applyGanttView() {
+    var metaEl = document.getElementById('ganttMeta');
+    if (metaEl) metaEl.textContent = _ganttRawTasks.length + ' Tasks';
+    renderGantt(_ganttRawTasks, document.getElementById('ganttBody'));
+  }
+
+  function renderGantt(tasks, container) {
+    if (!tasks.length) {
+      container.innerHTML = '<div class="empty-state">Keine Tasks vorhanden.</div>';
+      return;
+    }
+
+    var groupBy = (document.getElementById('ganttGroupBy') || {}).value || 'assignee';
+
+    // Tasks without dates fall back to created_at (milestone dot)
+    var plottable = tasks.map(function (t) {
+      if (!t.start_date && !t.due_date)
+        return Object.assign({}, t, { _noDate: true, due_date: t.created_at ? t.created_at.slice(0, 10) : null });
+      return t;
+    }).filter(function (t) { return t.due_date || t.start_date; });
+
+    if (!plottable.length) {
+      container.innerHTML = '<div class="empty-state">Keine Tasks mit Datum. Bitte Startdatum oder Fälligkeit an Tasks hinterlegen.</div>';
+      return;
+    }
+
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var allDates = [];
+    plottable.forEach(function (t) {
+      if (t.start_date) allDates.push(new Date(t.start_date + 'T00:00:00'));
+      if (t.due_date)   allDates.push(new Date(t.due_date   + 'T00:00:00'));
+    });
+    var rangeStart = new Date(Math.min.apply(null, allDates));
+    var rangeEnd   = new Date(Math.max.apply(null, allDates));
+    rangeStart.setDate(rangeStart.getDate() - 3);
+    rangeEnd.setDate(rangeEnd.getDate() + 4);
+    var totalMs  = rangeEnd.getTime() - rangeStart.getTime();
+    var totalDays = Math.round(totalMs / 86400000);
+    var ganttMinWidth = Math.max(820, totalDays * 28);
+    var labelStep = totalDays <= 14 ? 1 : totalDays <= 60 ? 7 : totalDays <= 180 ? 14 : 30;
+
+    function pct(d)       { return ((d.getTime() - rangeStart.getTime()) / totalMs * 100).toFixed(3) + '%'; }
+    function widthPct(ms) { return (ms / totalMs * 100).toFixed(3) + '%'; }
+
+    // Colors by STATUS
+    var statusColors = { open: '#667eea', in_progress: '#f59e0b', review: '#8b5cf6', done: '#10b981' };
+    var statusLabels  = { open: 'Open', in_progress: 'In Bearbeitung', review: 'Review', done: 'Done' };
+    var priorityLabels = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+    var priorityColors = { critical: '#ef4444', high: '#f97316', medium: '#667eea', low: '#6b7280' };
+
+    var todayX = (today >= rangeStart && today <= rangeEnd) ? pct(today) : null;
+
+    // ── Month header ──────────────────────────────────────────────────
+    var axisMonthHtml = '';
+    var mCur = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+    while (mCur.getTime() < rangeEnd.getTime()) {
+      var mNext = new Date(mCur.getFullYear(), mCur.getMonth() + 1, 1);
+      var blkS  = mCur.getTime() < rangeStart.getTime() ? new Date(rangeStart) : new Date(mCur);
+      var blkE  = mNext.getTime() > rangeEnd.getTime()  ? new Date(rangeEnd)   : new Date(mNext);
+      axisMonthHtml += '<div class="gantt-axis-month-block" style="left:' + pct(blkS) + ';width:' + widthPct(blkE.getTime() - blkS.getTime()) + '">'
+        + mCur.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }) + '</div>';
+      mCur = new Date(mNext);
+    }
+
+    // ── Day ticks + row grid (every single day) ───────────────────────
+    var axisDayHtml = '', rowGridHtml = '';
+    var dCur = new Date(rangeStart), dayIndex = 0;
+    while (dCur.getTime() <= rangeEnd.getTime()) {
+      var isMonthStart = dCur.getDate() === 1;
+      var cls = isMonthStart ? 'major' : 'minor';
+      var dx  = pct(dCur);
+      axisDayHtml += '<div class="gantt-axis-tick ' + cls + '" style="left:' + dx + '"></div>';
+      if (isMonthStart || dayIndex % labelStep === 0)
+        axisDayHtml += '<div class="gantt-axis-day-lbl" style="left:' + dx + '">' + dCur.getDate() + '</div>';
+      rowGridHtml += '<div class="gantt-grid-line ' + cls + '" style="left:' + dx + '"></div>';
+      dCur.setDate(dCur.getDate() + 1);
+      dayIndex++;
+    }
+
+    // ── Grouping ──────────────────────────────────────────────────────
+    var groupOrder = [], groups = {};
+    plottable.forEach(function (t) {
+      var key, label;
+      if (groupBy === 'assignee') {
+        key   = t.assignee_id ? String(t.assignee_id) : '__none__';
+        label = key === '__none__' ? 'Nicht zugewiesen'
+              : (t.assignee ? (t.assignee.display_name || t.assignee.email) : key);
+      } else if (groupBy === 'project') {
+        key   = String(t.project_id);
+        label = t.project_name || ('Projekt ' + t.project_id);
+      } else if (groupBy === 'status') {
+        key   = t.status;
+        label = statusLabels[key] || key;
+      } else { // priority
+        key   = t.priority;
+        label = priorityLabels[key] || key;
+      }
+      if (!groups[key]) { groups[key] = { label: label, tasks: [] }; groupOrder.push(key); }
+      groups[key].tasks.push(t);
+    });
+
+    // Sort group order
+    var statusOrder   = { open: 0, in_progress: 1, review: 2, done: 3 };
+    var priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    if (groupBy === 'status')
+      groupOrder.sort(function (a, b) { return (statusOrder[a] || 9) - (statusOrder[b] || 9); });
+    else if (groupBy === 'priority')
+      groupOrder.sort(function (a, b) { return (priorityOrder[a] || 9) - (priorityOrder[b] || 9); });
+    else
+      groupOrder.sort(function (a, b) { return groups[a].label.localeCompare(groups[b].label); });
+
+    // ── Rows ──────────────────────────────────────────────────────────
+    var axisLabel = { assignee: 'Bearbeiter', project: 'Projekt', status: 'Status', priority: 'Priorität' }[groupBy] || groupBy;
+    var rowsHtml = '';
+    groupOrder.forEach(function (key) {
+      var g = groups[key];
+      rowsHtml += '<div class="gantt-group-header">'
+        + '<div class="gantt-group-header-label">' + escHtml(g.label) + '</div>'
+        + '<div class="gantt-group-header-track"></div>'
+        + '</div>';
+
+      g.tasks.forEach(function (t) {
+        var s = t.start_date ? new Date(t.start_date + 'T00:00:00') : new Date(t.due_date + 'T00:00:00');
+        var e = t.due_date   ? new Date(t.due_date   + 'T00:00:00') : s;
+        var barStart = s < rangeStart ? new Date(rangeStart) : s;
+        var barEnd   = e < barStart   ? new Date(barStart)   : e;
+        barEnd = new Date(barEnd.getTime() + 86400000);
+        var left  = pct(barStart);
+        var width = widthPct(barEnd.getTime() - barStart.getTime());
+
+        var color  = statusColors[t.status]  || '#667eea';
+        var dotClr = priorityColors[t.priority] || '#888';
+        var isDone = t.status === 'done';
+        var isLate = !isDone && t.due_date && new Date(t.due_date + 'T00:00:00') < today;
+        var noDate = !!t._noDate;
+        var barStyle = 'left:' + left + ';width:' + width + ';background:' + color + ';'
+          + (isDone ? 'opacity:0.45;' : isLate ? 'box-shadow:inset 0 0 0 2px #ef4444;' : '')
+          + (noDate ? 'opacity:0.35;background:transparent;border:2px dashed ' + color + ';' : '');
+
+        rowsHtml += '<div class="gantt-row">'
+          + '<div class="gantt-label">'
+          + '<span class="task-pri-dot" style="background:' + dotClr + '" title="' + escHtml(priorityLabels[t.priority] || '') + '"></span>'
+          + '<span class="gantt-label-text' + (isDone ? ' gantt-done' : '') + '" title="' + escHtml(t.title) + '">' + escHtml(t.title) + '</span>'
+          + '</div>'
+          + '<div class="gantt-track">'
+          + rowGridHtml
+          + (todayX ? '<div class="gantt-today" style="left:' + todayX + '"></div>' : '')
+          + '<div class="gantt-bar" data-task-id="' + t.id + '" style="' + barStyle + '" title="' + escHtml(t.title) + '">'
+          + '<span class="gantt-bar-label">' + escHtml(t.title) + '</span>'
+          + '</div>'
+          + '</div>'
+          + '</div>';
+      });
+    });
+
+    container.innerHTML = '<div class="gantt-outer"><div class="gantt-inner" style="min-width:' + ganttMinWidth + 'px">'
+      + '<div class="gantt-axis">'
+      + '<div class="gantt-axis-label-col">' + escHtml(axisLabel) + '</div>'
+      + '<div class="gantt-axis-timeline">'
+      + '<div class="gantt-axis-months">' + axisMonthHtml + '</div>'
+      + '<div class="gantt-axis-days">' + axisDayHtml + '</div>'
+      + '</div></div>'
+      + rowsHtml
+      + '</div></div>';
   }
 
   /* ── Task Modal ── */
+  var _editTaskId = null; // null = create, number = edit
+
   function openTaskModal(defaults) {
     var d = defaults || {};
-    document.getElementById('taskModalTitle').textContent = 'Neuer Task';
+    _editTaskId = d._editId || null;
+    document.getElementById('taskModalTitle').textContent = _editTaskId ? 'Task bearbeiten' : 'Neuer Task';
+    document.getElementById('taskSaveBtn').textContent   = _editTaskId ? 'Speichern' : 'Task erstellen';
     document.getElementById('taskForm').reset();
     document.getElementById('taskError').style.display = 'none';
-    selectedTaskTags = [];
+    selectedTaskTags = d._tags ? d._tags.slice() : [];
     renderTaskTags();
 
     // Populate dropdowns
@@ -937,22 +1215,37 @@
       assigneeSel.innerHTML = '<option value="">— Niemand —</option>' + allUsers.map(function (u) {
         return '<option value="' + u.id + '">' + escHtml(u.display_name || u.email) + '</option>';
       }).join('');
+      if (d.assignee_id) assigneeSel.value = String(d.assignee_id);
     }).catch(function () {});
 
     var parentSel = document.getElementById('taskParent');
     parentSel.innerHTML = '<option value="">— Kein Parent —</option>';
     apiFetch('/api/tasks?project_id=' + encodeURIComponent(state.project) + '&status=open').then(function (r) { return r.ok ? r.json() : []; }).then(function (tasks) {
       tasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
-      parentSel.innerHTML = '<option value="">— Kein Parent —</option>' + tasks.map(function (t) {
+      // exclude the task being edited from parent options
+      parentSel.innerHTML = '<option value="">— Kein Parent —</option>' + tasks.filter(function(t){ return t.id !== _editTaskId; }).map(function (t) {
         return '<option value="' + t.id + '">' + escHtml(t.title) + '</option>';
       }).join('');
+      if (d.parent_task_id) parentSel.value = String(d.parent_task_id);
     }).catch(function () {});
+
+    // Pre-fill fields
+    if (d.title)              document.getElementById('taskTitle').value      = d.title;
+    if (d.description)        document.getElementById('taskDesc').value       = d.description;
+    if (d.status)             document.getElementById('taskStatus').value     = d.status;
+    if (d.priority)           document.getElementById('taskPriority').value   = d.priority;
+    if (d.start_date)         document.getElementById('taskStartDate').value  = d.start_date;
+    if (d.start_time)         document.getElementById('taskStartTime').value  = d.start_time;
+    if (d.due_date)           document.getElementById('taskDueDate').value    = d.due_date;
+    if (d.end_time)           document.getElementById('taskEndTime').value    = d.end_time;
+    if (d.estimated_minutes)  document.getElementById('taskMinutes').value    = d.estimated_minutes;
+    if (d.app_link)           document.getElementById('taskAppLink').value    = d.app_link;
 
     document.getElementById('taskModal').classList.add('open');
   }
   window.openTaskModal = openTaskModal;
 
-  function closeTaskModal() { document.getElementById('taskModal').classList.remove('open'); }
+  function closeTaskModal() { document.getElementById('taskModal').classList.remove('open'); _editTaskId = null; }
 
   /* ── Task Detail Popup ── */
   function openTaskDetail() { document.getElementById('taskDetailBackdrop').classList.add('open'); }
@@ -962,15 +1255,41 @@
   document.getElementById('taskDetailBackdrop').addEventListener('click', function (e) {
     if (e.target === this) closeTaskDetail();
   });
+  document.getElementById('taskDetailPopup').addEventListener('click', function (e) {
+    if (e.target.id === 'tdEditBtn' && _currentTaskData) {
+      closeTaskDetail();
+      openTaskModal({
+        _editId:          _currentTaskData.id,
+        _tags:            _currentTaskData.tags || [],
+        title:            _currentTaskData.title,
+        description:      _currentTaskData.description,
+        status:           _currentTaskData.status,
+        priority:          _currentTaskData.priority,
+        assignee_id:       _currentTaskData.assignee_id,
+        start_date:        _currentTaskData.start_date,
+        start_time:        _currentTaskData.start_time,
+        due_date:          _currentTaskData.due_date,
+        end_time:          _currentTaskData.end_time,
+        estimated_minutes: _currentTaskData.estimated_minutes,
+        qlik_app_id:       _currentTaskData.qlik_app_id,
+        app_link:          _currentTaskData.app_link,
+        parent_task_id:    _currentTaskData.parent_task_id,
+      });
+    }
+  });
+
+  var _currentTaskData = null;
 
   async function showTaskDetail(taskId) {
     var el = document.getElementById('taskDetailContent');
     el.innerHTML = '<div class="empty-state">Lade…</div>';
+    _currentTaskData = null;
     openTaskDetail();
     try {
       var res = await apiFetch('/api/tasks/' + encodeURIComponent(taskId));
       if (!res.ok) throw new Error('Task nicht gefunden');
       var t = await res.json();
+      _currentTaskData = t;
 
       var priLabels = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
       var statusLabels = { open: 'Open', in_progress: 'In Bearbeitung', review: 'Review', done: 'Done' };
@@ -1014,7 +1333,8 @@
         + '<div><div class="td-field-label">Priorität</div><div class="td-field-value">' + escHtml(priLabels[t.priority] || t.priority) + '</div></div>'
         + '<div><div class="td-field-label">Status</div><div class="td-field-value">' + escHtml(statusLabels[t.status] || t.status) + '</div></div>'
         + '<div><div class="td-field-label">Zugewiesen an</div><div class="td-field-value">' + (t.assignee ? avatarHtml(t.assignee) + ' ' + escHtml(t.assignee.display_name || t.assignee.email) : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
-        + '<div><div class="td-field-label">Fälligkeit</div><div class="td-field-value' + (isOverdue(t.due_date) && t.status !== 'done' ? ' task-overdue' : '') + '">' + (t.due_date ? fmtDate(t.due_date) : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
+        + '<div><div class="td-field-label">Start</div><div class="td-field-value">' + (t.start_date ? fmtDate(t.start_date) + (t.start_time ? ' ' + t.start_time : '') : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
+        + '<div><div class="td-field-label">Ende / Fälligkeit</div><div class="td-field-value' + (isOverdue(t.due_date) && t.status !== 'done' ? ' task-overdue' : '') + '">' + (t.due_date ? fmtDate(t.due_date) + (t.end_time ? ' ' + t.end_time : '') : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
         + '<div><div class="td-field-label">Geschätzte Minuten</div><div class="td-field-value">' + (t.estimated_minutes || '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
         + '<div><div class="td-field-label">App</div><div class="td-field-value">' + (t.qlik_app_id ? escHtml(appNameById(t.qlik_app_id)) : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
         + '</div>'
@@ -1024,6 +1344,9 @@
         + '<div class="td-meta">'
         + '<span>Erstellt: ' + timeAgo(t.created_at) + '</span>'
         + '<span>Aktualisiert: ' + timeAgo(t.updated_at) + '</span>'
+        + '</div>'
+        + '<div style="margin-top:1rem;display:flex;gap:0.6rem;justify-content:flex-end">'
+        + '<button class="btn-primary" id="tdEditBtn" style="font-size:0.82rem;padding:0.4rem 1rem">Bearbeiten</button>'
         + '</div>';
     } catch (err) {
       el.innerHTML = '<div class="empty-state">' + escHtml(err.message) + '</div>';
@@ -1120,22 +1443,30 @@
       status: document.getElementById('taskStatus').value,
       priority: document.getElementById('taskPriority').value,
       assignee_id: document.getElementById('taskAssignee').value ? parseInt(document.getElementById('taskAssignee').value, 10) : null,
+      start_date: document.getElementById('taskStartDate').value || null,
+      start_time: document.getElementById('taskStartTime').value || null,
       due_date: document.getElementById('taskDueDate').value || null,
+      end_time: document.getElementById('taskEndTime').value || null,
       estimated_minutes: document.getElementById('taskMinutes').value ? parseInt(document.getElementById('taskMinutes').value, 10) : null,
       qlik_app_id: document.getElementById('taskApp').value || null,
       app_link: document.getElementById('taskAppLink').value.trim() || null,
       parent_task_id: document.getElementById('taskParent').value ? parseInt(document.getElementById('taskParent').value, 10) : null
     };
     try {
-      var res = await apiFetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      var isEdit = !!_editTaskId;
+      var url    = isEdit ? '/api/tasks/' + _editTaskId : '/api/tasks';
+      var method = isEdit ? 'PUT' : 'POST';
+      var res = await apiFetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) { var err = await res.json().catch(function () { return {}; }); throw new Error(err.detail || 'Fehler'); }
       var task = await res.json();
-      // Link tags
-      for (var i = 0; i < selectedTaskTags.length; i++) {
-        await apiFetch('/api/task-tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: task.id, tag_id: selectedTaskTags[i].id }) });
+      if (!isEdit) {
+        // Link tags only on create (PUT endpoint handles existing tags separately)
+        for (var i = 0; i < selectedTaskTags.length; i++) {
+          await apiFetch('/api/task-tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: task.id, tag_id: selectedTaskTags[i].id }) });
+        }
       }
       closeTaskModal();
-      showToast('Task erstellt');
+      showToast(isEdit ? 'Task aktualisiert' : 'Task erstellt');
       refreshDashboard();
     } catch (err) {
       errEl.textContent = err.message;
@@ -1156,47 +1487,41 @@
     document.getElementById('docDate').value = new Date().toISOString().slice(0, 10);
 
     var appSel = document.getElementById('docApp');
-    appSel.innerHTML = '<option value="">— Keine App —</option>' + allApps.map(function (a) {
-      return '<option value="' + escHtml(a.app_id || a.id) + '">' + escHtml(a.name || a.app_id) + '</option>';
-    }).join('');
-    if (d.qlik_app_id) appSel.value = d.qlik_app_id;
+    appSel.innerHTML = buildDocAppSelectOptions(d.qlik_app_id || '');
 
-    // Load template based on type
-    loadDocTemplate(document.getElementById('docType').value);
-
+    initDocEditor();
     document.getElementById('docModal').classList.add('open');
   }
   window.openDocModal = openDocModal;
+
+  function initDocEditor() {
+    if (docEditor) docEditor.destroy();
+    docEditor = AtlasSmartCompose.log('docEditorContainer', {});
+  }
 
   function closeDocModal() { document.getElementById('docModal').classList.remove('open'); }
   document.getElementById('docModalClose').addEventListener('click', closeDocModal);
   document.getElementById('docCancel').addEventListener('click', closeDocModal);
   document.getElementById('btnNewDoc').addEventListener('click', function () { openDocModal(); });
 
-  async function loadDocTemplate(type) {
-    if (docEditor) docEditor.destroy();
-    var tpl = '';
-    try {
-      var res = await apiFetch('/api/templates?type=doc_entry_' + encodeURIComponent(type));
-      if (res.ok) { var d = await res.json(); tpl = d.body || d.content || d.template || ''; }
-    } catch (e) {}
-    docEditor = AtlasMarkdownEditor.create('docEditorContainer', { initialValue: tpl, placeholder: 'Inhalt eingeben…', toolbar: true });
-  }
-
   document.getElementById('docType').addEventListener('change', function () {
-    loadDocTemplate(this.value);
+    if (docEditor) docEditor.clear();
   });
 
   document.getElementById('docForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     var errEl = document.getElementById('docError');
     errEl.style.display = 'none';
+    var vals = docEditor ? docEditor.getValues() : { was: '', warum: null };
+    var selectedAppId = document.getElementById('docApp').value || null;
     var body = {
       project_id: parseInt(state.project, 10),
       entry_type: document.getElementById('docType').value,
-      qlik_app_id: document.getElementById('docApp').value || null,
+      qlik_app_id: selectedAppId,
+      betrifft:    selectedAppId ? appNameById(selectedAppId) : null,
       entry_date: document.getElementById('docDate').value || null,
-      content: docEditor ? docEditor.getValue() : ''
+      content: vals.was,
+      warum:   vals.warum,
     };
     try {
       var res = await apiFetch('/api/log-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -1214,9 +1539,18 @@
   function openDocSidebar(doc) {
     document.getElementById('sidebarType').textContent = (doc.entry_type || 'note').toUpperCase();
     document.getElementById('sidebarType').style.color = { change: '#60a5fa', decision: '#4ade80', incident: '#f87171', note: 'var(--text-muted)' }[doc.entry_type] || 'var(--text-muted)';
-    document.getElementById('sidebarTitle').textContent = doc.title || '(Kein Titel)';
+    document.getElementById('sidebarTitle').textContent = doc.entry_date || '';
     document.getElementById('sidebarMeta').textContent = (doc.author ? (doc.author.display_name || doc.author.email) + ' · ' : '') + (doc.qlik_app_id ? appNameById(doc.qlik_app_id) + ' · ' : '') + timeAgo(doc.created_at);
-    document.getElementById('sidebarContent').innerHTML = AtlasMarkdownEditor.renderMarkdown(doc.content || '');
+    var sideHtml = '';
+    if (doc.content) {
+      sideHtml += '<div class="sc-field" style="margin-bottom:0.8rem"><div class="sc-label">Was</div>'
+        + '<div style="color:rgba(255,255,255,0.88);font-size:0.88rem;line-height:1.55;white-space:pre-wrap">' + escHtml(doc.content) + '</div></div>';
+    }
+    if (doc.warum) {
+      sideHtml += '<div class="sc-field" style="margin-bottom:0.8rem"><div class="sc-label">Warum / Begründung</div>'
+        + '<div style="color:rgba(255,255,255,0.7);font-size:0.85rem;line-height:1.55;white-space:pre-wrap">' + escHtml(doc.warum) + '</div></div>';
+    }
+    document.getElementById('sidebarContent').innerHTML = sideHtml || '<span style="opacity:0.4">Kein Inhalt</span>';
     document.getElementById('docSidebar').classList.add('open');
   }
   document.getElementById('docSidebarClose').addEventListener('click', function () {
@@ -1383,6 +1717,9 @@
   /* ── Filter handlers ── */
   document.getElementById('filterStatus').addEventListener('change', loadProjectTasks);
   document.getElementById('filterTag').addEventListener('change', loadProjectTasks);
+
+  /* ── Gantt group-by listener ── */
+  document.getElementById('ganttGroupBy').addEventListener('change', applyGanttView);
 
   /* ── Nav change handlers ── */
   document.getElementById('navCustomerSelect').addEventListener('change', function () {

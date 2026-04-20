@@ -65,6 +65,7 @@ from app.admin.routes import router as admin_router
 from app.themes.routes import router as themes_router
 from app.git_bridge.routes import router as git_bridge_router
 from app.collab.routes import router as collab_router
+from app.master_items.routes import router as master_items_router
 from app.fetch_jobs.contracts import (
     FETCH_STEP_ALL_ORDER,
     INDEPENDENT_FETCH_STEPS,
@@ -98,6 +99,7 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(themes_router, prefix="/api")
 app.include_router(git_bridge_router, prefix="/api")
 app.include_router(collab_router, prefix="/api")
+app.include_router(master_items_router, prefix="/api")
 
 # CORS
 origins = settings.dev_cors_origins or []

@@ -319,6 +319,38 @@
     });
   }
 
+  /**
+   * Build grouped <optgroup> HTML for an app picker select.
+   * @param {Array<{app_id:string, name:string, space_name:string}>} normalizedApps - pre-sorted
+   * @param {string} selectedId
+   */
+  function buildGroupedAppSelectOptions(normalizedApps, selectedId) {
+    if (!normalizedApps.length) return '<option value="">— Apps werden geladen\u2026 —</option>';
+    var html = '<option value="">— Keine spezifische App —</option>';
+    var lastSpace = null;
+    normalizedApps.forEach(function (a) {
+      if (a.space_name !== lastSpace) {
+        if (lastSpace !== null) html += '</optgroup>';
+        html += '<optgroup label="' + escapeHtml(a.space_name) + '">';
+        lastSpace = a.space_name;
+      }
+      html += '<option value="' + escapeHtml(a.app_id) + '"'
+            + (a.app_id === selectedId ? ' selected' : '') + '>'
+            + escapeHtml(a.name) + '</option>';
+    });
+    if (lastSpace !== null) html += '</optgroup>';
+    return html;
+  }
+
+  /** Normalize a raw /api/qlik-apps response item to {app_id, name, space_name}. */
+  function normalizeAppItem(a) {
+    return {
+      app_id:     a.app_id || String(a.id || ''),
+      name:       a.name || a.app_name || a.app_id || '',
+      space_name: a.space_name || a.spaceName || a.space_id || 'Kein Space',
+    };
+  }
+
   window.AtlasShared = {
     TOKEN_STORAGE_KEY: TOKEN_STORAGE_KEY,
     USER_STORAGE_KEY: USER_STORAGE_KEY,
@@ -343,5 +375,7 @@
     projectCustomerId: projectCustomerId,
     syncCustomerFromProject: syncCustomerFromProject,
     updateNavProjectContext: updateNavProjectContext,
+    buildGroupedAppSelectOptions: buildGroupedAppSelectOptions,
+    normalizeAppItem: normalizeAppItem,
   };
 })();

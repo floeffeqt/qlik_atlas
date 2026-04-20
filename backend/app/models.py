@@ -1,6 +1,7 @@
 from sqlalchemy import (
     Column,
     Date,
+    Time,
     Integer,
     BigInteger,
     Float,
@@ -41,6 +42,7 @@ class Customer(Base):
     _git_token_encrypted = Column("git_token", Text, nullable=True)
     git_base_url = Column(String(500), nullable=True)
     notes = Column(Text, nullable=True)
+    _customer_link_encrypted = Column("customer_link", Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -84,6 +86,23 @@ class Customer(Base):
             self._git_token_encrypted = None
         else:
             self._git_token_encrypted = encrypt_credential(value, context="customers.git_token")
+
+    @property
+    def customer_link(self) -> str | None:
+        if not self._customer_link_encrypted:
+            return None
+        return decrypt_credential(
+            self._customer_link_encrypted,
+            context="customers.customer_link",
+            allow_plaintext_fallback=True,
+        )
+
+    @customer_link.setter
+    def customer_link(self, value: str | None) -> None:
+        if value is None:
+            self._customer_link_encrypted = None
+        else:
+            self._customer_link_encrypted = encrypt_credential(value, context="customers.customer_link")
 
 
 class Project(Base):
@@ -592,7 +611,10 @@ class Task(Base):
     status = Column(String(50), nullable=False, server_default="open")
     priority = Column(String(20), nullable=False, server_default="medium")
     assignee_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    due_date = Column(Date, nullable=True)
+    start_date = Column(Date, nullable=True)
+    start_time = Column(Time, nullable=True)
+    due_date   = Column(Date, nullable=True)
+    end_time   = Column(Time, nullable=True)
     estimated_minutes = Column(Integer, nullable=True)
     app_link = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -634,7 +656,9 @@ class DocEntry(Base):
     qlik_app_id = Column(String(100), nullable=True, index=True)
     author_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     entry_type = Column(String(50), nullable=False, index=True)
-    content = Column(Text, nullable=False)
+    content = Column(Text, nullable=False)       # = "was" (what happened)
+    warum = Column(Text, nullable=True)          # why / reasoning
+    betrifft = Column(Text, nullable=True)       # affected apps / areas (free text)
     entry_date = Column(Date, nullable=False, server_default=func.current_date())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

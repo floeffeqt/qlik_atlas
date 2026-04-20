@@ -38,6 +38,7 @@ class CustomerIn(BaseModel):
     git_provider: Optional[str] = None
     git_token: Optional[str] = None
     git_base_url: Optional[str] = None
+    customer_link: Optional[str] = None
 
 
 class CustomerUpdate(BaseModel):
@@ -48,6 +49,7 @@ class CustomerUpdate(BaseModel):
     git_provider: Optional[str] = None
     git_token: Optional[str] = None  # None = keep existing
     git_base_url: Optional[str] = None
+    customer_link: Optional[str] = None
 
 
 class CustomerOut(BaseModel):
@@ -59,6 +61,7 @@ class CustomerOut(BaseModel):
     git_token_preview: Optional[str]
     git_base_url: Optional[str]
     notes: Optional[str]
+    customer_link: Optional[str]
     created_at: str
     updated_at: str
 
@@ -66,6 +69,7 @@ class CustomerOut(BaseModel):
 class CustomerNameOut(BaseModel):
     id: int
     name: str
+    customer_link: Optional[str] = None
 
 def _mask_key(api_key: str) -> str:
     return ("••••••••" + api_key[-4:]) if len(api_key) > 4 else "••••"
@@ -82,6 +86,7 @@ def _to_out(c: Customer) -> CustomerOut:
         git_token_preview=_mask_key(git_tok) if git_tok else None,
         git_base_url=c.git_base_url,
         notes=c.notes,
+        customer_link=c.customer_link,
         created_at=iso_or_empty(c.created_at),
         updated_at=iso_or_empty(c.updated_at),
     )
@@ -94,8 +99,8 @@ async def list_customer_names(
     session: AsyncSession = Depends(_user_scoped_session),
 ):
     """Minimal customer list for dropdowns — no credentials exposed."""
-    result = await session.execute(select(Customer.id, Customer.name).order_by(Customer.name))
-    return [CustomerNameOut(id=row.id, name=row.name) for row in result]
+    result = await session.execute(select(Customer).order_by(Customer.name))
+    return [CustomerNameOut(id=c.id, name=c.name, customer_link=c.customer_link) for c in result.scalars()]
 
 
 # ── Admin-only routes ──
@@ -130,6 +135,8 @@ async def create_customer(
     )
     if payload.git_token:
         customer.git_token = payload.git_token.strip()
+    if payload.customer_link:
+        customer.customer_link = payload.customer_link.strip()
     session.add(customer)
     await session.commit()
     await session.refresh(customer)
@@ -182,6 +189,8 @@ async def update_customer(
             customer._git_token_encrypted = None
     if payload.git_base_url is not None:
         customer.git_base_url = payload.git_base_url.strip().rstrip("/") if payload.git_base_url else None
+    if payload.customer_link is not None:
+        customer.customer_link = payload.customer_link.strip() if payload.customer_link.strip() else None
 
     await session.commit()
     await session.refresh(customer)

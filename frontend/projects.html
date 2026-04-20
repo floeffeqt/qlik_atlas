@@ -491,6 +491,7 @@
 
 <script src="/assets/atlas-shared.js"></script>
 <script src="/assets/markdownEditor.js"></script>
+<script src="/assets/smartCompose.js"></script>
 <script>
   window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
   window.AtlasShared.bindLogout('logoutBtn');
@@ -1124,18 +1125,10 @@
 
   function initReadmeEditor(content) {
     if (readmeEditor) readmeEditor.destroy();
-    readmeEditor = AtlasMarkdownEditor.create('readmeEditorContainer', {
+    readmeEditor = AtlasSmartCompose.readme('readmeEditorContainer', {
+      readmeType: 'project_readme',
       initialValue: content,
-      toolbar: true,
-      resetButton: true,
-      placeholder: 'Projekt-Dokumentation schreiben…',
       onChange: function () { debounceReadmeSave(); },
-      onReset: async function () {
-        try {
-          var tRes = await apiFetch('/api/templates?type=project_readme');
-          if (tRes.ok) { var d = await tRes.json(); readmeEditor.setValue(d.body || d.content || d.template || ''); }
-        } catch (e) {}
-      }
     });
   }
 
@@ -1169,27 +1162,22 @@
     }
   }
 
-  // Anchor navigation
+  // Anchor navigation — scroll to the matching Smart-Compose field
+  var _anchorKeyMap = {
+    'tenant-übersicht': 'beschreibung',
+    'architektur':      'architektur',
+    'reload-automation':'reload',
+    'ansprechpartner':  'ansprechpartner',
+    'entscheidungen':   'entscheidungen',
+    'einschränkungen':  'einschraenkungen',
+  };
   document.getElementById('readmeNav').addEventListener('click', function(e) {
     var btn = e.target.closest('[data-anchor]');
-    if (!btn || !readmeEditor) return;
-    var anchor = btn.getAttribute('data-anchor');
-    var ta = readmeEditor.getTextarea();
-    var text = ta.value;
-    var patterns = [
-      new RegExp('^#{1,3}\\s*' + anchor.replace(/-/g, '[\\s-]'), 'im'),
-      new RegExp(anchor.replace(/-/g, '[\\s-]'), 'i')
-    ];
-    for (var i = 0; i < patterns.length; i++) {
-      var match = text.match(patterns[i]);
-      if (match) {
-        var idx = text.indexOf(match[0]);
-        ta.focus();
-        ta.setSelectionRange(idx, idx + match[0].length);
-        ta.scrollTop = ta.scrollHeight * (idx / text.length);
-        break;
-      }
-    }
+    if (!btn) return;
+    var key = _anchorKeyMap[btn.getAttribute('data-anchor')];
+    if (!key) return;
+    var el = document.querySelector('#readmeEditorContainer [data-sc-key="' + key + '"]');
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
   });
 
   // Override loadData to also load readme

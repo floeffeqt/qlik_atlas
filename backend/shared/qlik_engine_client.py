@@ -3,11 +3,13 @@
 Flow per app:
   1. Connect  wss://{tenant}/app/{appId}  (Authorization: Bearer {api_key})
   2. OpenDoc   → get doc handle
-  3. GetScript → get current load script text
+  3. Perform Engine calls (GetScript, CreateSessionObject, …)
   4. Close connection
 
 Design notes:
-- Each call opens its own WebSocket connection and closes it afterwards.
+- ``get_script`` opens its own connection for a single call.
+- ``open_session`` is an async context manager for multi-step operations
+  (master items export/diff/import etc.).
 - Responses are matched by JSON-RPC ``id``; change notifications are ignored.
 - Timeout applies to each individual ``ws.recv()`` wait.
 """
@@ -16,7 +18,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Optional
 
 import websockets
 import websockets.exceptions
@@ -44,8 +47,80 @@ class QlikEngineError(RuntimeError):
         self.code = code
 
 
+class EngineSession:
+    """Active multi-call session within a single Qlik Engine WebSocket connection.
+
+    Obtained via ``QlikEngineClient.open_session(app_id)``. Do not instantiate directly.
+    """
+
+    def __init__(self, ws: Any, doc_handle: int, app_id: str, client: "QlikEngineClient") -> None:
+        self._ws = ws
+        self._doc_handle = doc_handle
+        self._app_id = app_id
+        self._client = client
+        self._next_id = 10  # OpenDoc used id=1; start above it
+
+    @property
+    def doc_handle(self) -> int:
+        return self._doc_handle
+
+    async def _rpc(self, method: str, handle: int, params: list[Any] | None = None) -> dict[str, Any]:
+        msg_id = self._next_id
+        self._next_id += 1
+        return await self._client._send_and_receive(self._ws, msg_id, method, handle, params or [])
+
+    async def create_session_object(self, definition: dict) -> int:
+        resp = await self._rpc("CreateSessionObject", self._doc_handle, [definition])
+        return resp["result"]["qReturn"]["qHandle"]
+
+    async def get_layout(self, obj_handle: int) -> dict:
+        resp = await self._rpc("GetLayout", obj_handle)
+        return resp["result"]["qLayout"]
+
+    async def get_properties(self, obj_handle: int) -> dict:
+        resp = await self._rpc("GetProperties", obj_handle)
+        return resp["result"]["qProp"]
+
+    async def set_properties(self, obj_handle: int, props: dict) -> None:
+        await self._rpc("SetProperties", obj_handle, [props])
+
+    async def get_dimension(self, dim_id: str) -> tuple[int, dict]:
+        resp = await self._rpc("GetDimension", self._doc_handle, [dim_id])
+        handle = resp["result"]["qReturn"]["qHandle"]
+        return handle, await self.get_properties(handle)
+
+    async def get_measure(self, measure_id: str) -> tuple[int, dict]:
+        resp = await self._rpc("GetMeasure", self._doc_handle, [measure_id])
+        handle = resp["result"]["qReturn"]["qHandle"]
+        return handle, await self.get_properties(handle)
+
+    async def get_object(self, obj_id: str) -> tuple[int, dict]:
+        resp = await self._rpc("GetObject", self._doc_handle, [obj_id])
+        handle = resp["result"]["qReturn"]["qHandle"]
+        return handle, await self.get_properties(handle)
+
+    async def create_dimension(self, props: dict) -> str:
+        resp = await self._rpc("CreateDimension", self._doc_handle, [props])
+        return resp["result"]["qReturn"]["qInfo"]["qId"]
+
+    async def create_measure(self, props: dict) -> str:
+        resp = await self._rpc("CreateMeasure", self._doc_handle, [props])
+        return resp["result"]["qReturn"]["qInfo"]["qId"]
+
+    async def create_object(self, props: dict) -> str:
+        resp = await self._rpc("CreateObject", self._doc_handle, [props])
+        return resp["result"]["qReturn"]["qInfo"]["qId"]
+
+    async def do_save(self) -> None:
+        await self._rpc("DoSave", self._doc_handle)
+
+
 class QlikEngineClient:
-    """Minimal QIX client for reading app scripts via the Qlik Engine API."""
+    """QIX client for the Qlik Engine API.
+
+    Use ``get_script`` for a one-shot script fetch, or ``open_session`` as
+    an async context manager for multi-step operations.
+    """
 
     def __init__(
         self,
@@ -54,7 +129,6 @@ class QlikEngineClient:
         timeout: float = 30.0,
         logger: Optional[Any] = None,
     ) -> None:
-        # Strip scheme so we can build the wss:// URI reliably
         host = creds.tenant_url.rstrip("/")
         for prefix in ("https://", "http://"):
             if host.startswith(prefix):
@@ -98,6 +172,37 @@ class QlikEngineClient:
                 f"Engine connection failed for app {app_id}: {exc}", app_id=app_id
             ) from exc
 
+    @asynccontextmanager
+    async def open_session(self, app_id: str) -> AsyncIterator[EngineSession]:
+        """Open a WebSocket, OpenDoc, yield an EngineSession, then close.
+
+        Use for multi-step operations (master items, custom RPC sequences).
+        ``QlikEngineError`` propagates to the caller; connection is always closed.
+        """
+        uri = f"wss://{self._tenant_host}/app/{app_id}"
+        headers = [("Authorization", f"Bearer {self._api_key}")]
+        self._logger.info("Engine: open_session %s", uri)
+        try:
+            async with websockets.connect(
+                uri,
+                extra_headers=headers,
+                open_timeout=self._timeout,
+                close_timeout=5,
+            ) as ws:
+                handle = await self._open_doc(ws, app_id)
+                yield EngineSession(ws, handle, app_id, self)
+                self._logger.info("Engine: session closed for %s", app_id)
+        except QlikEngineError:
+            raise
+        except websockets.exceptions.WebSocketException as exc:
+            raise QlikEngineError(
+                f"WebSocket error for app {app_id}: {exc}", app_id=app_id
+            ) from exc
+        except asyncio.TimeoutError as exc:
+            raise QlikEngineError(
+                f"Timeout waiting for Engine response for app {app_id}", app_id=app_id
+            ) from exc
+
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     async def _send_and_receive(
@@ -108,11 +213,7 @@ class QlikEngineClient:
         handle: int,
         params: list[Any],
     ) -> dict[str, Any]:
-        """Send a JSON-RPC request and return the matching response.
-
-        Ignores change notifications and other push messages until the
-        response with the matching ``id`` arrives.
-        """
+        """Send a JSON-RPC request and return the matching response."""
         await ws.send(json.dumps({
             "jsonrpc": "2.0",
             "id": msg_id,
@@ -124,7 +225,6 @@ class QlikEngineClient:
             raw = await asyncio.wait_for(ws.recv(), timeout=self._timeout)
             msg = json.loads(raw)
             if msg.get("id") != msg_id:
-                # Change notification or unrelated message — skip
                 continue
             if "error" in msg:
                 err = msg["error"]

@@ -2,6 +2,28 @@
 
 ## ✅ What's Complete (Ready to Use)
 
+### Customer Link (100%) — Migration 0026
+- ✅ `customer_link` column added to `customers` table (AES-256-GCM encrypted, same pattern as `api_key`/`git_token`)
+- ✅ Admin UI: Eingabefeld in Kunden-Modal ("Link zum internen Kundenordner"), sichtbar in Kunden-Übersichtstabelle als klickbarer Link
+- ✅ Dashboard-Header: Kundenname wird als klickbarer Link angezeigt, wenn `customer_link` gesetzt
+- ✅ `/api/customers/names` liefert entschlüsselte URL an alle authentifizierten User
+- ✅ Migration: `backend/alembic/versions/0026_customer_link.py`
+
+### Master Items Sync (100%) — kein DB-Schema (rein API-getrieben)
+- ✅ `backend/shared/master_items_sync.py`: `export_master_items`, `diff_master_items`, `import_master_items` — nutzt `EngineSession`/`open_session` aus `qlik_engine_client.py`
+- ✅ `backend/shared/qlik_engine_client.py`: `EngineSession`-Klasse + `open_session` Async-Context-Manager für multi-step Engine-Operationen
+- ✅ `backend/app/qlik_deps.py`: `resolve_project_creds()` + `CredentialsError(ValueError)` — geteilter Credential-Resolver (Themes-Service + Master-Items-Routes)
+- ✅ `backend/app/master_items/routes.py`: drei Admin-Endpoints `POST /api/master-items/export|diff|import`
+- ✅ Frontend: Master Items Tab in `script-sync.html` (3-Schritt-Workflow: Export → Diff → Import)
+- ✅ Frontend: Properties-Detail-Fenster nach Export (Accordion je Dimension/Kennzahl/Visualisierung, Filter, Raw-JSON-Toggle)
+- ✅ Frontend: Diff-Request sendet gecachtes `_miExportData` als `source_export` (spart eine WS-Verbindung)
+- ✅ Frontend: Parallel-App-Listen-Refresh (`steps:['apps']`) beim Export-Klick
+
+### Script Sync UI (100%)
+- ✅ `scriptViewerPanel`-Null-Crash behoben (Element fehlte im DOM, Null-Guard hinzugefügt)
+- ✅ "Scripts abziehen"-Button mit Fetch-Job-Polling und animiertem Fortschrittsbalken (Admin-only)
+- ✅ Tab-Konflikt zwischen Seiten-Level-Tabs (`data-tab`) und Master-Items-Mini-Tabs (`data-mi-tab`) behoben
+
 ### Infrastructure (100%)
 - ✅ Docker Compose with 3 services: db, backend, frontend
 - ✅ PostgreSQL 15 with persistent volumes
@@ -628,3 +650,211 @@ docker compose --profile test run --rm test pytest tests/test_auth.py::test_heal
 
 ### Geänderte Dateien
 - `frontend/script-sync.html` (CSS, HTML, JavaScript)
+
+---
+
+## Update (2026-04-09): Smart-Compose — Freitext-Eingabe für READMEs, Logs und Tasks
+
+### Completed
+- **Smart-Compose-Ansatz (Option A)**: Markdown-Split-View-Editor durch strukturierte Eingabefelder ersetzt — kein Markdown-Wissen mehr erforderlich.
+- **`AtlasSmartCompose.readme()`**: Abschnitt-basiertes Formular mit beschrifteten Textarea-Feldern.
+  - `app_readme`: Felder: Was macht diese App?, Datenquellen, Reload/Automatisierung, Ansprechpartner, Bekannte Probleme
+  - `project_readme`: Felder: Tenant-Übersicht, Architektur, Reload-Automation, Ansprechpartner, Entscheidungen, Einschränkungen
+  - `getValue()` → sauberes Markdown (`## Heading\n\ncontent`) für die API (keine Backend-Änderung nötig)
+  - `setValue(md)` → parst bestehendes Markdown zurück in Felder (section-heading-based)
+  - `insertSection(key, text)` → direkte Feldbesetzung durch DS-Chips
+- **`AtlasSmartCompose.log()`**: 3-Feld-Formular (Was / Warum / Betrifft) statt Markdown-Editor.
+  - Markdown-Assembly: `**Was:** …\n\n**Warum:** …\n\n**Betrifft:** …`
+- **DS-Chips-Integration** bleibt erhalten: "In README einfügen" schreibt Markdown-Tabelle in das Feld `datenquellen`.
+- **Anchor-Navigation** (projects.html) scrollt jetzt zum passenden SmartCompose-Feld statt zum textarea-Cursor.
+- **Task-Beschreibung**: Placeholder spezifiziert ("Was soll gemacht werden? Akzeptanzkriterien…").
+
+### Spec-Compliance
+- Kein Backend/DB-Schema geändert — QLIK-PS-003/008 nicht berührt
+- QLIK-PS-006: Beide Frontend-Seiten mit SmartCompose-Integration getestet
+
+### Geänderte Dateien
+- `frontend/assets/smartCompose.js` (neu)
+- `frontend/app-detail.html` (README-Tab + Log-Modal auf SmartCompose umgestellt, DS-Chips-Handler angepasst)
+- `frontend/projects.html` (Projekt-README auf SmartCompose umgestellt, Anchor-Nav angepasst)
+
+---
+
+## Update (2026-04-09): App-Picker in Modals + Log-Felder in eigene DB-Spalten
+
+### Completed
+- **App-Picker im Log-Modal**: Dropdown mit allen für das Projekt geladenen Apps, nach Space gruppiert (`<optgroup>`), vorselektiert auf die aktuelle App.
+- **App-Picker im Task-Modal**: Gleicher Picker für Tasks (`taskAppSelect`).
+- **Log-Felder als eigene DB-Spalten** (Migration 0023 `doc_entries_fields`):
+  - `warum` (TEXT NULLABLE): Warum/Begründung — eigene Spalte statt Teil von `content`
+  - `betrifft` (TEXT NULLABLE): Betroffene Apps/Bereiche — eigene Spalte statt Freitext in `content`
+  - `content` bleibt als "Was"-Feld (Hauptinhalt)
+- **SmartCompose Log (`getValues()`)**: Gibt `{was, warum, betrifft}` als strukturiertes Objekt zurück; `getValue()` bleibt rückwärtskompatibel.
+- **Log-Liste / Sidebar** (app-detail.html, index.html): Zeigt `betrifft` in der Meta-Zeile an; Sidebar rendert Was/Warum/Betrifft als separate labeled-Felder.
+
+### Spec-Compliance
+- QLIK-PS-008: Migrationsdateiname `0023_doc_entries_fields.py` = 27 Zeichen ≤ 30 ✓
+- QLIK-PS-003: RLS auf `doc_entries` bereits via Migration 0021 aktiv — keine neue Policy nötig ✓
+- docs/DB_MODEL.md aktualisiert (neue Spalten dokumentiert)
+
+### Geänderte Dateien
+- `backend/alembic/versions/0023_doc_entries_fields.py` (neu)
+- `backend/app/models.py` (`DocEntry`: `warum`, `betrifft` Spalten)
+- `backend/app/collab/schemas.py` (`LogEntryIn`, `LogEntryOut`: neue Felder)
+- `backend/app/collab/routes.py` (list/get/create log entry: neue Felder persistieren + zurückgeben)
+- `frontend/assets/smartCompose.js` (`getValues()` für strukturierten Log-Rückgabewert)
+- `frontend/app-detail.html` (App-Picker, Log-Submit mit `getValues()`, Log-Anzeige)
+- `frontend/index.html` (App-Picker, Log-Submit mit `getValues()`, Log-Sidebar)
+- `docs/DB_MODEL.md` (doc_entries-Abschnitt ergänzt)
+
+---
+
+## Update (2026-04-13): Task-Bearbeitung im Dashboard
+
+### Completed
+- **Task-Detail-Popup**: "Bearbeiten"-Button ergänzt (unten rechts im Popup)
+- **Task-Modal**: Im Edit-Modus mit allen Feldern vorausgefüllt (Titel, Beschreibung, Status, Priorität, Fälligkeit, Geschätzte Minuten, App, Assignee, Parent Task, App-Link)
+- **Modal-Titel** wechselt zu "Task bearbeiten", Speichern-Button zu "Speichern"
+- **Submit**: `PUT /api/tasks/{id}` im Edit-Modus, `POST /api/tasks` bei Neu-Erstellung
+- **_editTaskId-Reset**: wird beim Schließen des Modals zurückgesetzt (Bugfix)
+
+### Bug-Hunt (QLIK-PS-007)
+- **Confirmed + Fixed (medium)**: `_editTaskId` nicht zurückgesetzt bei Abbrechen → PUT statt POST bei nächstem "Neuer Task". Behoben in `closeTaskModal()`. Dokumentiert in FIXES_APPLIED.md.
+- **Bekannt / nicht kritisch**: Tags werden beim Bearbeiten nicht neu gesetzt (bestehende Tags bleiben, neue per Tag-Picker nach Speichern). Kein Datenverlust. Residual Risk: low.
+
+### Spec-Compliance
+- QLIK-PS-006: Nur Frontend geändert — kein Backend-Impact-Assessment erforderlich ✓
+- QLIK-PS-007: Bug-Hunt durchgeführt, confirmed bug dokumentiert ✓
+- Kein neues DB-Schema → QLIK-PS-003/008 nicht berührt ✓
+
+### Geänderte Dateien
+- `frontend/index.html` (Task-Detail-Popup Edit-Button, openTaskModal Prefill, Submit PUT/POST, closeTaskModal Reset)
+- `FIXES_APPLIED.md` (Bugfix-Eintrag)
+
+## Update (2026-04-15): Gantt-Ansicht im Dashboard
+
+### Completed
+- **`start_date`-Feld**: Neues optionales Datum-Feld an Tasks (Migration 0024, DB-Spalte `tasks.start_date`)
+- **Task-Modal**: `Startdatum`-Eingabe ergänzt (neben Fälligkeit), Prefill beim Bearbeiten
+- **Task-Detail-Popup**: Startdatum-Zeile in der Feldübersicht ergänzt
+- **Gantt-Karte**: Neue full-width-Karte "Gantt-Ansicht" im Dashboard, sichtbar sobald Kunde oder Projekt ausgewählt
+- **Gantt-Rendering**: Tasks gruppiert nach Projekt, farbig nach Priorität (critical=rot, high=orange, medium=blau, low=grau), Heute-Linie, Überfällige Tasks mit rotem Rahmen, Done-Tasks ausgegraut
+- **Klickbar**: Klick auf Gantt-Bar öffnet Task-Detail-Popup
+- **Backend**: `GET /api/tasks` unterstützt neu `customer_id`-Filter (JOIN über `projects.customer_id`) für kundenweite Gantt-Ansicht
+
+### Spec-Compliance
+- QLIK-PS-008: Migration `0024_task_start_date.py` = 24 Zeichen ✓
+- QLIK-PS-003: `tasks`-Tabelle hat bereits RLS; neue Spalte benötigt keine eigene Policy ✓
+- QLIK-PS-006: Frontend und Backend geändert — Assessment durchgeführt, keine Breaking Changes ✓
+- QLIK-PS-007: Kein sicherheitskritischer Pfad betroffen; Bug-Hunt: keine neuen Bugs ✓
+- `docs/DB_MODEL.md` aktualisiert ✓
+
+### Geänderte Dateien
+- `backend/alembic/versions/0024_task_start_date.py` (neu)
+- `backend/app/models.py` (`Task.start_date`)
+- `backend/app/collab/schemas.py` (`TaskIn`, `TaskUpdate`, `TaskOut`)
+- `backend/app/collab/routes.py` (`_task_out`, `create_task`, `update_task`, `list_tasks` + `customer_id` filter)
+- `frontend/index.html` (Gantt-CSS, -HTML, -JS; start_date im Modal, Detail, Payload)
+- `docs/DB_MODEL.md`
+
+---
+
+## Update (2026-04-17): Gantt-Erweiterungen (Zeiten, Gruppierung, Grid)
+
+### Completed
+- **`start_time`/`end_time`-Felder**: Neue optionale Zeitfelder an Tasks (Migration 0025, `tasks.start_time` + `tasks.end_time`, Typ `TIME`)
+- **Task-Modal**: Startzeit- und Endzeit-Eingaben (HH:MM) neben Startdatum und Fälligkeit
+- **Gantt-Gruppierung**: Swimlane-Ansicht statt Filter — "Gruppieren nach" Selector (Bearbeiter / Projekt / Status / Priorität), linke Achse zeigt die gewählte Dimension, Task-Titel auf dem Balken
+- **Gantt-Grid**: Tageslinien für jeden einzelnen Tag (28px/Tag Mindestbreite), Monatsgrenzen als stärkere Linie, Zweiebenen-Achse (Monate oben, Tagesnummern unten)
+- **Grid nur in Task-Zeilen**: Grid-Linien erscheinen ausschließlich in `.gantt-track`, nicht in Group-Header-Zeilen
+- **Status-Farben**: open=#667eea, in_progress=#f59e0b, review=#8b5cf6, done=#10b981
+
+### Spec-Compliance
+- QLIK-PS-008: Migration `0025_task_times.py` = 18 Zeichen ✓
+- QLIK-PS-003: `tasks`-RLS bereits aktiv, keine neue Policy nötig ✓
+- QLIK-PS-006: Frontend und Backend synchron geändert ✓
+- `docs/DB_MODEL.md` aktualisiert ✓
+
+### Geänderte Dateien
+- `backend/alembic/versions/0025_task_times.py` (neu)
+- `backend/app/models.py` (`Task.start_time`, `Task.end_time`)
+- `backend/app/collab/schemas.py` (`start_time`, `end_time` in TaskIn/Update/Out)
+- `backend/app/collab/routes.py` (Serialisierung `strftime('%H:%M')`, create/update)
+- `frontend/index.html` (Gantt-Gruppierung, Grid, Achsenbeschriftung, Zeit-Inputs)
+- `docs/DB_MODEL.md`
+
+---
+
+## Update (2026-04-17): Kunden-Link (customer_link)
+
+### Completed
+- **`customer_link`-Feld**: Neues optionales verschlüsseltes Textfeld auf `customers` (Migration 0026)
+- **Verschlüsselung**: AES-256-GCM via `encrypt_credential`/`decrypt_credential` mit `context="customers.customer_link"` — gleicher Pattern wie `api_key`, `git_token`
+- **Admin-UI**: "Kunden-Link"-Eingabefeld im Kunden-Formular (admin.html), sichtbar in der Kunden-Übersichtstabelle als eigene Spalte
+- **Dashboard-Header**: Kundenname ist klickbarer Link (gestrichelt unterstrichen) wenn `customer_link` gesetzt, öffnet in neuem Tab
+- **`/api/customers/names`**: Liefert `customer_link` (entschlüsselt) an alle authentifizierten User
+
+### Spec-Compliance
+- QLIK-PS-001: `customer_link` AES-256-GCM verschlüsselt ✓
+- QLIK-PS-003: `customers` ist kein project-scoped Table, kein neuer Table → keine neue Policy nötig ✓
+- QLIK-PS-006: Backend + Frontend + Admin synchron ✓
+- QLIK-PS-008: Migration `0026_customer_link.py` = 22 Zeichen ✓
+- `docs/DB_MODEL.md` aktualisiert ✓
+
+### Geänderte Dateien
+- `backend/alembic/versions/0026_customer_link.py` (neu)
+- `backend/app/models.py` (`Customer._customer_link_encrypted`, `customer_link` property)
+- `backend/app/customers/routes.py` (CustomerIn, CustomerUpdate, CustomerOut, CustomerNameOut, `_to_out`, `/names`, create, update)
+- `frontend/admin.html` (Kunden-Link Eingabefeld + Tabellenspalte)
+- `frontend/index.html` (`updateHeader()` mit klickbarem Link)
+- `docs/DB_MODEL.md`
+
+---
+
+## Update (2026-04-17): Master Items Sync Modul
+
+### Completed
+- **`shared/master_items_sync.py`**: Export, Diff und Import von Qlik Master Items via Engine API (WebSocket/QIX); nutzt `QlikEngineClient.open_session`
+- **`export_master_items(creds, app_id)`**: Liest Dimensions, Measures, Visualizations aus einer App
+- **`diff_master_items(creds, source, target_app_id)`**: Vergleich Source-Export gegen Live-App (new / existing / conflict nach Titel)
+- **`import_master_items(creds, target_app_id, source, options)`**: Import mit `skip`/`overwrite` Duplikat-Handling + `dry_run`-Modus
+- **Session-Management**: `open_session` in `QlikEngineClient` garantiert `ws.close()` bei jedem Exit-Pfad
+- **Fehler-Isolation**: Jeder einzelne Engine-Call in `try/except` — ein fehlendes Item bricht den Gesamtprozess nicht ab
+- **Script Sync UI**: Properties-Detail-Panel, Diff mit gecachtem Export, Parallel-App-Listen-Refresh
+
+### Spec-Compliance
+- QLIK-PS-001: Keine Credentials in DB gespeichert — nimmt `QlikCredentials` entgegen, alles im Speicher ✓
+- QLIK-PS-005: Keine lokalen Artefakte ✓
+- QLIK-PS-008: Kein Migration-File (kein neues DB-Schema) ✓
+
+### Geänderte Dateien
+- `backend/shared/master_items_sync.py` (neu, dann Refactoring: eigener WS-Code → `QlikEngineClient.open_session`)
+- `backend/shared/qlik_engine_client.py` (`EngineSession`-Klasse + `open_session` ergänzt)
+- `backend/app/qlik_deps.py` (neu: `resolve_project_creds`, `CredentialsError`)
+- `backend/app/master_items/routes.py` (neu; nutzt `qlik_deps`)
+- `backend/app/themes/service.py` (Credential-Auflösung auf `qlik_deps` umgestellt)
+- `frontend/script-sync.html` (Master Items Tab vollständig implementiert)
+
+---
+
+## Update (2026-04-20): Architektur-Refactoring (Simplify Pass)
+
+### Completed
+- **WebSocket-Duplizierung beseitigt**: `master_items_sync.py` hatte ~170 Zeilen eigene WS/JSON-RPC-Logik (identisch mit `qlik_engine_client.py`). Entfernt; `QlikEngineClient.open_session` + `EngineSession` als geteilte Transportschicht eingeführt.
+- **`EngineSession`-Klasse**: Kapselt alle Engine-RPC-Methoden (`create_session_object`, `get_layout`, `get_dimension/measure/object`, `create_dimension/measure/object`, `set_properties`, `do_save`)
+- **`open_session` Context-Manager**: Verbindungsauf-/abbau, `OpenDoc`, Exception-Mapping → `QlikEngineError` — ein einziger Einstiegspunkt für alle multi-step Engine-Operationen
+- **`qlik_deps.py`**: Geteilter Credential-Resolver `resolve_project_creds()` + typisierter `CredentialsError(ValueError)` mit `.status`-Feld; ersetzt identischen Code in `themes/service.py` und `master_items/routes.py`
+- **Weitere Code-Quality-Fixes**: `getMiItemTitle` identische Branches zusammengeführt; `_strip_qinfo` auf Modulebene verschoben; `copy.deepcopy()` statt `json.loads(json.dumps())`; `source_export`-Cache in `DiffRequest` verhindert redundante WS-Verbindung
+
+### Spec-Compliance
+- QLIK-PS-001: Kein Credential-Handling geändert ✓
+- QLIK-PS-003: Kein neues DB-Schema ✓
+- QLIK-PS-008: Kein Migration-File ✓
+
+### Geänderte Dateien
+- `backend/shared/qlik_engine_client.py` (`EngineSession` + `open_session`)
+- `backend/shared/master_items_sync.py` (~170 Zeilen WS-Code entfernt, `QlikEngineClient` genutzt)
+- `backend/app/qlik_deps.py` (neu)
+- `backend/app/master_items/routes.py` (`qlik_deps` genutzt, `source_export` in `DiffRequest`)
+- `backend/app/themes/service.py` (`qlik_deps` genutzt)
+- `frontend/script-sync.html` (getMiItemTitle, renderMiDetailBody Fixes)
