@@ -33,10 +33,6 @@
     .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
     .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
     .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
-    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
-    .nav-link:hover, .nav-link.active { color: var(--text); background: var(--surface-hover); }
-    .nav-link.active { color: var(--accent); }
     .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; }
     .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; }
     .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
@@ -59,14 +55,6 @@
     .app-breadcrumb a:hover { text-decoration: underline; }
     .app-name { font-size: 1.5rem; font-weight: 700; }
     .app-id { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.15rem; }
-
-    /* ── TABS ── */
-    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
-    .tab-btn { padding: 0.65rem 1.2rem; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
-    .tab-btn:hover { color: var(--text); }
-    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
 
     /* ── COMMON ── */
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; backdrop-filter: blur(10px); }
@@ -214,6 +202,7 @@
     #toast.show { opacity: 1; transform: translateY(0); }
     .admin-fab { position: fixed; bottom: 1.5rem; left: 1.5rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; text-decoration: none; font-size: 0.85rem; font-weight: 600; border-radius: var(--radius-sm); z-index: 90; display: none; }
   </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
 <body>
@@ -229,6 +218,7 @@
     <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/app-hub.html">App Hub</a>
     <a class="nav-link" href="/theme-builder.html">Theme</a>
   </div>
   <div class="nav-project-badge">

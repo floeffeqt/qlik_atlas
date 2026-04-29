@@ -19,10 +19,26 @@
 - ✅ Frontend: Diff-Request sendet gecachtes `_miExportData` als `source_export` (spart eine WS-Verbindung)
 - ✅ Frontend: Parallel-App-Listen-Refresh (`steps:['apps']`) beim Export-Klick
 
+### App Hub (100%) — `frontend/app-hub.html`
+- ✅ Neue Seite: App-zentrierte Ansicht mit 5 Tabs (Übersicht, Script, Master Items, Fetch & Zeitpläne, Lineage)
+- ✅ URL-Param-basierte Navigation: `/app-hub.html?app_id=XXX&project_id=YYY`
+- ✅ Übersicht-Tab: App-Name, App-ID, Projekt, letzter Script-Fetch
+- ✅ Script-Tab: Qlik-Syntax-Highlighting, Abschnitte klappbar, Reload-Button, Kopieren
+- ✅ Master Items-Tab: Gleicher 3-Schritt-Workflow wie Script Sync, Quell-App ist diese App (fest), Multi-Target-Import
+- ✅ Fetch & Zeitpläne-Tab: Fetch-Job-Trigger mit SSE-Fortschritt, Job-Liste, Zeitpläne-CRUD
+- ✅ Lineage-Tab: Link zu `lineage.html?app_id=...`
+- ✅ "Hub"-Button in Script Sync Mapping-Tabelle und Script-Viewer (Direktnavigation)
+- ✅ App Hub Nav-Link in allen Seiten ergänzt
+
 ### Script Sync UI (100%)
 - ✅ `scriptViewerPanel`-Null-Crash behoben (Element fehlte im DOM, Null-Guard hinzugefügt)
-- ✅ "Scripts abziehen"-Button mit Fetch-Job-Polling und animiertem Fortschrittsbalken (Admin-only)
+- ✅ "Scripts abziehen"-Button mit Fetch-Job-Fortschritt via SSE + Polling-Fallback
 - ✅ Tab-Konflikt zwischen Seiten-Level-Tabs (`data-tab`) und Master-Items-Mini-Tabs (`data-mi-tab`) behoben
+- ✅ Master Items Import: Item-Selektion mit Checkboxen nach Diff (Neu/Konflikt/Gleich, je Typ filterbar)
+- ✅ Multi-App-Import: Mehrere Ziel-Apps gleichzeitig, per-App Accordion-Ergebnis
+- ✅ Geplante Fetch-Jobs: Cron-Zeitpläne pro Projekt (Migration 0027, APScheduler, CRUD-UI in script-sync.html)
+- ✅ Fetch-Job SSE-Streaming: `GET /api/fetch/jobs/{job_id}/stream` (EventSource, Polling-Fallback)
+- ✅ Admin-Übersicht Fetch-Zeitpläne: Tab in `admin.html` — alle Zeitpläne aller Kunden/Projekte, Aktivieren/Deaktivieren, Löschen
 
 ### Infrastructure (100%)
 - ✅ Docker Compose with 3 services: db, backend, frontend
@@ -858,3 +874,56 @@ docker compose --profile test run --rm test pytest tests/test_auth.py::test_heal
 - `backend/app/master_items/routes.py` (`qlik_deps` genutzt, `source_export` in `DiffRequest`)
 - `backend/app/themes/service.py` (`qlik_deps` genutzt)
 - `frontend/script-sync.html` (getMiItemTitle, renderMiDetailBody Fixes)
+
+---
+
+## Update (2026-04-20): Fetch-Job Verbesserungen + Master Items Import-Selektion
+
+### Completed
+
+#### SSE Job-Progress Streaming
+- **`GET /api/fetch/jobs/{job_id}/stream`**: Server-Sent Events Endpoint — liefert Job-Status alle 0.5s, schließt automatisch nach Abschluss/Fehler
+- **Frontend**: `pollFetchJob()` nutzt jetzt `EventSource` (SSE-native), Polling-Fallback für ältere Browser
+- Fortschrittsbalken zeigt exakten Schritt-Fortschritt basierend auf `completedSteps`
+
+#### Master Items Import-Selektion
+- **Backend**: `ImportRequest.source_export: dict | None` — gleiches Muster wie `DiffRequest`, vermeidet Re-Export
+- **Frontend**: Nach Diff erscheint Item-Selektion-Panel — Checkboxen pro Item (Neu=✓, Konflikt=✓, Gleich=☐)
+  - Accordion je Typ (Dimensions/Measures/Visualizations), "Alle wählen / Alle abwählen" Buttons
+  - Import sendet nur gewählte Items als `source_export` — kein unnötiger WS-Verbindungsaufbau
+
+#### Geplante Fetch-Jobs
+- **Migration 0027** (`0027_fetch_schedules.py`): `fetch_schedules` Tabelle mit `project_id`, `steps`, `cron_expr`, `label`, `is_active`, `last_run_at`, `next_run_at`, `created_by_user_id`
+- **`FetchSchedule` Model** in `models.py`
+- **APScheduler 3.x** (`AsyncIOScheduler`): lädt alle aktiven Zeitpläne beim Start aus DB, aktualisiert sich bei CRUD-Operationen
+- **4 Admin-Endpoints**: `GET/POST /api/fetch/schedules`, `PUT/DELETE /api/fetch/schedules/{id}`
+- **Frontend**: "Geplante Fetch-Jobs" Sektion in script-sync.html — Tabelle mit Cron/Schritten/Status/Nächster Lauf, Create/Edit Modal mit Cron-Eingabe + Schritt-Checkboxen
+
+### Spec-Compliance
+- QLIK-PS-001: Keine Credential-Änderungen ✓
+- QLIK-PS-003: Keine neue project-scoped Tabelle mit user-Daten (FetchSchedule ist admin-only, kein RLS nötig) ✓
+- QLIK-PS-008: Migration `0027_fetch_schedules.py` = 23 Zeichen ✓
+
+### Geänderte Dateien
+- `backend/main.py` (SSE-Endpoint, `_reload_scheduler`, `_run_scheduled_fetch`, lifespan, 4 CRUD-Routen)
+- `backend/requirements.txt` (`apscheduler>=3.10,<4.0`)
+- `backend/alembic/versions/0027_fetch_schedules.py` (neu)
+- `backend/app/models.py` (`FetchSchedule`)
+- `backend/app/master_items/routes.py` (`source_export` in `ImportRequest`)
+- `frontend/script-sync.html` (SSE polling, Checkbox-Selektion, Zeitplan-Sektion + Modal)
+
+---
+
+## Update (2026-04-20): Admin-Übersicht Fetch-Zeitpläne
+
+### Completed
+- **`GET /api/fetch/schedules`**: `project_id` jetzt optional — ohne Parameter werden alle Schedules aller Projekte zurückgegeben (JOIN über `projects` → `customers`, mit `project_name` + `customer_name`)
+- **`frontend/admin.html`**: Neuer Sidebar-Tab "Fetch-Zeitpläne" — zentrale Übersicht aller Cron-Zeitpläne mit Aktivieren/Deaktivieren-Toggle und Löschen. Erstellen/Bearbeiten bleibt in `script-sync.html` (pro Projekt)
+
+### Spec-Compliance
+- QLIK-PS-003: Kein neues DB-Schema ✓
+- QLIK-PS-008: Kein Migration-File ✓
+
+### Geänderte Dateien
+- `backend/main.py` (`list_schedules`: `project_id` optional, JOIN + Namens-Enrichment)
+- `frontend/admin.html` (Sidebar-Link, `schedulesSection`, `loadAllSchedules`, Toggle/Delete-Handler)

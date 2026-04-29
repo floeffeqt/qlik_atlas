@@ -10,11 +10,13 @@ from typing import Any, Literal
 logger = logging.getLogger("atlas.api")
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func as sa_func
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+import json
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from shared.config import is_prod, settings
 from shared.models import GraphResponse, HealthResponse, InventoryResponse, OrphansReport, PaginatedGraphResponse
@@ -89,6 +91,8 @@ from app.fetch_jobs.runtime import (
 )
 from app.fetch_jobs.store import _run_db_store_step
 from shared.security_headers import apply_security_headers
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 
 app = FastAPI(title="Lineage Explorer API", docs_url=None, redoc_url=None)
@@ -429,9 +433,93 @@ async def _load_project_creds(project_id: int, *, actor_user_id: int, actor_role
 
 
 
+_scheduler = AsyncIOScheduler(timezone="UTC")
+
+
+async def _run_scheduled_fetch(schedule_id: int, project_id: int, steps: list[str], user_id: int) -> None:
+    """Trigger a fetch job from a schedule, skipping if another job is already running."""
+    async with fetch_jobs_lock:
+        for job in fetch_jobs_registry.values():
+            if job.get("status") in {"queued", "running"}:
+                logger.info("Scheduled job %d skipped: another job running", schedule_id)
+                return
+
+    planned = _normalize_steps(steps)
+    job_id = uuid.uuid4().hex
+    job_logs[job_id] = []
+    now = _utc_now_iso()
+    job = {
+        "jobId": job_id,
+        "status": "queued",
+        "projectId": project_id,
+        "requestedSteps": steps,
+        "plannedSteps": planned,
+        "completedSteps": [],
+        "currentStep": None,
+        "results": {},
+        "error": None,
+        "createdAt": now,
+        "startedAt": now,
+        "updatedAt": now,
+        "finishedAt": None,
+        "triggeredByUserId": user_id,
+        "scheduledJobId": schedule_id,
+    }
+    async with fetch_jobs_lock:
+        fetch_jobs_registry[job_id] = job
+        _prune_old_jobs()
+
+    from app.database import AsyncSessionLocal
+    from app.models import FetchSchedule
+    async with AsyncSessionLocal() as db:
+        sched = await db.get(FetchSchedule, schedule_id)
+        if sched:
+            sched.last_run_at = datetime.now(timezone.utc)
+            await db.commit()
+
+    req = FetchJobRequest(project_id=project_id, steps=steps)
+    task = asyncio.create_task(
+        _execute_fetch_job(job_id, req, planned, actor_user_id=user_id, actor_role="admin")
+    )
+    async with fetch_jobs_lock:
+        if job_id in fetch_jobs_registry:
+            fetch_jobs_registry[job_id]["_task"] = task
+
+
+async def _reload_scheduler() -> None:
+    """Load all active schedules from DB and register them with APScheduler."""
+    from app.database import AsyncSessionLocal
+    from app.models import FetchSchedule
+    from sqlalchemy import select
+
+    _scheduler.remove_all_jobs()
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(select(FetchSchedule).where(FetchSchedule.is_active == True))).scalars().all()  # noqa: E712
+    for sched in rows:
+        try:
+            _scheduler.add_job(
+                _run_scheduled_fetch,
+                CronTrigger.from_crontab(sched.cron_expr, timezone="UTC"),
+                args=[sched.id, sched.project_id, list(sched.steps), sched.created_by_user_id],
+                id=f"sched_{sched.id}",
+                replace_existing=True,
+                misfire_grace_time=300,
+            )
+        except Exception as exc:
+            logger.warning("Could not schedule job %d (%s): %s", sched.id, sched.cron_expr, exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
+    _scheduler.start()
+    try:
+        await _reload_scheduler()
+    except Exception as exc:
+        logger.warning("Could not load fetch schedules on startup: %s", exc)
+    try:
+        yield
+    finally:
+        _scheduler.shutdown(wait=False)
 
 app.router.lifespan_context = lifespan
 
@@ -893,6 +981,32 @@ async def get_fetch_job_logs(job_id: str, _admin: dict = Depends(require_admin))
         }
 
 
+@app.get("/api/fetch/jobs/{job_id}/stream")
+async def stream_fetch_job(job_id: str, _admin: dict = Depends(require_admin)):
+    """Server-Sent Events stream for real-time job progress. Closes when job finishes."""
+    async def event_generator():
+        try:
+            while True:
+                async with fetch_jobs_lock:
+                    job = fetch_jobs_registry.get(job_id)
+                    if not job:
+                        yield f"data: {json.dumps({'error': 'not found'})}\n\n"
+                        return
+                    payload = _public_job(job)
+                yield f"data: {json.dumps(payload)}\n\n"
+                if payload.get("status") in ("completed", "failed"):
+                    return
+                await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            pass
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
 @app.post("/api/fetch/jobs")
 async def start_fetch_job(
     payload: FetchJobRequest,
@@ -939,6 +1053,170 @@ async def start_fetch_job(
     async with fetch_jobs_lock:
         fetch_jobs_registry[job_id]["_task"] = task
         return _public_job(fetch_jobs_registry[job_id])
+
+
+# ── Fetch Schedules CRUD ──────────────────────────────────────────────────────
+
+class _ScheduleIn(BaseModel):
+    project_id: int
+    steps: list[str]
+    cron_expr: str
+    label: str | None = None
+    is_active: bool = True
+
+
+class _ScheduleUpdate(BaseModel):
+    steps: list[str] | None = None
+    cron_expr: str | None = None
+    label: str | None = None
+    is_active: bool | None = None
+
+
+def _schedule_out(s: Any) -> dict:
+    next_run = None
+    try:
+        job = _scheduler.get_job(f"sched_{s.id}")
+        if job and job.next_run_time:
+            next_run = job.next_run_time.isoformat()
+    except Exception:
+        pass
+    return {
+        "id": s.id,
+        "project_id": s.project_id,
+        "steps": s.steps,
+        "cron_expr": s.cron_expr,
+        "label": s.label,
+        "is_active": s.is_active,
+        "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
+        "next_run_at": next_run,
+        "created_by_user_id": s.created_by_user_id,
+        "created_at": s.created_at.isoformat() if s.created_at else None,
+    }
+
+
+@app.get("/api/fetch/schedules")
+async def list_schedules(
+    project_id: int | None = Query(default=None),
+    _admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    from app.models import FetchSchedule, Project, Customer
+    q = (
+        select(FetchSchedule, Project.name.label("project_name"), Customer.name.label("customer_name"))
+        .join(Project, FetchSchedule.project_id == Project.id)
+        .join(Customer, Project.customer_id == Customer.id)
+        .order_by(Customer.name, Project.name, FetchSchedule.id)
+    )
+    if project_id is not None:
+        q = q.where(FetchSchedule.project_id == project_id)
+    rows = (await session.execute(q)).all()
+    result = []
+    for sched, proj_name, cust_name in rows:
+        out = _schedule_out(sched)
+        out["project_name"] = proj_name
+        out["customer_name"] = cust_name
+        result.append(out)
+    return {"schedules": result}
+
+
+@app.post("/api/fetch/schedules", status_code=201)
+async def create_schedule(
+    payload: _ScheduleIn,
+    admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    from app.models import FetchSchedule
+    try:
+        CronTrigger.from_crontab(payload.cron_expr, timezone="UTC")
+    except Exception:
+        raise HTTPException(status_code=422, detail=f"Ungültiger Cron-Ausdruck: {payload.cron_expr!r}")
+    sched = FetchSchedule(
+        project_id=payload.project_id,
+        steps=payload.steps,
+        cron_expr=payload.cron_expr,
+        label=payload.label,
+        is_active=payload.is_active,
+        created_by_user_id=int(admin["user_id"]),
+    )
+    session.add(sched)
+    await session.commit()
+    await session.refresh(sched)
+    if sched.is_active:
+        try:
+            _scheduler.add_job(
+                _run_scheduled_fetch,
+                CronTrigger.from_crontab(sched.cron_expr, timezone="UTC"),
+                args=[sched.id, sched.project_id, list(sched.steps), sched.created_by_user_id],
+                id=f"sched_{sched.id}",
+                replace_existing=True,
+                misfire_grace_time=300,
+            )
+        except Exception as exc:
+            logger.warning("Could not register schedule %d: %s", sched.id, exc)
+    return _schedule_out(sched)
+
+
+@app.put("/api/fetch/schedules/{schedule_id}")
+async def update_schedule(
+    schedule_id: int,
+    payload: _ScheduleUpdate,
+    _admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    from app.models import FetchSchedule
+    sched = await session.get(FetchSchedule, schedule_id)
+    if not sched:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if payload.steps is not None:
+        sched.steps = payload.steps
+    if payload.cron_expr is not None:
+        try:
+            CronTrigger.from_crontab(payload.cron_expr, timezone="UTC")
+        except Exception:
+            raise HTTPException(status_code=422, detail=f"Ungültiger Cron-Ausdruck: {payload.cron_expr!r}")
+        sched.cron_expr = payload.cron_expr
+    if payload.label is not None:
+        sched.label = payload.label
+    if payload.is_active is not None:
+        sched.is_active = payload.is_active
+    await session.commit()
+    await session.refresh(sched)
+    try:
+        _scheduler.remove_job(f"sched_{sched.id}")
+    except Exception:
+        pass
+    if sched.is_active:
+        try:
+            _scheduler.add_job(
+                _run_scheduled_fetch,
+                CronTrigger.from_crontab(sched.cron_expr, timezone="UTC"),
+                args=[sched.id, sched.project_id, list(sched.steps), sched.created_by_user_id],
+                id=f"sched_{sched.id}",
+                replace_existing=True,
+                misfire_grace_time=300,
+            )
+        except Exception as exc:
+            logger.warning("Could not re-register schedule %d: %s", sched.id, exc)
+    return _schedule_out(sched)
+
+
+@app.delete("/api/fetch/schedules/{schedule_id}", status_code=204)
+async def delete_schedule(
+    schedule_id: int,
+    _admin: dict = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    from app.models import FetchSchedule
+    sched = await session.get(FetchSchedule, schedule_id)
+    if not sched:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    await session.delete(sched)
+    await session.commit()
+    try:
+        _scheduler.remove_job(f"sched_{sched.id}")
+    except Exception:
+        pass
+    return
 
 
 if is_prod() and settings.frontend_dist.exists():

@@ -34,10 +34,6 @@
     .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
     .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
     .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
-    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
-    .nav-link:hover, .nav-link.active { color: var(--text); background: var(--surface-hover); }
-    .nav-link.active { color: var(--accent); }
     .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; min-width: 0; }
     .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
     .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
@@ -319,6 +315,7 @@
     .gantt-bar:hover { filter: brightness(1.2); }
     .gantt-bar-label { font-size: 0.62rem; color: #fff; padding: 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
 <body>
@@ -334,6 +331,7 @@
     <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/app-hub.html">App Hub</a>
     <a class="nav-link" href="/theme-builder.html">Theme</a>
   </div>
   <div class="nav-project-badge">
@@ -483,6 +481,10 @@
     <div class="modal-title" id="taskModalTitle">Neuer Task</div>
     <div class="alert alert-error" id="taskError"></div>
     <form id="taskForm">
+      <div class="form-group" id="taskProjectGroup" style="display:none">
+        <label for="taskProjectId">Projekt *</label>
+        <select id="taskProjectId"></select>
+      </div>
       <div class="form-group">
         <label for="taskTitle">Titel *</label>
         <input type="text" id="taskTitle" required placeholder="Task-Titel eingeben" />
@@ -579,6 +581,10 @@
     <div class="modal-title">Neuer Log-Eintrag</div>
     <div class="alert alert-error" id="docError"></div>
     <form id="docForm">
+      <div class="form-group" id="docProjectGroup" style="display:none">
+        <label for="docProjectId">Projekt *</label>
+        <select id="docProjectId"></select>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label for="docType">Typ *</label>
@@ -1201,33 +1207,56 @@
     selectedTaskTags = d._tags ? d._tags.slice() : [];
     renderTaskTags();
 
+    // Project picker (general mode only)
+    var taskProjGroup = document.getElementById('taskProjectGroup');
+    var taskProjSel   = document.getElementById('taskProjectId');
+    var _general = isGeneral();
+    taskProjGroup.style.display = _general ? '' : 'none';
+    taskProjSel.required = _general;
+    if (_general) {
+      taskProjSel.innerHTML = '<option value="">— Projekt wählen —</option>' + allProjects.map(function (p) {
+        return '<option value="' + p.id + '">' + escHtml((p.customer_name ? p.customer_name + ' / ' : '') + (p.name || p.id)) + '</option>';
+      }).join('');
+      if (state.project) taskProjSel.value = String(state.project);
+    }
+
+    function _resolvedTaskProject() { return _general ? taskProjSel.value : state.project; }
+
+    function _loadTaskProjectDropdowns(pid) {
+      var assigneeSel = document.getElementById('taskAssignee');
+      var parentSel   = document.getElementById('taskParent');
+      if (!pid) {
+        assigneeSel.innerHTML = '<option value="">— Niemand —</option>';
+        parentSel.innerHTML   = '<option value="">— Kein Parent —</option>';
+        return;
+      }
+      apiFetch('/api/projects/' + encodeURIComponent(pid) + '/members').then(function (r) { return r.ok ? r.json() : []; }).then(function (users) {
+        allUsers = Array.isArray(users) ? users : [];
+        assigneeSel.innerHTML = '<option value="">— Niemand —</option>' + allUsers.map(function (u) {
+          return '<option value="' + u.id + '">' + escHtml(u.display_name || u.email) + '</option>';
+        }).join('');
+        if (d.assignee_id) assigneeSel.value = String(d.assignee_id);
+      }).catch(function () {});
+      apiFetch('/api/tasks?project_id=' + encodeURIComponent(pid) + '&status=open').then(function (r) { return r.ok ? r.json() : []; }).then(function (tasks) {
+        tasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
+        parentSel.innerHTML = '<option value="">— Kein Parent —</option>' + tasks.filter(function (t) { return t.id !== _editTaskId; }).map(function (t) {
+          return '<option value="' + t.id + '">' + escHtml(t.title) + '</option>';
+        }).join('');
+        if (d.parent_task_id) parentSel.value = String(d.parent_task_id);
+      }).catch(function () {});
+    }
+
+    _loadTaskProjectDropdowns(_resolvedTaskProject());
+    if (_general) {
+      taskProjSel.onchange = function () { _loadTaskProjectDropdowns(taskProjSel.value); };
+    }
+
     // Populate dropdowns
     var appSel = document.getElementById('taskApp');
     appSel.innerHTML = '<option value="">— Keine App —</option>' + allApps.map(function (a) {
       return '<option value="' + escHtml(a.app_id || a.id) + '">' + escHtml(a.name || a.app_id) + '</option>';
     }).join('');
     if (d.qlik_app_id) appSel.value = d.qlik_app_id;
-
-    var assigneeSel = document.getElementById('taskAssignee');
-    assigneeSel.innerHTML = '<option value="">— Niemand —</option>';
-    apiFetch('/api/projects/' + encodeURIComponent(state.project) + '/members').then(function (r) { return r.ok ? r.json() : []; }).then(function (users) {
-      allUsers = Array.isArray(users) ? users : [];
-      assigneeSel.innerHTML = '<option value="">— Niemand —</option>' + allUsers.map(function (u) {
-        return '<option value="' + u.id + '">' + escHtml(u.display_name || u.email) + '</option>';
-      }).join('');
-      if (d.assignee_id) assigneeSel.value = String(d.assignee_id);
-    }).catch(function () {});
-
-    var parentSel = document.getElementById('taskParent');
-    parentSel.innerHTML = '<option value="">— Kein Parent —</option>';
-    apiFetch('/api/tasks?project_id=' + encodeURIComponent(state.project) + '&status=open').then(function (r) { return r.ok ? r.json() : []; }).then(function (tasks) {
-      tasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
-      // exclude the task being edited from parent options
-      parentSel.innerHTML = '<option value="">— Kein Parent —</option>' + tasks.filter(function(t){ return t.id !== _editTaskId; }).map(function (t) {
-        return '<option value="' + t.id + '">' + escHtml(t.title) + '</option>';
-      }).join('');
-      if (d.parent_task_id) parentSel.value = String(d.parent_task_id);
-    }).catch(function () {});
 
     // Pre-fill fields
     if (d.title)              document.getElementById('taskTitle').value      = d.title;
@@ -1436,8 +1465,10 @@
     e.preventDefault();
     var errEl = document.getElementById('taskError');
     errEl.style.display = 'none';
+    var _taskPid = isGeneral() ? document.getElementById('taskProjectId').value : state.project;
+    if (!_taskPid) { errEl.textContent = 'Bitte Projekt wählen.'; errEl.style.display = 'block'; return; }
     var body = {
-      project_id: parseInt(state.project, 10),
+      project_id: parseInt(_taskPid, 10),
       title: document.getElementById('taskTitle').value.trim(),
       description: document.getElementById('taskDesc').value.trim() || null,
       status: document.getElementById('taskStatus').value,
@@ -1486,6 +1517,18 @@
     document.getElementById('docError').style.display = 'none';
     document.getElementById('docDate').value = new Date().toISOString().slice(0, 10);
 
+    var docProjGroup = document.getElementById('docProjectGroup');
+    var docProjSel   = document.getElementById('docProjectId');
+    var _general = isGeneral();
+    docProjGroup.style.display = _general ? '' : 'none';
+    docProjSel.required = _general;
+    if (_general) {
+      docProjSel.innerHTML = '<option value="">— Projekt wählen —</option>' + allProjects.map(function (p) {
+        return '<option value="' + p.id + '">' + escHtml((p.customer_name ? p.customer_name + ' / ' : '') + (p.name || p.id)) + '</option>';
+      }).join('');
+      if (state.project) docProjSel.value = String(state.project);
+    }
+
     var appSel = document.getElementById('docApp');
     appSel.innerHTML = buildDocAppSelectOptions(d.qlik_app_id || '');
 
@@ -1512,10 +1555,12 @@
     e.preventDefault();
     var errEl = document.getElementById('docError');
     errEl.style.display = 'none';
+    var _docPid = isGeneral() ? document.getElementById('docProjectId').value : state.project;
+    if (!_docPid) { errEl.textContent = 'Bitte Projekt wählen.'; errEl.style.display = 'block'; return; }
     var vals = docEditor ? docEditor.getValues() : { was: '', warum: null };
     var selectedAppId = document.getElementById('docApp').value || null;
     var body = {
-      project_id: parseInt(state.project, 10),
+      project_id: parseInt(_docPid, 10),
       entry_type: document.getElementById('docType').value,
       qlik_app_id: selectedAppId,
       betrifft:    selectedAppId ? appNameById(selectedAppId) : null,
@@ -1743,8 +1788,6 @@
     var dimNav = isGeneral();
     document.getElementById('navCustomerSelect').disabled = dimNav;
     document.getElementById('navProjectSelect').disabled = dimNav;
-    document.getElementById('btnNewTask').disabled = dimNav;
-    document.getElementById('btnNewDoc').disabled = dimNav;
     updateHeader();
     refreshDashboard();
   });

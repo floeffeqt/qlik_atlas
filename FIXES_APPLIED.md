@@ -1,5 +1,46 @@
 # Build & Startup Issues - FIXED
 
+## [BUGFIX] 2026-04-28 Lineage: Außerhalb-Filter entfernt Shared-Nodes fälschlicherweise
+
+- Severity: medium
+- Area: frontend/lineage.html
+- Source: code-review / correctness audit
+- Symptoms: Beim Ausblenden von Outside-Area-Apps wurden Table-/Field-Nodes, die
+  sowohl mit einer Inside-Area-App als auch mit Outside-Area-Apps verbunden sind
+  (Shared Sources), fälschlicherweise aus dem Graph entfernt.
+- Root Cause: `collectIntermediateNodesBetweenOutsideApps` stellte die falsche Frage:
+  „Liegt dieser Node auf einem Pfad zwischen zwei Outside-Apps?" statt
+  „Ist dieser Node nach dem Entfernen der Outside-Apps noch von einer Inside-App
+  erreichbar?" — führte zu O(V×(V+E))-Laufzeit und falschen Ergebnissen bei
+  gemeinsam genutzten Datenquellen.
+- Fix: Funktion `collectIntermediateNodesBetweenOutsideApps` entfernt. Ersetzt durch:
+  1. Kanten zu Outside-Apps entfernen (cleanEdges)
+  2. BFS via `collectReachableNodeIds` von allen Inside-Area-Apps auf cleanEdges
+  3. Nodes, die nicht erreichbar sind, als Waisen ausblenden
+  Komplexität: O(V+E) statt O(V×(V+E)); korrekt auch bei Shared Sources.
+- Changed Files: frontend/lineage.html
+- Verification: JS-Syntax-Check (node -e "new Function(...)") → pass; Docker rebuild → started clean
+- Residual Risk: none
+
+## [FEATURE] 2026-04-20 Admin-Übersicht Fetch-Zeitpläne
+
+- Area: backend/main.py, frontend/admin.html
+- Changes:
+  1. `GET /api/fetch/schedules`: `project_id` optional — ohne Parameter alle Schedules via JOIN `projects` → `customers`, mit `project_name` + `customer_name`
+  2. `admin.html`: Sidebar-Tab "Fetch-Zeitpläne" — Tabelle aller Zeitpläne, Aktivieren/Deaktivieren-Toggle (PUT), Löschen (DELETE), Reload-Button
+- Changed Files: `backend/main.py`, `frontend/admin.html`
+- Residual Risk: none
+
+## [FEATURE] 2026-04-20 Fetch-Job SSE + Master Items Checkbox-Selektion + Geplante Fetch-Jobs
+
+- Area: backend/main.py, frontend/script-sync.html, backend/app/master_items
+- Changes:
+  1. **SSE Progress Streaming**: `GET /api/fetch/jobs/{job_id}/stream` — Server-Sent Events statt 1.5s-Polling; Fallback auf XHR-Polling wenn EventSource nicht verfügbar
+  2. **Master Items Checkbox-Selektion**: Nach Diff erscheint Item-Panel (Neu=✓, Konflikt=✓, Gleich=☐); Import sendet nur ausgewählte Items als `source_export` — kein Re-Export, keine zweite WS-Verbindung
+  3. **Geplante Fetch-Jobs**: Migration 0027, FetchSchedule-Model, APScheduler AsyncIOScheduler, 4 CRUD-Endpoints, Frontend-UI mit Cron-Modal und Zeitplan-Tabelle
+- Changed Files: `backend/main.py`, `backend/requirements.txt`, `backend/alembic/versions/0027_fetch_schedules.py`, `backend/app/models.py`, `backend/app/master_items/routes.py`, `frontend/script-sync.html`
+- Residual Risk: APScheduler läuft im gleichen asyncio event loop — bei sehr langen CPU-bound Operationen könnte er blockieren (in der Praxis unkritisch da Fetch-Jobs I/O-bound sind)
+
 ## [REFACTOR] 2026-04-20 WebSocket-Duplizierung beseitigt + geteilter Credential-Resolver
 
 - Area: backend/shared, backend/app/master_items, backend/app/themes

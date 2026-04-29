@@ -57,23 +57,6 @@
       pointer-events: none;
       z-index: 0;
     }
-    body.theme-classic {
-      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-      --surface: rgba(255,255,255,0.05);
-      --surface-hover: rgba(255,255,255,0.08);
-      --border: rgba(255,255,255,0.1);
-      --accent: #667eea;
-      --accent2: #764ba2;
-      --accent3: #14b8a6;
-      --text-muted: rgba(255,255,255,0.5);
-      --text-dim: rgba(255,255,255,0.3);
-      --glow-cyan: none;
-      --glow-pink: none;
-    }
-    body.theme-classic::before,
-    body.theme-classic::after {
-      opacity: 0.08;
-    }
     body.theme-performance {
       --bg: linear-gradient(135deg, #0d1324 0%, #101a32 50%, #132447 100%);
       --surface: rgba(255,255,255,0.035);
@@ -155,17 +138,7 @@
       box-shadow: var(--glow-cyan), var(--glow-pink);
     }
     .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
-    .nav-link {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.875rem;
-      padding: 0.4rem 0.75rem;
-      border-radius: var(--radius-sm);
-      transition: color 0.15s, background 0.15s, box-shadow 0.15s;
-    }
-    .nav-link:hover { color: var(--text); background: var(--surface-hover); box-shadow: inset 0 0 0 1px rgba(56,189,248,0.2); }
-    .nav-link.active { color: #9be7ff; background: rgba(56,189,248,0.16); box-shadow: inset 0 0 0 1px rgba(56,189,248,0.34), var(--glow-cyan); }
+
     .nav-project-badge {
       margin-left: 0.5rem;
       padding: 0.25rem 0.55rem;
@@ -219,7 +192,12 @@
       border-bottom: 1px solid rgba(56,189,248,0.24);
       backdrop-filter: blur(16px);
       box-shadow: inset 0 -1px 0 rgba(255,255,255,0.03);
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(56,189,248,0.3) transparent;
     }
+    .toolbar > * { flex-shrink: 0; }
     .toolbar-label { font-size: 0.8rem; color: var(--text-muted); }
     select {
       padding: 0.35rem 0.75rem;
@@ -519,9 +497,10 @@
 
     /* ── ADMIN FAB ── */
   </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
-<body class="lineage-page theme-neon">
+<body class="lineage-page theme-performance">
 
 <nav>
   <a class="nav-brand" href="/">
@@ -534,6 +513,7 @@
     <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link active" href="/lineage.html">Lineage</a>
     <a class="nav-link" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/app-hub.html">App Hub</a>
     <a class="nav-link" href="/theme-builder.html">Theme</a>
   </div>
   <div class="nav-project-badge" id="navCustomerBadge">
@@ -564,13 +544,6 @@
     <option value="file">File</option>
     <option value="other">Other</option>
   </select>
-  <span class="toolbar-label">Lineage-Ebene:</span>
-  <select id="lineageLevelFilter">
-    <option value="all">All</option>
-    <option value="resource">Resource</option>
-    <option value="table">Table</option>
-    <option value="field">Field</option>
-  </select>
   <span class="toolbar-label">App:</span>
   <select id="appFilter">
     <option value="">Alle</option>
@@ -589,12 +562,6 @@
     <option value="force">Force Graph</option>
     <option value="tidy">Tidy Tree</option>
   </select>
-  <span class="toolbar-label">Theme:</span>
-  <select id="themeSelect">
-    <option value="neon">Neon</option>
-    <option value="classic">Classic</option>
-    <option value="performance">Performance</option>
-  </select>
   <input id="searchInput" class="toolbar-input" type="text" placeholder="Suche nach Name, ID, App, Bereich..." />
   <div class="toolbar-sep"></div>
   <button class="btn-toolbar primary" id="loadBtn">↻ Graph laden</button>
@@ -604,6 +571,8 @@
   <span class="stat-pill" id="nodeCount">0 Nodes</span>
   <span class="stat-pill" id="edgeCount">0 Edges</span>
   <span class="stat-pill warning" id="outAreaCount" style="display:none;">0 App(s) ausserhalb Bereich</span>
+  <div class="toolbar-sep"></div>
+  <button class="btn-toolbar" id="btnExportHtml" title="Aktuellen Graph als eigenst&#228;ndige HTML-Datei exportieren">&#x2B07; Export</button>
 </div>
 
 <div class="graph-wrap">
@@ -797,39 +766,11 @@
     setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
   }
 
-  var THEME_STORAGE_KEY = 'lineage_theme_mode_v1';
-  var LINEAGE_LEVEL_FILTER_STORAGE_KEY = 'lineage_level_filter_v1';
-  function normalizeThemeMode(mode) {
-    var m = String(mode || '').trim().toLowerCase();
-    if (m === 'classic' || m === 'performance') return m;
-    return 'neon';
+  function applyThemeMode() {
+    document.body.classList.remove('theme-neon', 'theme-classic');
+    document.body.classList.add('theme-performance');
   }
-  function applyThemeMode(mode, persist) {
-    var normalized = normalizeThemeMode(mode);
-    document.body.classList.remove('theme-neon', 'theme-classic', 'theme-performance');
-    document.body.classList.add('theme-' + normalized);
-    var sel = document.getElementById('themeSelect');
-    if (sel && sel.value !== normalized) sel.value = normalized;
-    if (persist) {
-      try { localStorage.setItem(THEME_STORAGE_KEY, normalized); } catch (e) {}
-    }
-  }
-  (function initThemeMode() {
-    var stored = null;
-    try { stored = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
-    applyThemeMode(stored || 'neon', false);
-  })();
-  (function initLineageLevelFilter() {
-    var sel = document.getElementById('lineageLevelFilter');
-    if (!sel) return;
-    var stored = null;
-    try { stored = localStorage.getItem(LINEAGE_LEVEL_FILTER_STORAGE_KEY); } catch (e) {}
-    var value = String(stored || 'all').toLowerCase();
-    if (value !== 'all' && value !== 'resource' && value !== 'table' && value !== 'field') {
-      value = 'all';
-    }
-    sel.value = value;
-  })();
+  applyThemeMode();
 
   var nodeColors = {
     app: '#38bdf8',
@@ -853,24 +794,20 @@
   syncLegendNodeColors();
   function normalizedNodeType(type) {
     var t = String(type || '').toLowerCase();
+    if (t === 'application') t = 'app';
     return nodeColors[t] ? t : 'other';
   }
-  function nodePassesLineageLevel(nodeType, levelMode) {
-    var t = normalizedNodeType(nodeType);
-    var level = String(levelMode || 'all').toLowerCase();
-    if (level === 'all' || level === 'field') return true;
-    if (level === 'table') return t !== 'field';
-    if (level === 'resource') return t !== 'field' && t !== 'table';
-    return true;
-  }
   function nodeAppId(node) {
+    if (normalizedNodeType(node && node.type) === 'app') {
+      return String((node && (node.id || node.appId || (node.meta && (node.meta.appId || node.meta.app_id)))) || '').trim();
+    }
     return String((node && (node.group || node.appId || (node.meta && (node.meta.appId || node.meta.app_id)))) || '').trim();
   }
   function nodeAppName(node) {
-    return String((node && ((node.meta && node.meta.appName) || (node.meta && node.meta.app_name) || (node.type === 'app' ? node.label : ''))) || '').trim();
+    return String((node && ((node.meta && node.meta.appName) || (node.meta && node.meta.app_name) || (normalizedNodeType(node.type) === 'app' ? node.label : ''))) || '').trim();
   }
   function nodeSpaceId(node) {
-    return String((node && ((node.meta && (node.meta.spaceId || node.meta.space_id)) || (node.type === 'app' ? node.group : ''))) || '').trim();
+    return String((node && ((node.meta && (node.meta.spaceId || node.meta.space_id)) || (normalizedNodeType(node.type) === 'app' ? node.group : ''))) || '').trim();
   }
   function nodeSpaceName(node) {
     return String((node && ((node.meta && (node.meta.spaceName || node.meta.space_name)) || (node.meta && node.meta.area) || '')) || '').trim();
@@ -1125,70 +1062,6 @@
     }
     return visited;
   }
-  function collectIntermediateNodesBetweenOutsideApps(outsideAppIds, edges) {
-    var outsideList = Array.from(outsideAppIds || []).map(function(id) { return String(id); });
-    if (outsideList.length < 2) return new Set();
-
-    var adjacency = Object.create(null);
-    (edges || []).forEach(function(e) {
-      var s = edgeNodeId(e.source);
-      var t = edgeNodeId(e.target);
-      if (!s || !t) return;
-      s = String(s);
-      t = String(t);
-      if (!adjacency[s]) adjacency[s] = [];
-      if (!adjacency[t]) adjacency[t] = [];
-      adjacency[s].push(t);
-      adjacency[t].push(s);
-    });
-
-    var outsideSet = new Set(outsideList);
-    var intermediate = new Set();
-
-    for (var i = 0; i < outsideList.length; i++) {
-      var source = outsideList[i];
-      if (!adjacency[source]) continue;
-
-      var queue = [source];
-      var seen = Object.create(null);
-      var prev = Object.create(null);
-      seen[source] = true;
-      prev[source] = null;
-
-      while (queue.length) {
-        var cur = queue.shift();
-        var nexts = adjacency[cur] || [];
-        for (var n = 0; n < nexts.length; n++) {
-          var nextId = String(nexts[n]);
-          if (seen[nextId]) continue;
-          seen[nextId] = true;
-          prev[nextId] = cur;
-          queue.push(nextId);
-        }
-      }
-
-      for (var j = i + 1; j < outsideList.length; j++) {
-        var target = outsideList[j];
-        if (!seen[target]) continue;
-
-        var path = [];
-        var cursor = target;
-        while (cursor !== null && typeof cursor !== 'undefined') {
-          path.push(cursor);
-          if (cursor === source) break;
-          cursor = prev[cursor];
-        }
-        if (!path.length || path[path.length - 1] !== source) continue;
-
-        for (var k = 1; k < path.length - 1; k++) {
-          var mid = String(path[k]);
-          if (!outsideSet.has(mid)) intermediate.add(mid);
-        }
-      }
-    }
-
-    return intermediate;
-  }
   function graphNodeDisplayLabel(node) {
     var raw = String((node && (node.label || node.id)) || '').trim();
     if (!raw) return '';
@@ -1356,6 +1229,7 @@
   var simulation = null;
   var currentTransform = d3.zoomIdentity;
   var lastData = null;
+  var _exportState = null;
   var autoFitPending = false;
   var shouldAutoFitOnNextRender = true;
   var isProgrammaticZoom = false;
@@ -2088,7 +1962,6 @@
     var viewMode = document.getElementById('viewMode').value || 'force';
     var outsideAreaMode = document.getElementById('outsideAreaMode').value || 'show';
     var typeFilter = document.getElementById('typeFilter').value;
-    var lineageLevelFilter = document.getElementById('lineageLevelFilter').value || 'all';
     var appFilter = document.getElementById('appFilter').value;
     var areaFilter = document.getElementById('areaFilter').value;
     var areaFilterValue = String(areaFilter || '').trim().toLowerCase();
@@ -2110,7 +1983,6 @@
     }
 
     var filteredNodes = rawNodes.filter(function(n) {
-      if (!nodePassesLineageLevel(n.type, lineageLevelFilter)) return false;
       if (baseVisibleNodeIds && !baseVisibleNodeIds.has(String(n.id))) return false;
       if (typeFilter && normalizedNodeType(n.type) !== typeFilter) {
         if (!(viewMode === 'tidy' && normalizedNodeType(n.type) === 'app')) return false;
@@ -2133,17 +2005,29 @@
           .map(function(n) { return String(n.id); })
       );
       hiddenOutOfAreaAppCount = outsideAppNodeIds.size;
-      var betweenOutsideNodeIds = collectIntermediateNodesBetweenOutsideApps(outsideAppNodeIds, filteredEdges);
-      hiddenBetweenOutsideCount = betweenOutsideNodeIds.size;
 
-      if (hiddenOutOfAreaAppCount > 0 || hiddenBetweenOutsideCount > 0) {
-        var excludedNodeIds = new Set();
-        outsideAppNodeIds.forEach(function(id) { excludedNodeIds.add(id); });
-        betweenOutsideNodeIds.forEach(function(id) { excludedNodeIds.add(String(id)); });
-
-        filteredNodes = filteredNodes.filter(function(n) { return !excludedNodeIds.has(String(n.id)); });
+      if (outsideAppNodeIds.size > 0) {
+        // Drop edges that touch any outside-area app, then BFS from the
+        // remaining inside-area apps. Any node not reachable from an
+        // inside-area app after this is an orphan and must be hidden too.
+        var cleanEdges = filteredEdges.filter(function(e) {
+          return !outsideAppNodeIds.has(String(e.source)) && !outsideAppNodeIds.has(String(e.target));
+        });
+        var insideAppIds = new Set(
+          filteredNodes
+            .filter(function(n) {
+              return normalizedNodeType(n.type) === 'app' && !outsideAppNodeIds.has(String(n.id));
+            })
+            .map(function(n) { return String(n.id); })
+        );
+        var reachable = collectReachableNodeIds(insideAppIds, cleanEdges);
+        var beforeCount = filteredNodes.length;
+        filteredNodes = filteredNodes.filter(function(n) {
+          return !outsideAppNodeIds.has(String(n.id)) && reachable.has(String(n.id));
+        });
+        hiddenBetweenOutsideCount = beforeCount - hiddenOutOfAreaAppCount - filteredNodes.length;
         nodeIds = new Set(filteredNodes.map(function(n) { return String(n.id); }));
-        filteredEdges = filteredEdges.filter(function(e) {
+        filteredEdges = cleanEdges.filter(function(e) {
           return nodeIds.has(String(e.source)) && nodeIds.has(String(e.target));
         });
       }
@@ -2166,6 +2050,12 @@
     document.getElementById('nodeCount').textContent = filteredNodes.length + ' nodes';
     document.getElementById('edgeCount').textContent = filteredEdges.length + ' edges';
     document.getElementById('emptyState').classList.toggle('show', !filteredNodes.length);
+    _exportState = {
+      nodes: filteredNodes,
+      edges: filteredEdges,
+      filters: { type: typeFilter, app: appFilter, area: areaFilter, outside: outsideAreaMode, search: searchTerm },
+      ts: new Date().toISOString(),
+    };
 
     var simNodes = filteredNodes.map(function(n) {
       var copy = Object.assign({}, n);
@@ -2606,12 +2496,6 @@
     shouldAutoFitOnNextRender = false;
     maybeRenderLastData();
   });
-  document.getElementById('lineageLevelFilter').addEventListener('change', function() {
-    var value = String(document.getElementById('lineageLevelFilter').value || 'all').toLowerCase();
-    try { localStorage.setItem(LINEAGE_LEVEL_FILTER_STORAGE_KEY, value); } catch (e) {}
-    shouldAutoFitOnNextRender = false;
-    maybeRenderLastData();
-  });
   document.getElementById('appFilter').addEventListener('change', function() {
     var selected = String(document.getElementById('appFilter').value || '').trim();
     deepLinkHighlightPending = !!selected;
@@ -2636,18 +2520,6 @@
     maybeRenderLastData();
   });
   document.getElementById('searchInput').addEventListener('input', debounceRender);
-  document.getElementById('themeSelect').addEventListener('change', function() {
-    var mode = String(document.getElementById('themeSelect').value || 'neon');
-    applyThemeMode(mode, true);
-    if (mode === 'performance') {
-      showToast('Theme: Performance (reduzierte Effekte)', 1800);
-    } else if (mode === 'classic') {
-      showToast('Theme: Classic', 1400);
-    } else {
-      showToast('Theme: Neon', 1400);
-    }
-  });
-
   document.getElementById('zoomIn').addEventListener('click', function() {
     autoFitPending = false;
     svg.transition().duration(250).call(zoom.scaleBy, 1.4);
@@ -2874,6 +2746,172 @@
       renderCommentBadges();
     } catch (e) { showToast('Fehler beim Speichern'); }
   });
+
+  // ── HTML Export ───────────────────────────────────────────────────────────
+  function exportLineageHtml() {
+    if (!_exportState || !_exportState.nodes.length) {
+      showToast('Kein Graph geladen — bitte zuerst laden.', 3000);
+      return;
+    }
+    var st = _exportState;
+    var fp = [];
+    if (st.filters.type) fp.push('Typ: ' + st.filters.type);
+    if (st.filters.app) fp.push('App: ' + st.filters.app);
+    if (st.filters.area) fp.push('Bereich: ' + st.filters.area);
+    if (st.filters.outside === 'hide') fp.push('Außerhalb ausgeblendet');
+    if (st.filters.search) fp.push('Suche: „' + st.filters.search + '“');
+    var filterStr = fp.length ? fp.join(' · ') : 'Keine aktiven Filter';
+    var dateStr = new Date(st.ts).toLocaleString('de-DE');
+
+    function he(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    var typesPresent = {};
+    st.nodes.forEach(function(n) { if (n.type) typesPresent[String(n.type).toLowerCase()] = true; });
+    var legendHtml = Object.keys(nodeColors).filter(function(t) { return typesPresent[t]; }).map(function(t) {
+      return '<div class="li"><div class="ld" style="background:' + nodeColors[t] + '"></div>' + he(t.charAt(0).toUpperCase() + t.slice(1)) + '</div>';
+    }).join('');
+
+    var nodesJson = JSON.stringify(st.nodes);
+    var edgesJson = JSON.stringify(st.edges);
+    var colorsJson = JSON.stringify(nodeColors);
+
+    var rendererLines = [
+      '(function() {',
+      'var NC = ' + colorsJson + ';',
+      "function nc(t){var k=String(t||'').toLowerCase();return NC[k]||NC.other||'#94a3b8';}",
+      "function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}",
+      'var W=window.innerWidth,H=window.innerHeight-56;',
+      'var svgEl=document.getElementById("graph");',
+      'svgEl.setAttribute("width",W);svgEl.setAttribute("height",H);',
+      'var svg=d3.select(svgEl),g=svg.append("g");',
+      'var zoom=d3.zoom().scaleExtent([0.03,12]).on("zoom",function(e){g.attr("transform",e.transform);});',
+      'svg.call(zoom);',
+      'var nodes=NODES.map(function(n){return Object.assign({},n);});',
+      'var nmap={};nodes.forEach(function(n){nmap[String(n.id)]=n;});',
+      "var edges=EDGES.filter(function(e){return nmap[String(e.source)]&&nmap[String(e.target)];}).map(function(e){return Object.assign({},e);});",
+      'var defs=svg.append("defs");',
+      'defs.append("marker").attr("id","arr").attr("viewBox","0 0 10 10").attr("refX",20).attr("refY",5).attr("markerWidth",5).attr("markerHeight",5).attr("orient","auto-start-reverse").append("path").attr("d","M0,0 L10,5 L0,10 z").attr("fill","rgba(255,255,255,0.18)");',
+      'var sim=d3.forceSimulation(nodes)',
+      '  .force("link",d3.forceLink(edges).id(function(d){return String(d.id);}).distance(85))',
+      '  .force("charge",d3.forceManyBody().strength(-220))',
+      '  .force("center",d3.forceCenter(W/2,H/2))',
+      '  .force("collision",d3.forceCollide(24));',
+      'var link=g.append("g").selectAll("line").data(edges).enter().append("line")',
+      '  .attr("stroke","rgba(255,255,255,0.1)").attr("stroke-width",1.2).attr("marker-end","url(#arr)");',
+      'var dragBeh=d3.drag()',
+      '  .on("start",function(e,d){if(!e.active)sim.alphaTarget(0.3).restart();d.fx=d.x;d.fy=d.y;})',
+      '  .on("drag",function(e,d){d.fx=e.x;d.fy=e.y;})',
+      '  .on("end",function(e,d){if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null;});',
+      'var nd=g.append("g").selectAll("g").data(nodes).enter().append("g").call(dragBeh)',
+      '  .on("click",function(e,d){e.stopPropagation();showPanel(d);});',
+      'nd.append("circle")',
+      "  .attr('r',function(d){return String(d.type||'').toLowerCase()==='app'?14:8;})",
+      "  .attr('fill',function(d){return nc(d.type);})",
+      "  .attr('fill-opacity',0.85).attr('stroke','#fff').attr('stroke-width',1.2).attr('stroke-opacity',0.18);",
+      'nd.append("text")',
+      "  .attr('dy',function(d){return String(d.type||'').toLowerCase()==='app'?27:20;})",
+      "  .attr('text-anchor','middle')",
+      "  .attr('font-size',function(d){return String(d.type||'').toLowerCase()==='app'?'11px':'9px';})",
+      "  .attr('fill','#cbd5e1').attr('fill-opacity',0.75)",
+      "  .text(function(d){var l=String(d.label||d.id||'');return l.length>22?l.slice(0,20)+'…':l;});",
+      'sim.on("tick",function(){',
+      '  link.attr("x1",function(d){return d.source.x;}).attr("y1",function(d){return d.source.y;})',
+      '      .attr("x2",function(d){return d.target.x;}).attr("y2",function(d){return d.target.y;});',
+      '  nd.attr("transform",function(d){return "translate("+d.x+","+d.y+")";});',
+      '});',
+      'sim.on("end",function(){',
+      '  try{var b=g.node().getBBox();if(!b.width||!b.height)return;',
+      '  var s=Math.min(0.9,Math.min(W/b.width,H/b.height));',
+      '  var tx=W/2-s*(b.x+b.width/2),ty=H/2-s*(b.y+b.height/2);',
+      '  svg.transition().duration(600).call(zoom.transform,d3.zoomIdentity.translate(tx,ty).scale(s));}catch(err){}',
+      '});',
+      'svg.on("click",function(){document.getElementById("panel").classList.add("hidden");});',
+      'function showPanel(d){',
+      "  var meta=d.meta||{};",
+      "  var html='<h3>'+esc(d.label||d.id||'–')+'</h3><table>';",
+      "  html+='<tr><td class=\"k\">Typ</td><td class=\"v\">'+esc(d.type||'–')+'</td></tr>';",
+      "  html+='<tr><td class=\"k\">ID</td><td class=\"v\">'+esc(String(d.id||'–'))+'</td></tr>';",
+      "  if(d.group)html+='<tr><td class=\"k\">Gruppe</td><td class=\"v\">'+esc(d.group)+'</td></tr>';",
+      '  Object.keys(meta).sort().forEach(function(k){',
+      "    var v=meta[k];if(v!=null&&String(v).length<300)html+='<tr><td class=\"k\">'+esc(k)+'</td><td class=\"v\">'+esc(String(v))+'</td></tr>';",
+      '  });',
+      "  html+='</table>';",
+      '  document.getElementById("panelContent").innerHTML=html;',
+      '  document.getElementById("panel").classList.remove("hidden");',
+      '}',
+      'document.getElementById("panelClose").addEventListener("click",function(){document.getElementById("panel").classList.add("hidden");});',
+      'window.addEventListener("resize",function(){',
+      '  W=window.innerWidth;H=window.innerHeight-56;',
+      '  svgEl.setAttribute("width",W);svgEl.setAttribute("height",H);',
+      '  sim.force("center",d3.forceCenter(W/2,H/2)).alpha(0.1).restart();',
+      '});',
+      '})();'
+    ].join('\n');
+
+    var css = [
+      '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}',
+      'body{background:#0d1324;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden;}',
+      '#hdr{height:56px;display:flex;align-items:center;gap:1rem;padding:0 1.25rem;background:rgba(15,20,40,0.95);border-bottom:1px solid rgba(255,255,255,0.08);}',
+      '#hdr-title{font-size:0.95rem;font-weight:700;white-space:nowrap;}',
+      '.hdr-sep{width:1px;height:20px;background:rgba(255,255,255,0.1);flex-shrink:0;}',
+      '.hdr-meta{font-size:0.78rem;color:rgba(226,238,255,0.5);white-space:nowrap;}',
+      '.hdr-filters{font-size:0.78rem;color:rgba(255,255,255,0.35);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}',
+      '.hdr-spacer{flex:1;}',
+      '.hdr-badge{font-size:0.72rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:0.2rem 0.6rem;color:rgba(226,238,255,0.45);white-space:nowrap;}',
+      'svg#graph{display:block;cursor:grab;}svg#graph:active{cursor:grabbing;}',
+      '#panel{position:fixed;top:68px;right:1rem;width:280px;max-height:calc(100vh - 80px);background:rgba(10,15,40,0.97);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:1rem;overflow-y:auto;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.45);}',
+      '#panel.hidden{display:none;}',
+      '#panel h3{font-size:0.9rem;font-weight:700;margin-bottom:0.75rem;word-break:break-all;padding-right:1.5rem;line-height:1.3;}',
+      '#panel table{width:100%;border-collapse:collapse;font-size:0.78rem;}',
+      '#panel td{padding:0.25rem 0.4rem;vertical-align:top;border-bottom:1px solid rgba(255,255,255,0.04);}',
+      '#panel td.k{color:rgba(255,255,255,0.45);width:80px;white-space:nowrap;}',
+      '#panel td.v{word-break:break-all;font-family:"Courier New",monospace;font-size:0.73rem;color:#cbd5e1;}',
+      '#panelClose{position:absolute;top:0.55rem;right:0.65rem;background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:1.1rem;line-height:1;}',
+      '#panelClose:hover{color:#fff;}',
+      '#legend{position:fixed;bottom:1rem;left:1rem;background:rgba(10,15,40,0.88);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:0.55rem 0.8rem;font-size:0.73rem;}',
+      '.li{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.22rem;color:rgba(226,238,255,0.55);}',
+      '.li:last-child{margin-bottom:0;}.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0;}'
+    ].join('\n');
+
+    var html = '<!doctype html>\n<html lang="de">\n<head>\n'
+      + '<meta charset="UTF-8">\n'
+      + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+      + '<title>Lineage Export — ' + he(dateStr) + '</title>\n'
+      + '<style>' + css + '</style>\n'
+      + '</head>\n<body>\n'
+      + '<div id="hdr">'
+      +   '<span id="hdr-title">&#x1F578;&#xFE0F; Lineage Export</span>'
+      +   '<div class="hdr-sep"></div>'
+      +   '<span class="hdr-meta">' + he(dateStr) + '</span>'
+      +   '<div class="hdr-sep"></div>'
+      +   '<span class="hdr-filters">' + he(filterStr) + '</span>'
+      +   '<div class="hdr-spacer"></div>'
+      +   '<span class="hdr-badge">' + st.nodes.length + ' Nodes · ' + st.edges.length + ' Edges</span>'
+      + '</div>\n'
+      + '<svg id="graph"></svg>\n'
+      + '<div id="panel" class="hidden"><button id="panelClose">×</button><div id="panelContent"></div></div>\n'
+      + '<div id="legend">' + legendHtml + '</div>\n'
+      + '<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"><\/script>\n'
+      + '<script>\n'
+      + 'var NODES = ' + nodesJson + ';\n'
+      + 'var EDGES = ' + edgesJson + ';\n'
+      + rendererLines + '\n'
+      + '<\/script>\n'
+      + '</body>\n</html>';
+
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'lineage-export-' + new Date().toISOString().slice(0, 10) + '.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+    showToast('Export heruntergeladen', 2000);
+  }
+
+  document.getElementById('btnExportHtml').addEventListener('click', exportLineageHtml);
 
   // Override loadGraph to also load comment counts
   var _origLoadGraph = loadGraph;

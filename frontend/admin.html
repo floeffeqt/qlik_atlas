@@ -151,6 +151,7 @@
   <nav class="sidebar-nav">
     <a class="sidebar-link active" data-section="users"><span class="sidebar-link-icon">👤</span> Benutzer</a>
     <a class="sidebar-link" data-section="customers"><span class="sidebar-link-icon">🏢</span> Kunden</a>
+    <a class="sidebar-link" data-section="schedules"><span class="sidebar-link-icon">⏰</span> Fetch-Zeitpläne</a>
   </nav>
   <div class="sidebar-footer" id="adminEmail">—</div>
 </aside>
@@ -197,6 +198,27 @@
       </div>
     </div>
   </div>
+
+  <!-- === SCHEDULES SECTION === -->
+  <div class="section" id="schedulesSection">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Fetch-Zeitpläne</h1>
+        <p class="page-subtitle">Geplante Fetch-Jobs aller Kunden und Projekte (Erstellen/Bearbeiten über Script-Sync)</p>
+      </div>
+      <button class="btn-primary" id="reloadSchedulesBtn">&#x21BB; Aktualisieren</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Alle Zeitpläne</span>
+        <span id="scheduleCount" style="font-size:0.8rem;color:var(--text-dim)">—</span>
+      </div>
+      <div id="schedulesTableWrap">
+        <div class="empty-state"><div class="empty-icon">⏰</div>Lade&hellip;</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ══════════════ MODALS ══════════════ -->
@@ -601,6 +623,104 @@
     this.disabled = false;
     this.textContent = 'Löschen';
     deleteTargetId = null;
+  });
+
+  // ══════════════ FETCH-ZEITPLÄNE ══════════════
+
+  async function loadAllSchedules() {
+    var wrap = document.getElementById('schedulesTableWrap');
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">⏰</div>Lade&hellip;</div>';
+    try {
+      var res = await apiFetch('/api/fetch/schedules');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+      renderAllSchedules(data.schedules || []);
+    } catch(e) {
+      wrap.innerHTML = '<div class="empty-state">Fehler: ' + escHtml(e.message) + '</div>';
+    }
+  }
+
+  function renderAllSchedules(list) {
+    var wrap = document.getElementById('schedulesTableWrap');
+    document.getElementById('scheduleCount').textContent = list.length + ' Zeitplan' + (list.length !== 1 ? 'e' : '');
+    if (!list.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">⏰</div>Keine Zeitpläne konfiguriert.</div>';
+      return;
+    }
+    var rows = list.map(function(s) {
+      var steps = (s.steps || []).join(', ');
+      var nextRun = s.next_run_at ? new Date(s.next_run_at).toLocaleString('de-DE') : '&mdash;';
+      var lastRun = s.last_run_at ? new Date(s.last_run_at).toLocaleString('de-DE') : 'Noch nie';
+      var activeBadge = s.is_active
+        ? '<span class="badge badge-active">Aktiv</span>'
+        : '<span class="badge badge-inactive">Inaktiv</span>';
+      var toggleLabel = s.is_active ? 'Deaktivieren' : 'Aktivieren';
+      var toggleClass = s.is_active ? 'btn-danger' : 'btn-edit';
+      return '<tr>'
+        + '<td class="td-name">' + escHtml(s.customer_name || '—') + '</td>'
+        + '<td>' + escHtml(s.project_name || '—') + '</td>'
+        + '<td>' + escHtml(s.label || '—') + '</td>'
+        + '<td><code style="font-size:0.78rem;color:#a5b4fc;">' + escHtml(s.cron_expr) + '</code></td>'
+        + '<td style="color:var(--text-muted);font-size:0.8rem;">' + escHtml(steps) + '</td>'
+        + '<td>' + activeBadge + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + nextRun + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + lastRun + '</td>'
+        + '<td><div class="td-actions">'
+        + '<button class="' + toggleClass + '" data-toggle-sched="' + s.id + '" data-active="' + s.is_active + '">' + toggleLabel + '</button>'
+        + '<button class="btn-danger" data-del-sched="' + s.id + '" data-label="' + escHtml(s.label || s.cron_expr) + '">Löschen</button>'
+        + '</div></td>'
+        + '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table><thead><tr>'
+      + '<th>Kunde</th><th>Projekt</th><th>Bezeichnung</th><th>Cron (UTC)</th><th>Schritte</th><th>Status</th><th>Nächster Lauf</th><th>Letzter Lauf</th><th style="text-align:right">Aktionen</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+
+    wrap.querySelectorAll('[data-toggle-sched]').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var id = this.dataset.toggleSched;
+        var nowActive = this.dataset.active === 'true';
+        this.disabled = true;
+        try {
+          var res = await apiFetch('/api/fetch/schedules/' + id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: !nowActive }),
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          showToast(nowActive ? 'Zeitplan deaktiviert' : 'Zeitplan aktiviert');
+          await loadAllSchedules();
+        } catch(e) {
+          showToast('Fehler: ' + e.message);
+          this.disabled = false;
+        }
+      });
+    });
+
+    wrap.querySelectorAll('[data-del-sched]').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var id = this.dataset.delSched;
+        var label = this.dataset.label;
+        if (!confirm('Zeitplan "' + label + '" löschen?')) return;
+        this.disabled = true;
+        try {
+          var res = await apiFetch('/api/fetch/schedules/' + id, { method: 'DELETE' });
+          if (!res.ok && res.status !== 204) throw new Error('HTTP ' + res.status);
+          showToast('Zeitplan gelöscht');
+          await loadAllSchedules();
+        } catch(e) {
+          showToast('Fehler: ' + e.message);
+          this.disabled = false;
+        }
+      });
+    });
+  }
+
+  document.getElementById('reloadSchedulesBtn').addEventListener('click', loadAllSchedules);
+
+  document.querySelectorAll('.sidebar-link[data-section]').forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (this.dataset.section === 'schedules') loadAllSchedules();
+    });
   });
 
   // ══════════════ INIT ══════════════

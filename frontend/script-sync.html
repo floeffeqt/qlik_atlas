@@ -25,10 +25,6 @@
     .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
     .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; overflow: hidden; }
     .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
-    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
-    .nav-link:hover { color: var(--text); background: var(--surface-hover); }
-    .nav-link.active { color: var(--accent); background: var(--surface-hover); }
     .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; min-width: 0; }
     .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
     .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
@@ -184,14 +180,6 @@
     .sv-tab-section.sv-closed::before { transform: rotate(-90deg); }
     .sv-section-body.sv-collapsed { display: none; }
 
-    /* ── Tabs (reuse app-detail.html pattern) ── */
-    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.75rem; }
-    .tab-btn { padding: 0.65rem 1.25rem; font-size: 0.875rem; font-weight: 500; color: var(--text-muted); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
-    .tab-btn:hover { color: var(--text); }
-    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-
     /* ── Master Items specific ── */
     .mi-step { counter-increment: mi-step; }
     .mi-step-label { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.6rem; }
@@ -212,6 +200,17 @@
     .badge-existing { background: rgba(148,163,184,0.12); color: #94a3b8; }
     .badge-conflict { background: rgba(245,158,11,0.15); color: #fbbf24; }
     .mi-opts { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: 0.75rem; align-items: flex-start; }
+    .mi-sel-group { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.4rem; overflow: hidden; }
+    .mi-sel-group-hdr { display: flex; align-items: center; gap: 0.45rem; padding: 0.55rem 0.75rem; cursor: pointer; background: rgba(255,255,255,0.02); user-select: none; flex-wrap: wrap; }
+    .mi-sel-group-hdr:hover { background: rgba(255,255,255,0.04); }
+    .mi-sel-group-hdr .msg-title { font-weight: 600; font-size: 0.83rem; flex: 1; min-width: 80px; }
+    .mi-sel-group-body { display: none; padding: 0.55rem 0.85rem; border-top: 1px solid var(--border); max-height: 260px; overflow-y: auto; }
+    .mi-sel-group-body.open { display: block; }
+    .mi-sel-status-hdr { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; margin: 0.5rem 0 0.3rem; }
+    .mi-sel-status-hdr:first-child { margin-top: 0; }
+    .mi-sel-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.18rem 0; font-size: 0.81rem; }
+    .mi-sel-item label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+    .mi-sel-conflict-sub { font-size: 0.71rem; color: var(--text-dim); margin-left: 1.35rem; margin-top: -0.1rem; }
     .mi-opts label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: rgba(255,255,255,0.75); cursor: pointer; font-weight: normal; }
     .mi-opts input[type=checkbox], .mi-opts input[type=radio] { width: auto; padding: 0; cursor: pointer; accent-color: var(--accent); }
     .mi-import-result { margin-top: 1rem; }
@@ -219,8 +218,18 @@
     .mi-import-result th { text-align: left; color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
     .mi-import-result td { padding: 0.4rem 0.5rem; }
     .mi-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(102,126,234,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
+    .mi-extra-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 0.2rem 0.65rem; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .mi-extra-chip:hover { border-color: var(--accent); background: rgba(102,126,234,0.1); }
+    .mi-extra-chip input { cursor: pointer; accent-color: var(--accent); width: auto; padding: 0; }
+    .mi-multi-app-block { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.4rem; overflow: hidden; }
+    .mi-multi-app-hdr { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.7rem; background: rgba(255,255,255,0.04); cursor: pointer; font-size: 0.82rem; font-weight: 600; gap: 0.75rem; }
+    .mi-multi-app-hdr:hover { background: rgba(255,255,255,0.07); }
+    .mi-multi-badges { display: flex; gap: 0.5rem; font-size: 0.75rem; font-weight: 400; }
+    .mi-multi-app-body { display: none; padding: 0.5rem 0.5rem 0.3rem; }
+    .mi-multi-app-body.open { display: block; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
   <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
 <body>
@@ -233,6 +242,7 @@
     <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
     <a class="nav-link active" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/app-hub.html">App Hub</a>
     <a class="nav-link" href="/theme-builder.html">Theme</a>
   </div>
   <div class="nav-project-badge" id="navCustomerBadge">
@@ -322,6 +332,18 @@
     </div>
   </div>
 
+  <!-- Scheduled Fetch-Jobs -->
+  <div class="section" id="schedulesSection" style="display:none;">
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+      <span>&#x23F0; Geplante Fetch-Jobs</span>
+      <button class="btn-primary" id="newScheduleBtn">+ Neuer Zeitplan</button>
+    </div>
+    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">Automatische Fetch-Jobs nach Cron-Zeitplan (UTC). Beispiele: <code style="font-size:0.78rem;color:#a5b4fc;">0 3 * * *</code> = täglich 03:00 Uhr &nbsp;|&nbsp; <code style="font-size:0.78rem;color:#a5b4fc;">0 */6 * * *</code> = alle 6 Stunden</p>
+    <div id="schedulesWrap">
+      <div class="empty-state"><div class="empty-icon">&#x23F0;</div><div>Kein Projekt ausgewählt oder noch keine Zeitpläne konfiguriert.</div></div>
+    </div>
+  </div>
+
   </div><!-- end tab-scriptsync -->
 
   <!-- ════════════════════════════════ TAB: Master Items ════════════════════════════════ -->
@@ -374,6 +396,16 @@
           <thead><tr><th>Typ</th><th><span class="badge badge-new">Neu</span></th><th><span class="badge badge-existing">Gleich</span></th><th><span class="badge badge-conflict">Konflikt</span></th></tr></thead>
           <tbody id="miDiffBody"></tbody>
         </table>
+        <div id="miItemSelection" style="display:none;margin-top:1rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.55rem;flex-wrap:wrap;gap:0.4rem;">
+            <span style="font-size:0.78rem;color:var(--text-muted);">Item-Auswahl f&uuml;r Import (Neu &amp; Konflikte standardm&auml;&szlig;ig gew&auml;hlt)</span>
+            <div style="display:flex;gap:0.4rem;">
+              <button class="btn-action" id="miSelAllBtn">Alle w&auml;hlen</button>
+              <button class="btn-action" id="miSelNoneBtn">Alle abw&auml;hlen</button>
+            </div>
+          </div>
+          <div id="miSelectionBody"></div>
+        </div>
       </div>
     </div>
 
@@ -397,16 +429,20 @@
           <label><input type="checkbox" id="miOptDryRun" /> <strong>Dry Run</strong> (simulieren, nichts schreiben)</label>
         </div>
       </div>
+      <!-- Weitere Ziel-Apps -->
+      <div style="margin-top:1rem;">
+        <div style="font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;font-weight:700;letter-spacing:0.05em;margin-bottom:0.5rem;">Weitere Ziel-Apps <span id="miExtraSelCount" style="font-weight:400;color:var(--accent);"></span></div>
+        <div id="miExtraTargets" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.6rem;">
+          <span style="font-size:0.8rem;color:var(--text-dim);">&#8212; Projekt ausw&auml;hlen</span>
+        </div>
+      </div>
       <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
         <button class="btn-primary" id="miImportBtn">Importieren</button>
         <span id="miImportSpinner" style="display:none;font-size:0.8rem;color:var(--text-muted);"><span class="mi-spinner"></span>L&auml;uft&hellip;</span>
       </div>
       <div id="miImportResult" style="display:none;" class="mi-result-box mi-import-result">
         <div id="miImportResultHead" style="font-size:0.82rem;font-weight:600;margin-bottom:0.6rem;"></div>
-        <table>
-          <thead><tr><th>Typ</th><th>Importiert</th><th>&Uuml;berschrieben</th><th>&Uuml;bersprungen</th></tr></thead>
-          <tbody id="miImportBody"></tbody>
-        </table>
+        <div id="miImportBody"></div>
         <div id="miImportErrors" style="margin-top:0.6rem;"></div>
       </div>
     </div>
@@ -442,6 +478,47 @@
       <div class="modal-footer">
         <button type="button" class="btn-modal-cancel" id="mappingCancel">Abbrechen</button>
         <button type="submit" class="btn-modal-save" id="mappingSave">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal-backdrop" id="scheduleModal">
+  <div class="modal">
+    <button class="modal-close" id="scheduleModalClose">&times;</button>
+    <div class="modal-title" id="scheduleModalTitle">Neuer Zeitplan</div>
+    <div class="alert alert-error" id="scheduleError"></div>
+    <form id="scheduleForm">
+      <input type="hidden" id="editingScheduleId" value="" />
+      <div class="form-group">
+        <label for="sCronExpr">Cron-Ausdruck (UTC) *</label>
+        <input id="sCronExpr" type="text" placeholder="z.B.  0 3 * * *  (täglich 03:00 Uhr)" required />
+        <div style="font-size:0.73rem;color:var(--text-dim);margin-top:0.3rem;">Format: Minute Stunde Tag Monat Wochentag &nbsp;|&nbsp; <a href="https://crontab.guru" target="_blank" style="color:var(--accent);">crontab.guru</a></div>
+      </div>
+      <div class="form-group">
+        <label>Schritte *</label>
+        <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.3rem;">
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="apps" checked> Apps</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="spaces"> Spaces</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="scripts"> Scripts</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="data-connections"> Datenverbindungen</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="lineage"> Lineage</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="usage"> Usage</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="sLabel">Bezeichnung (optional)</label>
+        <input id="sLabel" type="text" placeholder="z.B. Nächtlicher Sync" />
+      </div>
+      <div class="form-group">
+        <label style="display:flex;gap:0.5rem;align-items:center;cursor:pointer;">
+          <input type="checkbox" id="sIsActive" checked> Aktiv
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="scheduleCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="scheduleSave">Speichern</button>
       </div>
     </form>
   </div>
@@ -591,6 +668,7 @@
     if (hasProject) {
       loadMappings();
       loadScriptsList();
+      loadSchedules();
     } else {
       mappings = [];
       overviewData = [];
@@ -598,6 +676,7 @@
       _allScriptApps = [];
       _openScriptAppId = null;
       document.getElementById('scriptsSection').style.display = 'none';
+      document.getElementById('schedulesSection').style.display = 'none';
       var vp = document.getElementById('scriptViewerPanel');
       if (vp) vp.style.display = 'none';
     }
@@ -658,55 +737,87 @@
     }
   }
 
-  function pollFetchJob(jobId) {
+  function _onFetchJobUpdate(job, stepOrder) {
     var progressSection = document.getElementById('fetchProgressSection');
     var label = document.getElementById('fetchProgressLabel');
     var bar = document.getElementById('fetchProgressBar');
     var statusEl = document.getElementById('fetchProgressStatus');
-    progressSection.style.display = '';
-    var stepOrder = ['apps', 'scripts'];
-    var stepIdx = 0;
+    var status = job.status;
+    var step = job.currentStep || '';
+    var completed = job.completedSteps || [];
 
+    var pct = 5;
+    if (stepOrder.length > 0) {
+      var doneCount = completed.length;
+      var totalCount = stepOrder.length;
+      if (step) {
+        var curIdx = stepOrder.indexOf(step);
+        if (curIdx >= 0) pct = Math.round(((doneCount + 0.5) / totalCount) * 100);
+        else pct = Math.round((doneCount / totalCount) * 100);
+      } else {
+        pct = Math.round((doneCount / totalCount) * 100);
+      }
+    }
+    if (status === 'completed') pct = 100;
+
+    bar.style.width = pct + '%';
+    label.textContent = step ? ('Schritt: ' + step) : 'Fetch-Job l\u00e4uft\u2026';
+    statusEl.textContent = status;
+
+    if (status === 'completed' || status === 'failed') {
+      var btn = document.getElementById('btnFetchScripts');
+      btn.disabled = false;
+      btn.textContent = '\u2193 Scripts abziehen';
+      if (status === 'completed') {
+        label.textContent = 'Scripts erfolgreich abgezogen';
+        statusEl.textContent = 'Fertig';
+        setTimeout(function() { progressSection.style.display = 'none'; }, 3000);
+        loadScriptsList();
+        showToast('Scripts abgezogen');
+      } else {
+        label.textContent = 'Fetch-Job fehlgeschlagen: ' + (job.error || status);
+        bar.style.background = '#f87171';
+      }
+    }
+  }
+
+  function pollFetchJob(jobId, stepOrder) {
+    stepOrder = stepOrder || ['apps', 'scripts'];
+    var progressSection = document.getElementById('fetchProgressSection');
+    progressSection.style.display = '';
+
+    if (typeof EventSource !== 'undefined') {
+      var es = new EventSource('/api/fetch/jobs/' + encodeURIComponent(jobId) + '/stream');
+      es.onmessage = function(e) {
+        try {
+          var job = JSON.parse(e.data);
+          if (job.error) { es.close(); return; }
+          _onFetchJobUpdate(job, stepOrder);
+          if (job.status === 'completed' || job.status === 'failed') es.close();
+        } catch (ex) {}
+      };
+      es.onerror = function() {
+        es.close();
+        _pollFetchFallback(jobId, stepOrder);
+      };
+    } else {
+      _pollFetchFallback(jobId, stepOrder);
+    }
+  }
+
+  function _pollFetchFallback(jobId, stepOrder) {
     function tick() {
       apiFetch('/api/fetch/jobs/' + encodeURIComponent(jobId)).then(function(r) {
         return r.json();
       }).then(function(job) {
-        var status = job.status;
-        var step = job.currentStep || '';
-
-        // Progress bar: roughly estimate based on step
-        var idx = stepOrder.indexOf(step);
-        var pct = idx >= 0 ? Math.round(((idx + 0.5) / stepOrder.length) * 100) : 50;
-        if (status === 'done' || status === 'success') pct = 100;
-
-        bar.style.width = pct + '%';
-        label.textContent = step ? ('Schritt: ' + step) : 'Fetch-Job läuft…';
-        statusEl.textContent = status;
-
-        if (status === 'running' || status === 'pending') {
+        _onFetchJobUpdate(job, stepOrder);
+        if (job.status === 'running' || job.status === 'queued') {
           _fetchPollTimer = setTimeout(tick, 1500);
-        } else {
-          // finished
-          var btn = document.getElementById('btnFetchScripts');
-          btn.disabled = false;
-          btn.textContent = '↓ Scripts abziehen';
-          if (status === 'done' || status === 'success') {
-            label.textContent = 'Scripts erfolgreich abgezogen';
-            statusEl.textContent = 'Fertig';
-            setTimeout(function() { progressSection.style.display = 'none'; }, 3000);
-            loadScriptsList();
-            showToast('Scripts abgezogen');
-          } else {
-            label.textContent = 'Fetch-Job beendet: ' + status;
-            bar.style.background = '#f87171';
-          }
         }
-      }).catch(function(e) {
-        statusEl.textContent = 'Fehler';
-        label.textContent = 'Konnte Status nicht abrufen';
+      }).catch(function() {
         var btn = document.getElementById('btnFetchScripts');
         btn.disabled = false;
-        btn.textContent = '↓ Scripts abziehen';
+        btn.textContent = '\u2193 Scripts abziehen';
       });
     }
     tick();
@@ -771,6 +882,7 @@
         + '<td class="mono">' + escHtml(shortSha(item.git_commit_sha)) + '</td>'
         + '<td>' + fmtDate(item.last_checked_at) + '</td>'
         + '<td class="actions">'
+        + '<a class="btn-action" href="/app-hub.html?app_id=' + encodeURIComponent(item.app_id) + (focusState.project ? '&project_id=' + encodeURIComponent(focusState.project) : '') + '" title="App Hub">Hub</a>'
         + '<button class="btn-action" data-history="' + escHtml(item.app_id) + '">History</button>'
         + '<button class="btn-action" data-edit="' + escHtml(item.app_id) + '">Edit</button>'
         + '<button class="btn-danger" data-delete="' + escHtml(item.app_id) + '">Del</button>'
@@ -971,6 +1083,7 @@
         + '<span class="sc-name">' + escHtml(appName) + '</span>'
         + '<span class="sc-meta" id="sc-meta-' + escHtml(appId) + '">' + escHtml(metaText) + '</span>'
         + '<div class="sc-toolbar">'
+        + '<a class="btn-action" href="/app-hub.html?app_id=' + encodeURIComponent(appId) + (focusState.project ? '&project_id='+encodeURIComponent(focusState.project) : '') + '" onclick="event.stopPropagation()">Hub</a>'
         + '<button class="btn-action sc-copy-btn" data-appid="' + escHtml(appId) + '">Kopieren</button>'
         + '</div>'
         + '</div>'
@@ -1267,7 +1380,93 @@
   // Master Items
   // ══════════════════════════════════════════════════════════════
 
-  var _miExportData = null; // stores last export result
+  var _miExportData = null;
+  var _miDiffData = null;
+  var _miApps = [];        // [{app_id, name}] for current project — used for extra-targets list
+
+  function renderMiSelection(diff) {
+    var types = [['dimensions','Dimensions'],['measures','Measures'],['visualizations','Visualizations']];
+    var html = '';
+    types.forEach(function(t) {
+      var key = t[0], label = t[1];
+      var d = diff[key] || {};
+      var its = d.items || {};
+      var newItems = its.new || [];
+      var conflictItems = its.conflict || [];
+      var existingItems = its.existing || [];
+      if (!newItems.length && !conflictItems.length && !existingItems.length) return;
+      html += '<div class="mi-sel-group">';
+      html += '<div class="mi-sel-group-hdr" onclick="this.nextElementSibling.classList.toggle(\'open\')">';
+      html += '<span class="msg-title">' + escHtml(label) + '</span>';
+      if (newItems.length) html += '<span class="badge badge-new">' + newItems.length + ' neu</span>';
+      if (conflictItems.length) html += '<span class="badge badge-conflict">' + conflictItems.length + ' Konflikt</span>';
+      if (existingItems.length) html += '<span class="badge badge-existing">' + existingItems.length + ' gleich</span>';
+      html += '<button class="btn-action" style="font-size:0.71rem;padding:0.15rem 0.45rem;" onclick="event.stopPropagation();_miSelGroup(\'' + key + '\',true)">Alle</button>';
+      html += '<button class="btn-action" style="font-size:0.71rem;padding:0.15rem 0.45rem;" onclick="event.stopPropagation();_miSelGroup(\'' + key + '\',false)">Keine</button>';
+      html += '</div><div class="mi-sel-group-body open">';
+      if (newItems.length) {
+        html += '<div class="mi-sel-status-hdr">Neu (' + newItems.length + ')</div>';
+        newItems.forEach(function(item, idx) {
+          var title = escHtml(item.title || (item.properties && item.properties.qInfo && item.properties.qInfo.qId) || '(unbekannt)');
+          html += '<div class="mi-sel-item"><label><input type="checkbox" checked data-mi-type="' + key + '" data-mi-status="new" data-mi-idx="' + idx + '"> ' + title + '</label></div>';
+        });
+      }
+      if (conflictItems.length) {
+        html += '<div class="mi-sel-status-hdr">Konflikt (' + conflictItems.length + ')</div>';
+        conflictItems.forEach(function(conflict, idx) {
+          var src = conflict.source || {};
+          var tgt = conflict.target || {};
+          var srcTitle = escHtml(src.title || '(unbekannt)');
+          var tgtTitle = escHtml(tgt.title || '');
+          html += '<div class="mi-sel-item"><label><input type="checkbox" checked data-mi-type="' + key + '" data-mi-status="conflict" data-mi-idx="' + idx + '"> ' + srcTitle + '</label></div>';
+          if (tgtTitle && tgtTitle !== srcTitle) html += '<div class="mi-sel-conflict-sub">Ziel: ' + tgtTitle + '</div>';
+        });
+      }
+      if (existingItems.length) {
+        html += '<div class="mi-sel-status-hdr">Gleich (' + existingItems.length + ') &mdash; standardm&auml;&szlig;ig abgew&auml;hlt</div>';
+        existingItems.forEach(function(item, idx) {
+          var title = escHtml(item.title || '(unbekannt)');
+          html += '<div class="mi-sel-item"><label><input type="checkbox" data-mi-type="' + key + '" data-mi-status="existing" data-mi-idx="' + idx + '"> ' + title + '</label></div>';
+        });
+      }
+      html += '</div></div>';
+    });
+    document.getElementById('miSelectionBody').innerHTML = html || '<div style="font-size:0.82rem;color:var(--text-dim);">Keine Items vorhanden.</div>';
+    document.getElementById('miItemSelection').style.display = '';
+  }
+
+  function _miSelGroup(type, checked) {
+    document.querySelectorAll('#miSelectionBody input[data-mi-type="' + type + '"]').forEach(function(cb) { cb.checked = checked; });
+  }
+  function _miSelAll(checked) {
+    document.querySelectorAll('#miSelectionBody input[type="checkbox"]').forEach(function(cb) { cb.checked = checked; });
+  }
+
+  function _buildFilteredSource() {
+    var filtered = { dimensions: [], measures: [], visualizations: [] };
+    document.querySelectorAll('#miSelectionBody input[type="checkbox"]:checked').forEach(function(cb) {
+      var type = cb.dataset.miType;
+      var status = cb.dataset.miStatus;
+      var idx = parseInt(cb.dataset.miIdx, 10);
+      if (!_miDiffData || !_miDiffData[type]) return;
+      var its = (_miDiffData[type] && _miDiffData[type].items) || {};
+      var arr = its[status] || [];
+      var entry = arr[idx];
+      if (!entry) return;
+      var item = (status === 'conflict') ? (entry.source || entry) : entry;
+      if (item) filtered[type].push(item);
+    });
+    return {
+      app_id: _miExportData ? _miExportData.app_id : '',
+      exported_at: _miExportData ? _miExportData.exported_at : new Date().toISOString(),
+      dimensions: filtered.dimensions,
+      measures: filtered.measures,
+      visualizations: filtered.visualizations,
+    };
+  }
+
+  document.getElementById('miSelAllBtn').addEventListener('click', function() { _miSelAll(true); });
+  document.getElementById('miSelNoneBtn').addEventListener('click', function() { _miSelAll(false); });
 
   function populateMiAppSelects() {
     var pid = focusState.project;
@@ -1284,20 +1483,64 @@
       document.getElementById('miTargetApp').innerHTML = placeholder + opts;
       document.getElementById('miExportBtn').disabled = !apps.length;
       document.getElementById('miDiffBtn').disabled = !apps.length;
+      _renderMiExtraTargets();
     }).catch(function() {});
+  }
+
+  function _renderMiExtraTargets() {
+    var sourceId = document.getElementById('miSourceApp').value;
+    var el = document.getElementById('miExtraTargets');
+    var available = _miApps.filter(function(a) { return a.app_id !== sourceId; });
+    if (!available.length) {
+      el.innerHTML = '<span style="font-size:0.8rem;color:var(--text-dim);">— Keine weiteren Apps verf\u00fcgbar</span>';
+      _updateExtraSelCount();
+      return;
+    }
+    el.innerHTML = available.map(function(a) {
+      return '<label class="mi-extra-chip"><input type="checkbox" value="' + escHtml(a.app_id) + '" onchange="_updateExtraSelCount()"> ' + escHtml(a.name || a.app_id) + '</label>';
+    }).join('');
+    _updateExtraSelCount();
+  }
+
+  function _updateExtraSelCount() {
+    var n = document.querySelectorAll('#miExtraTargets input[type=checkbox]:checked').length;
+    document.getElementById('miExtraSelCount').textContent = n ? '(' + n + ' ausgew\u00e4hlt)' : '';
+  }
+
+  function _miExtraTargetIds() {
+    return Array.from(document.querySelectorAll('#miExtraTargets input[type=checkbox]:checked')).map(function(cb) { return cb.value; });
+  }
+
+  function _appNameMap() {
+    var m = {};
+    _miApps.forEach(function(a) { m[a.app_id] = a.name || a.app_id; });
+    return m;
+  }
+
+  function _renderSingleImportTable(r) {
+    var rows = ['dimensions','measures','visualizations'].map(function(t) {
+      return '<tr><td style="font-weight:600">' + escHtml(t.charAt(0).toUpperCase() + t.slice(1)) + '</td>'
+        + '<td style="color:#4ade80">' + ((r.imported||{})[t]||0) + '</td>'
+        + '<td style="color:#a5b4fc">' + ((r.overwritten||{})[t]||0) + '</td>'
+        + '<td style="color:#94a3b8">' + ((r.skipped||{})[t]||0) + '</td></tr>';
+    }).join('');
+    return '<table><thead><tr><th>Typ</th><th>Importiert</th><th>\u00dcberschrieben</th><th>\u00dcbersprungen</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   document.getElementById('miSourceApp').addEventListener('change', function() {
     document.getElementById('miExportBtn').disabled = !this.value;
     // Reset downstream steps
     _miExportData = null;
+    _miDiffData = null;
     document.getElementById('miExportResult').style.display = 'none';
     document.getElementById('miDetailSection').style.display = 'none';
     _miDetailOpenSet.clear();
     setMiSectionEnabled('miDiffSection', false);
     setMiSectionEnabled('miImportSection', false);
     document.getElementById('miDiffResult').style.display = 'none';
+    document.getElementById('miItemSelection').style.display = 'none';
     document.getElementById('miImportResult').style.display = 'none';
+    _renderMiExtraTargets();
   });
 
   document.getElementById('miTargetApp').addEventListener('change', function() {
@@ -1332,8 +1575,8 @@
       var jobId = job.jobId || job.job_id;
       function pollApps() {
         apiFetch('/api/fetch/jobs/' + encodeURIComponent(jobId)).then(function(r) { return r.json(); }).then(function(j) {
-          if (j.status === 'running' || j.status === 'pending') { setTimeout(pollApps, 1500); return; }
-          if (j.status === 'done' || j.status === 'success') { populateMiAppSelects(); return; }
+          if (j.status === 'running' || j.status === 'queued') { setTimeout(pollApps, 1500); return; }
+          if (j.status === 'completed') { populateMiAppSelects(); return; }
           console.warn('App-Listen-Refresh fehlgeschlagen:', j.status, j);
         }).catch(function() {});
       }
@@ -1372,49 +1615,6 @@
     var targetId = document.getElementById('miTargetApp').value;
     var pid = focusState.project;
     if (!sourceId || !targetId || !pid) return;
-    if (sourceId === targetId) { showToast('Quell- und Ziel-App d\u00fcrfen nicht identisch sein.'); return; }
-    this.disabled = true;
-    this.innerHTML = '<span class="mi-spinner"></span>Vergleichen\u2026';
-    document.getElementById('miDiffResult').style.display = 'none';
-    setMiSectionEnabled('miImportSection', false);
-    try {
-      var resp = await apiFetch('/api/master-items/diff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: parseInt(pid, 10), source_app_id: sourceId, target_app_id: targetId, source_export: _miExportData || undefined }),
-      });
-      if (!resp.ok) {
-        var err = await resp.json().catch(function() { return {}; });
-        throw new Error(err.detail || 'HTTP ' + resp.status);
-      }
-      var diff = await resp.json();
-      var types = [['dimensions','Dimensions'],['measures','Measures'],['visualizations','Visualizations']];
-      var rows = types.map(function(t) {
-        var d = diff[t[0]] || {};
-        return '<tr>'
-          + '<td style="font-weight:600">' + escHtml(t[1]) + '</td>'
-          + '<td><span class="badge badge-new">' + (d.new || 0) + ' neu</span></td>'
-          + '<td><span class="badge badge-existing">' + (d.existing || 0) + ' gleich</span></td>'
-          + '<td><span class="badge badge-conflict">' + (d.conflict || 0) + ' Konflikt</span></td>'
-          + '</tr>';
-      }).join('');
-      document.getElementById('miDiffBody').innerHTML = rows;
-      document.getElementById('miDiffResult').style.display = '';
-      setMiSectionEnabled('miImportSection', true);
-      showToast('Vergleich abgeschlossen');
-    } catch (e) {
-      showToast('Vergleich fehlgeschlagen: ' + e.message, 6000);
-    } finally {
-      this.disabled = false;
-      this.textContent = 'Vergleichen';
-    }
-  });
-
-  document.getElementById('miImportBtn').addEventListener('click', async function() {
-    var sourceId = document.getElementById('miSourceApp').value;
-    var targetId = document.getElementById('miTargetApp').value;
-    var pid = focusState.project;
-    if (!sourceId || !targetId || !pid) return;
     var types = [];
     if (document.getElementById('miOptDim').checked)  types.push('dimensions');
     if (document.getElementById('miOptMeas').checked) types.push('measures');
@@ -1422,6 +1622,10 @@
     if (!types.length) { showToast('Mindestens einen Typ ausw\u00e4hlen.'); return; }
     var onDuplicate = document.querySelector('input[name="miDup"]:checked').value;
     var dryRun = document.getElementById('miOptDryRun').checked;
+    var sourceExport = _miDiffData ? _buildFilteredSource() : (_miExportData || undefined);
+
+    var extraIds = _miExtraTargetIds();
+    var allTargetIds = [targetId].concat(extraIds.filter(function(id) { return id !== targetId; }));
 
     document.getElementById('miImportBtn').disabled = true;
     document.getElementById('miImportSpinner').style.display = '';
@@ -1434,6 +1638,8 @@
           project_id: parseInt(pid, 10),
           source_app_id: sourceId,
           target_app_id: targetId,
+          target_app_ids: allTargetIds,
+          source_export: sourceExport,
           options: { types: types, on_duplicate: onDuplicate, dry_run: dryRun },
         }),
       });
@@ -1442,26 +1648,54 @@
         throw new Error(err.detail || 'HTTP ' + resp.status);
       }
       var result = await resp.json();
-      document.getElementById('miImportResultHead').textContent = dryRun ? 'Dry Run — keine \u00c4nderungen geschrieben' : 'Import abgeschlossen';
-      var typeRows = ['dimensions','measures','visualizations'].map(function(t) {
-        return '<tr>'
-          + '<td style="font-weight:600">' + escHtml(t.charAt(0).toUpperCase() + t.slice(1)) + '</td>'
-          + '<td style="color:#4ade80">' + ((result.imported || {})[t] || 0) + '</td>'
-          + '<td style="color:#a5b4fc">' + ((result.overwritten || {})[t] || 0) + '</td>'
-          + '<td style="color:#94a3b8">' + ((result.skipped || {})[t] || 0) + '</td>'
-          + '</tr>';
-      }).join('');
-      document.getElementById('miImportBody').innerHTML = typeRows;
-      var errHtml = '';
-      if (result.errors && result.errors.length) {
-        errHtml = '<div style="font-size:0.78rem;color:#f87171;margin-top:0.5rem;">'
-          + result.errors.slice(0, 5).map(function(e) {
-              return escHtml('[' + e.type + '] ' + e.title + ': ' + e.error);
-            }).join('<br>') + '</div>';
+      document.getElementById('miImportResultHead').textContent = dryRun ? 'Dry Run \u2014 keine \u00c4nderungen geschrieben' : 'Import abgeschlossen';
+
+      if (result.multi) {
+        var nameMap = _appNameMap();
+        var bodyHtml = Object.keys(result.results).map(function(appId) {
+          var r = result.results[appId];
+          var appName = escHtml(nameMap[appId] || appId);
+          if (r.error) {
+            return '<div class="mi-multi-app-block"><div class="mi-multi-app-hdr">' + appName
+              + ' <span style="color:#f87171;font-size:0.78rem;">' + escHtml(r.error) + '</span></div></div>';
+          }
+          var ti = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.imported||{})[t]||0);},0);
+          var to2 = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.overwritten||{})[t]||0);},0);
+          var ts = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.skipped||{})[t]||0);},0);
+          return '<div class="mi-multi-app-block">'
+            + '<div class="mi-multi-app-hdr" onclick="this.nextElementSibling.classList.toggle(\'open\')">'
+            + '<span>' + appName + '</span>'
+            + '<span class="mi-multi-badges">'
+            + '<span style="color:#4ade80">' + ti + ' imp</span> '
+            + '<span style="color:#a5b4fc">' + to2 + ' ovr</span> '
+            + '<span style="color:#94a3b8">' + ts + ' skip</span>'
+            + '</span></div>'
+            + '<div class="mi-multi-app-body open">' + _renderSingleImportTable(r) + '</div>'
+            + '</div>';
+        }).join('');
+        document.getElementById('miImportBody').innerHTML = bodyHtml;
+        document.getElementById('miImportErrors').innerHTML = '';
+      } else {
+        document.getElementById('miImportBody').innerHTML = _renderSingleImportTable(result);
+        var totalImported    = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.imported||{})[t]||0);},0);
+        var totalSkipped     = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.skipped||{})[t]||0);},0);
+        var totalOverwritten = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.overwritten||{})[t]||0);},0);
+        var hintHtml = '';
+        if (!dryRun && totalSkipped > 0 && totalImported === 0 && totalOverwritten === 0) {
+          hintHtml = '<div style="font-size:0.8rem;color:#fbbf24;margin-top:0.5rem;">&#9432; Alle Items sind bereits in der Ziel-App vorhanden. W\u00e4hle <strong>\u00dcberschreiben</strong> um sie zu aktualisieren.</div>';
+        }
+        var errHtml = hintHtml;
+        if (result.errors && result.errors.length) {
+          errHtml += '<div style="font-size:0.78rem;color:#f87171;margin-top:0.5rem;">'
+            + result.errors.slice(0, 5).map(function(e) {
+                return escHtml('[' + e.type + '] ' + e.title + ': ' + e.error);
+              }).join('<br>') + '</div>';
+        }
+        document.getElementById('miImportErrors').innerHTML = errHtml;
       }
-      document.getElementById('miImportErrors').innerHTML = errHtml;
+
       document.getElementById('miImportResult').style.display = '';
-      showToast(dryRun ? 'Dry Run abgeschlossen' : 'Import abgeschlossen');
+      showToast(dryRun ? 'Dry Run abgeschlossen' : 'Import abgeschlossen (' + allTargetIds.length + ' App' + (allTargetIds.length > 1 ? 's' : '') + ')');
     } catch (e) {
       showToast('Import fehlgeschlagen: ' + e.message, 6000);
     } finally {
@@ -1616,6 +1850,152 @@
 
   // ── Init ──
   loadData();
+
+  // ══════════════════════════════════════════════════════════════
+  // Scheduled Fetch-Jobs
+  // ══════════════════════════════════════════════════════════════
+
+  var _editingScheduleId = null;
+
+  async function loadSchedules() {
+    var pid = focusState.project;
+    var section = document.getElementById('schedulesSection');
+    if (!pid) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    try {
+      var resp = await apiFetch('/api/fetch/schedules?project_id=' + encodeURIComponent(pid));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      renderSchedules(data.schedules || []);
+    } catch (e) {
+      document.getElementById('schedulesWrap').innerHTML = '<div class="empty-state">Fehler beim Laden der Zeitpläne: ' + escHtml(e.message) + '</div>';
+    }
+  }
+
+  function renderSchedules(list) {
+    if (!list.length) {
+      document.getElementById('schedulesWrap').innerHTML = '<div class="empty-state"><div class="empty-icon">&#x23F0;</div><div>Noch keine Zeitpläne konfiguriert.</div></div>';
+      return;
+    }
+    var rows = list.map(function(s) {
+      var steps = (s.steps || []).join(', ');
+      var nextRun = s.next_run_at ? new Date(s.next_run_at).toLocaleString('de-DE') : '&mdash;';
+      var lastRun = s.last_run_at ? new Date(s.last_run_at).toLocaleString('de-DE') : 'Noch nie';
+      var activeBadge = s.is_active
+        ? '<span class="badge badge-in_sync">Aktiv</span>'
+        : '<span class="badge badge-unmapped">Inaktiv</span>';
+      return '<tr>'
+        + '<td>' + escHtml(s.label || '—') + '</td>'
+        + '<td><code style="font-size:0.78rem;color:#a5b4fc;">' + escHtml(s.cron_expr) + '</code></td>'
+        + '<td style="color:var(--text-muted);font-size:0.8rem;">' + escHtml(steps) + '</td>'
+        + '<td>' + activeBadge + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + nextRun + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + lastRun + '</td>'
+        + '<td><div class="actions">'
+        + '<button class="btn-action" onclick="openEditSchedule(' + s.id + ')">Bearbeiten</button>'
+        + '<button class="btn-action" style="color:#f87171;" onclick="deleteSchedule(' + s.id + ')">Löschen</button>'
+        + '</div></td>'
+        + '</tr>';
+    }).join('');
+    document.getElementById('schedulesWrap').innerHTML = '<table class="sync-table"><thead><tr>'
+      + '<th>Bezeichnung</th><th>Cron</th><th>Schritte</th><th>Status</th><th>Nächster Lauf</th><th>Letzter Lauf</th><th>Aktionen</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function openNewSchedule() {
+    _editingScheduleId = null;
+    document.getElementById('scheduleModalTitle').textContent = 'Neuer Zeitplan';
+    document.getElementById('scheduleError').style.display = 'none';
+    document.getElementById('editingScheduleId').value = '';
+    document.getElementById('sCronExpr').value = '';
+    document.getElementById('sLabel').value = '';
+    document.getElementById('sIsActive').checked = true;
+    document.querySelectorAll('.sStepCb').forEach(function(cb) { cb.checked = cb.value === 'apps'; });
+    document.getElementById('scheduleModal').classList.add('open');
+  }
+
+  async function openEditSchedule(id) {
+    var pid = focusState.project;
+    if (!pid) return;
+    try {
+      var resp = await apiFetch('/api/fetch/schedules?project_id=' + encodeURIComponent(pid));
+      var data = await resp.json();
+      var s = (data.schedules || []).find(function(x) { return x.id === id; });
+      if (!s) return;
+      _editingScheduleId = id;
+      document.getElementById('scheduleModalTitle').textContent = 'Zeitplan bearbeiten';
+      document.getElementById('scheduleError').style.display = 'none';
+      document.getElementById('editingScheduleId').value = id;
+      document.getElementById('sCronExpr').value = s.cron_expr;
+      document.getElementById('sLabel').value = s.label || '';
+      document.getElementById('sIsActive').checked = s.is_active;
+      var steps = s.steps || [];
+      document.querySelectorAll('.sStepCb').forEach(function(cb) { cb.checked = steps.indexOf(cb.value) >= 0; });
+      document.getElementById('scheduleModal').classList.add('open');
+    } catch (e) {
+      showToast('Fehler: ' + e.message);
+    }
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm('Zeitplan wirklich löschen?')) return;
+    try {
+      var resp = await apiFetch('/api/fetch/schedules/' + id, { method: 'DELETE' });
+      if (!resp.ok && resp.status !== 204) throw new Error('HTTP ' + resp.status);
+      showToast('Zeitplan gelöscht');
+      loadSchedules();
+    } catch (e) {
+      showToast('Löschen fehlgeschlagen: ' + e.message);
+    }
+  }
+
+  function closeScheduleModal() {
+    document.getElementById('scheduleModal').classList.remove('open');
+    _editingScheduleId = null;
+  }
+
+  document.getElementById('newScheduleBtn').addEventListener('click', openNewSchedule);
+  document.getElementById('scheduleModalClose').addEventListener('click', closeScheduleModal);
+  document.getElementById('scheduleCancel').addEventListener('click', closeScheduleModal);
+  document.getElementById('scheduleModal').addEventListener('click', function(e) {
+    if (e.target === this) closeScheduleModal();
+  });
+
+  document.getElementById('scheduleForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var pid = focusState.project;
+    if (!pid) return;
+    var cron = document.getElementById('sCronExpr').value.trim();
+    var label = document.getElementById('sLabel').value.trim();
+    var isActive = document.getElementById('sIsActive').checked;
+    var steps = [];
+    document.querySelectorAll('.sStepCb:checked').forEach(function(cb) { steps.push(cb.value); });
+    if (!steps.length) {
+      document.getElementById('scheduleError').textContent = 'Mindestens einen Schritt auswählen.';
+      document.getElementById('scheduleError').style.display = '';
+      return;
+    }
+    document.getElementById('scheduleSave').disabled = true;
+    try {
+      var id = document.getElementById('editingScheduleId').value;
+      var method = id ? 'PUT' : 'POST';
+      var url = id ? '/api/fetch/schedules/' + id : '/api/fetch/schedules';
+      var body = { project_id: parseInt(pid, 10), steps: steps, cron_expr: cron, label: label || null, is_active: isActive };
+      var resp = await apiFetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'HTTP ' + resp.status);
+      }
+      closeScheduleModal();
+      showToast(id ? 'Zeitplan aktualisiert' : 'Zeitplan erstellt');
+      loadSchedules();
+    } catch (err) {
+      document.getElementById('scheduleError').textContent = err.message;
+      document.getElementById('scheduleError').style.display = '';
+    } finally {
+      document.getElementById('scheduleSave').disabled = false;
+    }
+  });
 </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
    - Scope: static frontend pages (index/projects/analytics/lineage/admin/theme-builder)
 */
 
-@media (max-width: 1240px) {
+@media (max-width: 1400px) {
   nav {
     height: auto !important;
     min-height: 60px;

@@ -699,3 +699,20 @@ class DocTemplate(Base):
     is_default = Column(Boolean, nullable=False, server_default=text("false"))
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+
+class FetchSchedule(Base):
+    """Scheduled recurring fetch job configuration."""
+    __tablename__ = "fetch_schedules"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    steps = Column(JSONB, nullable=False)
+    cron_expr = Column(String(100), nullable=False)
+    label = Column(String(200), nullable=True)
+    is_active = Column(Boolean, nullable=False, server_default=text("true"))
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

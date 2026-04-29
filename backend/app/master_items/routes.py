@@ -38,6 +38,8 @@ class ImportRequest(BaseModel):
     project_id: int
     source_app_id: str
     target_app_id: str
+    target_app_ids: list[str] = []  # if non-empty, used instead of target_app_id (multi-app)
+    source_export: dict | None = None
     options: dict = {}
 
 
@@ -103,8 +105,25 @@ async def run_import(
     except CredentialsError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     try:
-        source = await export_master_items(creds, payload.source_app_id)
-        return await import_master_items(creds, payload.target_app_id, source, payload.options)
+        source = payload.source_export or await export_master_items(creds, payload.source_app_id)
+
+        # Build deduplicated target list (multi-app takes precedence over single)
+        raw = payload.target_app_ids if payload.target_app_ids else [payload.target_app_id]
+        seen: set[str] = set()
+        target_ids = [x for x in raw if x and not (x in seen or seen.add(x))]  # type: ignore[func-returns-value]
+
+        if len(target_ids) == 1:
+            return await import_master_items(creds, target_ids[0], source, payload.options)
+
+        # Multi-app: run sequentially, collect per-app results
+        results: dict[str, Any] = {}
+        for app_id in target_ids:
+            try:
+                results[app_id] = await import_master_items(creds, app_id, source, payload.options)
+            except Exception as exc:
+                results[app_id] = {"error": str(exc)}
+        return {"multi": True, "results": results}
+
     except MasterItemsSyncError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
