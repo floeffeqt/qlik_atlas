@@ -20,13 +20,23 @@ wird beim Start über die Shell-Variable `ENV_FILE` gesteuert.
 # Entwicklung (Standard)
 docker compose up -d
 
-# Produktion
+# Produktion (Hetzner / Server)
+# Alle Variablen kommen aus .env.prod via env_file — kein --env-file Flag nötig.
 docker compose -f docker-compose.prod.yml up -d
+
+# Produktion: Images aktualisieren (nach neuem Release)
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
+
+# Produktion: Logs prüfen
+docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml logs -f frontend
 
 # Mit pgAdmin (nur Dev)
 docker compose --profile dev up -d
 
-# Rebuild nach Code-Änderungen
+# Rebuild nach Code-Änderungen (Dev)
 docker compose up -d --build backend
 docker compose up -d --build frontend
 ```
@@ -39,7 +49,10 @@ docker compose up -d --build frontend
 2. Alle `CHANGE_ME`-Werte ersetzen
 3. `CREDENTIALS_AES256_GCM_KEY_B64` generieren (siehe Abschnitt unten)
 4. `JWT_SECRET` generieren: `openssl rand -base64 64`
-5. Datei **nur auf dem Server** ablegen, nie ins Repo
+5. `PUBLIC_URL` setzen — öffentliche URL des Servers, z.B.:
+   - `PUBLIC_URL=http://123.45.67.89:4001` (nur IP/Port)
+   - `PUBLIC_URL=https://atlas.your-domain.com` (mit Domain + HTTPS)
+6. Datei **nur auf dem Server** ablegen, nie ins Repo
 
 ---
 
@@ -86,3 +99,5 @@ Ohne diesen Schritt ist eine Rotation nicht möglich.
 | `JWT_SECRET` | Signiert Login-Tokens | Ja (loggt alle User aus) |
 | `CREDENTIALS_AES256_GCM_KEY_B64` | Verschlüsselt Kunden-Credentials | Nur mit Re-Encryption |
 | `CREDENTIALS_AES256_GCM_KEY_ID` | Key-Versions-Label | Mit Key-Rotation |
+| `PUBLIC_URL` | Öffentliche Frontend-URL (CORS + CSP) | Jederzeit |
+| `FETCH_TRIGGER_TOKEN` | Schützt POST /api/fetch/jobs | Jederzeit |

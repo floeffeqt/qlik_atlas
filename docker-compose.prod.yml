@@ -3,10 +3,6 @@ services:
     image: postgres:15-alpine
     restart: unless-stopped
     env_file: .env.prod
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -21,14 +17,6 @@ services:
     image: ghcr.io/floeffeqt/qlik-atlas-backend:latest
     restart: unless-stopped
     env_file: .env.prod
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - APP_ENV=${APP_ENV}
-      - JWT_SECRET=${JWT_SECRET}
-      - CREDENTIALS_AES256_GCM_KEY_B64=${CREDENTIALS_AES256_GCM_KEY_B64}
-      - CREDENTIALS_AES256_GCM_KEY_ID=${CREDENTIALS_AES256_GCM_KEY_ID}
-      - ADMIN_EMAIL=${ADMIN_EMAIL}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
