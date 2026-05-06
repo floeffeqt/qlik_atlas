@@ -1,5 +1,30 @@
 # Build & Startup Issues - FIXED
 
+## [SECURITY] 2026-04-29 Stufe-1 Umgebungstrennung: getrennte Env-Dateien pro Deployment
+
+- Area: docker-compose.yml, .gitignore, .env.*, docs/ENVIRONMENT.md
+- Changes:
+  1. `.env.dev` erstellt — Entwicklungsumgebung (im Repo, keine echten Secrets)
+  2. `.env.prod` erstellt — Produktionsvorlage mit CHANGE_ME-Platzhaltern (nicht im Repo)
+  3. `.gitignore`: `.env.prod` und `.env.staging` explizit ausgeschlossen
+  4. `docker-compose.yml`: `env_file` auf `${ENV_FILE:-.env.dev}` umgestellt — Standard ist Dev, Prod via `ENV_FILE=.env.prod docker compose up -d`
+  5. `.env.example` aktualisiert mit kritischem AES-Key-Hinweis
+  6. `docs/ENVIRONMENT.md` erstellt — vollständige Doku inkl. ⚠️ KRITISCH-Abschnitt zu `CREDENTIALS_AES256_GCM_KEY_B64` (Rotation nur mit Re-Encryption, Backup-Pflicht im Passwort-Manager)
+- Verification: `git ls-files .env.prod` → leer (nicht getrackt); docker-compose.yml yaml-valide
+
+## [SECURITY] 2026-04-29 QLIK-PS-005: Persistence-Audit — nur PostgreSQL darf persistieren
+
+- Spec: QLIK-PS-005
+- Area: docker-compose.yml, backend/shared/utils.py, backend/exporters/
+- Changes:
+  1. `backend`-Service: Bind-Mount `./backend:/app` entfernt — Container läuft ausschließlich mit eingebautem Image-Stand; kein Host-Dateisystemzugriff mehr
+  2. `pgadmin`-Service: `volumes: pgadmin_data` entfernt + `profiles: [dev]` gesetzt — pgAdmin startet nur explizit via `docker compose --profile dev up`, kein persistentes Volume außerhalb Postgres
+  3. Top-Level-Volume `pgadmin_data` entfernt
+  4. `backend/exporters/` (json_writer.py, manifest_writer.py, __init__.py) gelöscht — totes Code mit Datei-Schreib-Fähigkeit, nie aufgerufen
+  5. `backend/shared/utils.py`: `write_json`, `read_json`, `write_csv`, `write_xlsx`, `ensure_dir`, `sanitize_name` entfernt — sämtliche Datei-Schreib-/Lese-Funktionen; einzig genutzte Funktion `url_encode_qri` bleibt
+- Verification: `grep -rn "write_json\|write_csv\|write_xlsx\|ensure_dir\|read_json\|exporters"` → 0 Treffer im Produktiv-Code; docker-compose.yml syntaktisch valide
+- Residual Risk: Bei Backend-Code-Änderungen muss neu gebaut werden (`docker compose up -d --build backend`)
+
 ## [BUGFIX] 2026-04-28 Lineage: Außerhalb-Filter entfernt Shared-Nodes fälschlicherweise
 
 - Severity: medium

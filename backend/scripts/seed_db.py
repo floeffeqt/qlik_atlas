@@ -3,6 +3,7 @@ Database seeding script: creates initial admin user
 Run after migrations: python -m scripts.seed_db
 """
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -34,10 +35,16 @@ async def seed_db():
                 "users table is missing. Migrations did not complete successfully."
             )
 
+    admin_email = os.environ.get("ADMIN_EMAIL")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if not admin_email or not admin_password:
+        raise RuntimeError(
+            "ADMIN_EMAIL and ADMIN_PASSWORD must be set in environment variables."
+        )
+
     print("Seeding admin user...")
     async with AsyncSessionLocal() as session:
-        # Check if user exists
-        result = await session.execute(select(User).where(User.email == "admin@admin.de"))
+        result = await session.execute(select(User).where(User.email == admin_email))
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -48,15 +55,15 @@ async def seed_db():
             else:
                 print("Admin user already exists")
         else:
-            test_user = User(
-                email="admin@admin.de",
-                password_hash=hash_password("admin123"),
+            user = User(
+                email=admin_email,
+                password_hash=hash_password(admin_password),
                 is_active=True,
                 role="admin",
             )
-            session.add(test_user)
+            session.add(user)
             await session.commit()
-            print("Admin user created: admin@admin.de / admin123")
+            print(f"Admin user created: {admin_email}")
 
     print("Database seeding complete!")
 

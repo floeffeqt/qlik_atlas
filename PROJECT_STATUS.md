@@ -41,8 +41,9 @@
 - ✅ Admin-Übersicht Fetch-Zeitpläne: Tab in `admin.html` — alle Zeitpläne aller Kunden/Projekte, Aktivieren/Deaktivieren, Löschen
 
 ### Infrastructure (100%)
-- ✅ Docker Compose with 3 services: db, backend, frontend
-- ✅ PostgreSQL 15 with persistent volumes
+- ✅ Docker Compose with 3 services: db, backend, frontend (pgadmin dev-profile only)
+- ✅ PostgreSQL 15 — einziges persistentes Volume (`pgdata`)
+- ✅ QLIK-PS-005 compliant: kein Bind-Mount, keine File-Write-Utilities, kein pgadmin_data-Volume
 - ✅ FastAPI backend with async SQLAlchemy + asyncpg
 - ✅ Nginx frontend serving SPA on port **4001**
 - ✅ Health checks on all services
