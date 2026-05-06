@@ -52,8 +52,6 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: ${ENV_FILE:-.env.dev}
-    environment:
-      - VITE_API_URL=${VITE_API_URL}
     ports:
       - "4001:80"
     depends_on:
