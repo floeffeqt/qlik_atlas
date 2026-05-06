@@ -11,5 +11,13 @@ alembic>=1.11,<2.0
 
 # Auth
 python-jose[cryptography]>=3.0
-passlib[bcrypt]>=1.7.4
+cryptography>=42,<46
+passlib[argon2]>=1.7.4
+argon2-cffi>=23,<26
 python-dotenv>=1.0
+
+# WebSocket (Qlik Engine API / QIX)
+websockets>=12.0,<14.0
+
+# Scheduled jobs
+apscheduler>=3.10,<4.0

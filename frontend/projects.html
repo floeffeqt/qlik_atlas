@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background:#1a1a2e;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -23,11 +23,14 @@
 
     nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
     .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
-    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
-    .nav-links { display: flex; gap: 0.25rem; margin-left: 1rem; }
-    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm); transition: color 0.15s, background 0.15s; }
-    .nav-link:hover { color: var(--text); background: var(--surface-hover); }
-    .nav-link.active { color: var(--accent); background: var(--surface-hover); }
+    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; overflow: hidden; }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; min-width: 0; }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.28) inset; }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
     .nav-spacer { flex: 1; }
     .nav-user { display: flex; align-items: center; gap: 0.75rem; }
     .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
@@ -93,6 +96,12 @@
     .btn-modal-save { padding: 0.6rem 1.3rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
     .btn-modal-save:hover { opacity: 0.9; }
     .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .fetch-step-list { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.2rem; }
+    .fetch-step-item { display: flex; align-items: center; gap: 0.6rem; color: rgba(255,255,255,0.88); font-size: 0.86rem; }
+    .fetch-step-item input[type="checkbox"] { width: 15px; height: 15px; accent-color: #4ade80; cursor: pointer; }
+    .fetch-step-actions { display: flex; gap: 0.45rem; margin-top: 0.7rem; }
+    .btn-step { padding: 0.35rem 0.6rem; font-size: 0.76rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; }
+    .btn-step:hover { background: var(--surface-hover); color: var(--text); }
 
     .alert { border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
     .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
@@ -231,6 +240,12 @@
     .recent-jobs-wrap {
       position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 390;
     }
+    .recent-jobs-wrap.with-log-open {
+      top: 4.5rem; bottom: auto; z-index: 410;
+    }
+    .recent-jobs-wrap.with-log-open .recent-jobs-list {
+      top: calc(100% + 0.4rem); bottom: auto;
+    }
     .recent-jobs-wrap.hidden { display: none; }
     .recent-jobs-toggle {
       display: flex; align-items: center; gap: 0.5rem;
@@ -278,17 +293,59 @@
     .rji-name { flex: 1; font-size: 0.72rem; color: #aaffaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rji-label { font-size: 0.65rem; color: #558855; }
     .rji-open { font-size: 0.65rem; color: #55ffff; flex-shrink: 0; }
+
+    /* ── ADMIN FAB ── */
+    .admin-fab {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 1.5rem;
+      padding: 0.6rem 1.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      z-index: 90;
+      box-shadow: 0 4px 16px rgba(102,126,234,0.3);
+      transition: opacity 0.2s, transform 0.1s;
+      display: none;
+    }
+    .admin-fab:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* ── MAIN README SECTION ── */
+    .main-readme-section { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
+    .main-readme-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .main-readme-title { font-size: 0.92rem; font-weight: 700; }
+    .main-readme-status { font-size: 0.78rem; color: var(--text-muted); }
+    .readme-banner { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-size: 0.82rem; color: #fbbf24; margin-bottom: 1rem; }
+    .readme-nav { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+    .readme-nav-btn { padding: 0.25rem 0.55rem; font-size: 0.7rem; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .readme-nav-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
   </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
 <body>
 
 <nav>
-  <a class="nav-brand" href="/"><div class="brand-icon">⬡</div>Lineage Explorer</a>
-  <div class="nav-links">
-    <a class="nav-link" href="/">Dashboard</a>
-    <a class="nav-link" href="/customers.html">Kunden</a>
-    <a class="nav-link active" href="/projects.html">Projekte</a>
-    <a class="nav-link" href="/lineage.html">Lineage</a>
+  <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>Atlas</a>
+    <div class="nav-links">
+      <a class="nav-link active" href="/projects.html">Projekte</a>
+      <a class="nav-link" href="/">Dashboard</a>
+      <a class="nav-link" href="/analytics.html">Analytics</a>
+      <a class="nav-link" href="/lineage.html">Lineage</a>
+      <a class="nav-link" href="/script-sync.html">Script Sync</a>
+      <a class="nav-link" href="/app-hub.html">App Hub</a>
+    <a class="nav-link" href="/theme-builder.html">Theme</a>
+    </div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
   </div>
   <div class="nav-spacer"></div>
   <div class="nav-user">
@@ -304,6 +361,24 @@
       <p class="page-subtitle">Lineage-Projekte verwalten und Daten laden</p>
     </div>
     <button class="btn-primary" id="newProjectBtn">+ Neues Projekt</button>
+  </div>
+
+  <!-- Main Project README -->
+  <div class="main-readme-section" id="mainReadmeSection">
+    <div class="main-readme-header">
+      <span class="main-readme-title">Projekt README</span>
+      <span class="main-readme-status" id="readmeStatus"></span>
+    </div>
+    <div class="readme-banner" id="readmeBanner" style="display:none">Dokumentiere hier Architektur, Reload-Automation und Ansprechpartner für den gesamten Tenant.</div>
+    <div class="readme-nav" id="readmeNav">
+      <button class="readme-nav-btn" data-anchor="tenant-übersicht">Tenant-Übersicht</button>
+      <button class="readme-nav-btn" data-anchor="architektur">Architektur</button>
+      <button class="readme-nav-btn" data-anchor="reload-automation">Reload-Automation</button>
+      <button class="readme-nav-btn" data-anchor="ansprechpartner">Ansprechpartner</button>
+      <button class="readme-nav-btn" data-anchor="entscheidungen">Entscheidungen</button>
+      <button class="readme-nav-btn" data-anchor="einschränkungen">Einschränkungen</button>
+    </div>
+    <div id="readmeEditorContainer"></div>
   </div>
 
   <div id="projectsWrap">
@@ -356,7 +431,36 @@
   </div>
 </div>
 
-<!-- ── LOG POPUP ── -->
+<!-- Fetch Step Selection -->
+<div class="modal-backdrop" id="fetchModal">
+  <div class="modal confirm-modal">
+    <div class="modal-title">Fetch-Job starten</div>
+    <div class="confirm-msg" id="fetchModalProject"></div>
+    <div class="form-group">
+      <label>Steps (standard: alle ausgewahlt)</label>
+      <div class="fetch-step-list" id="fetchStepList"></div>
+      <div class="fetch-step-actions">
+        <button type="button" class="btn-step" id="fetchSelectAll">Alle wahlen</button>
+        <button type="button" class="btn-step" id="fetchSelectNone">Alle abwahlen</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="fetchLineageLevel">Lineage-Level (fuer App Edges)</label>
+      <select id="fetchLineageLevel">
+        <option value="resource">Resource (Standard)</option>
+        <option value="field">Field</option>
+        <option value="table">Table</option>
+        <option value="all">All</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" id="fetchModalCancel">Abbrechen</button>
+      <button class="btn-modal-save" id="fetchModalStart">Job starten</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log Popup -->
 <div class="log-popup hidden" id="logPopup">
   <div class="log-header">
     <span class="log-status-dot done" id="logDot">OK</span>
@@ -380,37 +484,98 @@
   <button class="recent-jobs-toggle" id="recentJobsBtn">&gt; FETCH LOG</button>
 </div>
 
+<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
 <div id="toast"></div>
 
+<script src="/assets/atlas-shared.js"></script>
+<script src="/assets/markdownEditor.js"></script>
+<script src="/assets/smartCompose.js"></script>
 <script>
-  var token = localStorage.getItem('auth_access_token');
-  if (!token) { window.location.href = '/login.html'; }
-
-  try {
-    var jp = JSON.parse(atob(token.split('.')[1]));
-    document.getElementById('userEmail').textContent = 'User #' + (jp.sub || '—');
-  } catch(e) {}
-
-  document.getElementById('logoutBtn').addEventListener('click', function() {
-    localStorage.removeItem('auth_access_token');
-    window.location.href = '/login.html';
-  });
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
+  window.AtlasShared.bindLogout('logoutBtn');
 
   function showToast(msg, dur) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, dur || 3000);
+    window.AtlasShared.showToast(msg, dur, 'toast');
   }
 
   async function apiFetch(path, opts) {
-    var headers = Object.assign({'Authorization': 'Bearer ' + token}, (opts && opts.headers) || {});
-    var res = await fetch(path, Object.assign({}, opts || {}, {headers: headers}));
-    if (res.status === 401) { localStorage.removeItem('auth_access_token'); window.location.href = '/login.html'; }
-    return res;
+    return window.AtlasShared.apiFetch(path, opts);
+  }
+  var initialFocusState = window.AtlasShared.readFocusState(window.location.search);
+  var focusState = {
+    project: initialFocusState.project,
+    customer: initialFocusState.customer
+  };
+  function projectCustomerId(project) {
+    return window.AtlasShared.projectCustomerId(project);
+  }
+  function applyFocusPersistence() {
+    window.AtlasShared.persistFocusState(focusState);
+  }
+  function syncCustomerFromProject() {
+    var projectMap = {};
+    (Array.isArray(projects) ? projects : []).forEach(function(p) {
+      if (p && p.id !== undefined && p.id !== null) projectMap[String(p.id)] = p;
+    });
+    window.AtlasShared.syncCustomerFromProject(focusState, projectMap);
+  }
+  function updateFocusNavLinks(projectId, customerId) {
+    window.AtlasShared.updateNavProjectContext(projectId, customerId, 'a.nav-link');
+  }
+  function syncFocusInUrl(projectId, customerId) {
+    var q = new URLSearchParams(window.location.search);
+    if (projectId) q.set('project', String(projectId));
+    else q.delete('project');
+    if (customerId) q.set('customer', String(customerId));
+    else q.delete('customer');
+    history.replaceState(null, '', '/projects.html' + (q.toString() ? ('?' + q.toString()) : ''));
+  }
+  function renderFocusCustomerSelect() {
+    var sel = document.getElementById('navCustomerSelect');
+    var list = Array.isArray(customers) ? customers : [];
+    if (!list.length) {
+      focusState.customer = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Kunden verfuegbar</option>';
+      return;
+    }
+    sel.disabled = false;
+    if (!focusState.customer || !list.find(function(c) { return String(c.id) === String(focusState.customer); })) {
+      focusState.customer = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(c) {
+      return '<option value="' + escHtml(String(c.id)) + '"' + (String(c.id) === String(focusState.customer) ? ' selected' : '') + '>' + escHtml(c.name || ('Kunde ' + c.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.customer);
+  }
+  function renderFocusProjectSelect() {
+    var sel = document.getElementById('navProjectSelect');
+    var list = (Array.isArray(projects) ? projects : []).filter(function(p) {
+      return String(projectCustomerId(p)) === String(focusState.customer || '');
+    });
+    if (!list.length) {
+      focusState.project = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Projekte fuer Kunden</option>';
+      applyFocusPersistence();
+      updateFocusNavLinks('', focusState.customer);
+      syncFocusInUrl('', focusState.customer);
+      return;
+    }
+    sel.disabled = false;
+    if (!focusState.project || !list.find(function(p) { return String(p.id) === String(focusState.project); })) {
+      focusState.project = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(p) {
+      return '<option value="' + escHtml(String(p.id)) + '"' + (String(p.id) === String(focusState.project) ? ' selected' : '') + '>' + escHtml(p.name || ('Projekt ' + p.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.project);
+    applyFocusPersistence();
+    updateFocusNavLinks(focusState.project, focusState.customer);
+    syncFocusInUrl(focusState.project, focusState.customer);
   }
 
-  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
   function fmtDate(iso) {
     if (!iso) return '—';
@@ -432,10 +597,13 @@
   async function loadData() {
     var [projRes, custRes] = await Promise.all([
       apiFetch('/api/projects'),
-      apiFetch('/api/customers')
+      apiFetch('/api/customers/names')
     ]);
     projects = await projRes.json();
     customers = await custRes.json();
+    syncCustomerFromProject();
+    renderFocusCustomerSelect();
+    renderFocusProjectSelect();
     renderProjects();
     populateCustomerDropdown();
   }
@@ -446,7 +614,7 @@
     sel.innerHTML = '<option value="">— Kunden wählen —</option>'
       + customers.map(function(c) {
           return '<option value="' + c.id + '"' + (String(c.id) === current ? ' selected' : '') + '>'
-            + escHtml(c.name) + ' (' + escHtml(c.tenant_url.replace(/^https?:\/\//, '').split('/')[0]) + ')'
+            + escHtml(c.name)
             + '</option>';
         }).join('');
   }
@@ -461,7 +629,7 @@
       var jobInfo = projectJobStatus[p.id] || {};
       var lastStatus = jobInfo.status ? statusBadge(jobInfo.status) : statusBadge('');
       var custName = p.customer ? escHtml(p.customer.name) : '—';
-      var custUrl = p.customer ? escHtml(p.customer.tenant_url) : '—';
+      var projectIdLabel = p.id !== undefined && p.id !== null ? escHtml(String(p.id)) : '—';
       var isBusy = jobInfo.status === 'running' || jobInfo.status === 'queued';
       return '<div class="project-card">'
         + '<div class="project-card-header">'
@@ -471,18 +639,33 @@
         + (p.description ? '<div class="project-desc">' + escHtml(p.description) + '</div>' : '')
         + '<div class="project-meta">'
         + '<div class="meta-row"><span class="meta-key">Kunde</span><span class="meta-val">' + custName + '</span></div>'
-        + '<div class="meta-row"><span class="meta-key">Tenant</span><span class="meta-val" title="' + custUrl + '">' + custUrl.replace(/^https?:\/\//, '') + '</span></div>'
+        + '<div class="meta-row"><span class="meta-key">Projekt</span><span class="meta-val">' + projectIdLabel + '</span></div>'
         + '<div class="meta-row"><span class="meta-key">Erstellt</span><span class="meta-val">' + fmtDate(p.created_at) + '</span></div>'
         + '</div>'
         + '<div class="project-actions">'
-        + '<button class="btn-fetch" id="fetchBtn-' + p.id + '" onclick="startFetch(' + p.id + ')" ' + (isBusy ? 'disabled' : '') + '>▶ Daten laden</button>'
+        + '<button class="btn-fetch" id="fetchBtn-' + p.id + '" data-fetch-id="' + p.id + '" ' + (isBusy ? 'disabled' : '') + '>▶ Daten laden</button>'
+        + '<a class="btn-lineage" href="/analytics.html?project=' + p.id + '">Analytics</a>'
         + '<a class="btn-lineage" href="/lineage.html?project=' + p.id + '">⬡ Lineage</a>'
-        + '<button class="btn-edit" onclick="openEdit(' + p.id + ')">Bearbeiten</button>'
-        + '<button class="btn-danger" onclick="openDelete(' + p.id + ', \'' + escHtml(p.name) + '\')">Löschen</button>'
+        + '<button class="btn-edit" data-edit-id="' + p.id + '">Bearbeiten</button>'
+        + '<button class="btn-danger" data-delete-id="' + p.id + '">Löschen</button>'
         + '</div>'
         + '</div>';
     }).join('');
     wrap.innerHTML = '<div class="projects-grid">' + cards + '</div>';
+
+    wrap.querySelectorAll('[data-fetch-id]').forEach(function(btn) {
+      btn.addEventListener('click', function() { openFetchModal(parseInt(this.dataset.fetchId, 10)); });
+    });
+    wrap.querySelectorAll('[data-edit-id]').forEach(function(btn) {
+      btn.addEventListener('click', function() { openEdit(parseInt(this.dataset.editId, 10)); });
+    });
+    wrap.querySelectorAll('[data-delete-id]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = parseInt(this.dataset.deleteId, 10);
+        var p = projects.find(function(x) { return x.id === id; });
+        openDelete(id, p ? p.name : '');
+      });
+    });
   }
 
   // ── LOG POPUP ─────────────────────────────────────────────────────
@@ -492,6 +675,23 @@
   var lastLogCount = 0;
   var recentJobs = [];      // [{jobId, projectName, status, projectId}]
   var recentJobsOpen = false;
+
+  function isLogPopupOpen() {
+    return !document.getElementById('logPopup').classList.contains('hidden');
+  }
+
+  function updateRecentJobsVisibility() {
+    var wrap = document.getElementById('recentJobsWrap');
+    var hasRecentJobs = recentJobs.length > 0;
+    var popupOpen = isLogPopupOpen();
+    if (hasRecentJobs) wrap.classList.remove('hidden');
+    else wrap.classList.add('hidden');
+    wrap.classList.toggle('with-log-open', popupOpen && hasRecentJobs);
+    if (!hasRecentJobs) {
+      recentJobsOpen = false;
+      document.getElementById('recentJobsList').classList.add('hidden');
+    }
+  }
 
   function setLogDot(status) {
     var dot = document.getElementById('logDot');
@@ -511,16 +711,26 @@
   }
 
   function logLineClass(text) {
-    if (/^✓/.test(text) || /✓/.test(text.replace(/\[\d{2}:\d{2}:\d{2}\]\s*/, ''))) return 'log-line log-ok';
+    if (/^✓/.test(text) || /✓/.test(text.replace(/^\[[^\]]+\]\s*/, ''))) return 'log-line log-ok';
     if (/^✗/.test(text) || /Fehler/.test(text)) return 'log-line log-err';
     if (/Schritt \d+\//.test(text)) return 'log-line log-step';
     return 'log-line';
   }
 
+  function formatLogLineToLocal(text) {
+    var m = /^\[([^\]]+)\]\s*(.*)$/.exec(String(text || ''));
+    if (!m) return text;
+    var parsed = new Date(m[1]);
+    if (isNaN(parsed.getTime())) return text;
+    var local = parsed.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    return '[' + local + '] ' + m[2];
+  }
+
   function appendLogLine(text) {
+    var displayText = formatLogLineToLocal(text);
     var el = document.createElement('div');
-    el.className = logLineClass(text);
-    el.textContent = text;
+    el.className = logLineClass(displayText);
+    el.textContent = displayText;
     document.getElementById('logLines').appendChild(el);
     var body = document.getElementById('logBody');
     body.scrollTop = body.scrollHeight;
@@ -534,16 +744,15 @@
     setLogDot(status || 'queued');
     document.getElementById('logPopup').classList.remove('hidden', 'minimized');
     document.getElementById('logMinimize').textContent = '[-]';
-    document.getElementById('recentJobsWrap').classList.add('hidden');
     recentJobsOpen = false;
+    document.getElementById('recentJobsList').classList.add('hidden');
+    updateRecentJobsVisibility();
   }
 
   function closeLogPopup() {
     logPolling = false;
     document.getElementById('logPopup').classList.add('hidden');
-    if (recentJobs.length > 0) {
-      document.getElementById('recentJobsWrap').classList.remove('hidden');
-    }
+    updateRecentJobsVisibility();
   }
 
   document.getElementById('logMinimize').addEventListener('click', function() {
@@ -598,6 +807,7 @@
     recentJobs = recentJobs.filter(function(j) { return j.jobId !== jobId; });
     recentJobs.unshift({jobId: jobId, projectName: projectName, projectId: projectId, status: status});
     if (recentJobs.length > 6) recentJobs = recentJobs.slice(0, 6);
+    updateRecentJobsVisibility();
   }
 
   function statusDotColor(status) {
@@ -635,6 +845,7 @@
   });
 
   async function reopenLog(jobId, projectName, projectId) {
+    logPolling = false;
     recentJobsOpen = false;
     document.getElementById('recentJobsList').classList.add('hidden');
     openLogPopup(jobId, projectName, 'queued');
@@ -655,7 +866,60 @@
 
   // ── FETCH JOB ─────────────────────────────────────────────────────
 
-  async function startFetch(projectId) {
+  var FETCH_STEP_OPTIONS = [
+    {id: 'spaces', label: 'Spaces'},
+    {id: 'apps', label: 'Apps'},
+    {id: 'data-connections', label: 'Data Connections'},
+    {id: 'reloads', label: 'Reloads'},
+    {id: 'audits', label: 'Audits'},
+    {id: 'licenses-consumption', label: 'Licenses Consumption'},
+    {id: 'licenses-status', label: 'Licenses Status'},
+    {id: 'app-data-metadata', label: 'App Data Metadata'},
+    {id: 'lineage', label: 'Lineage'},
+    {id: 'app-edges', label: 'App Edges'},
+    {id: 'usage', label: 'Usage'},
+    {id: 'scripts', label: 'Scripts'}
+  ];
+  var fetchModalProjectId = null;
+
+  function renderFetchStepList(selectAll) {
+    var wrap = document.getElementById('fetchStepList');
+    wrap.innerHTML = FETCH_STEP_OPTIONS.map(function(step) {
+      var checked = selectAll ? ' checked' : '';
+      return '<label class="fetch-step-item">'
+        + '<input type="checkbox" data-fetch-step="' + step.id + '"' + checked + ' />'
+        + '<span>' + escHtml(step.label) + '</span>'
+        + '</label>';
+    }).join('');
+  }
+
+  function getSelectedFetchSteps() {
+    var selected = [];
+    document.querySelectorAll('[data-fetch-step]').forEach(function(el) {
+      if (el.checked) selected.push(el.getAttribute('data-fetch-step'));
+    });
+    return selected;
+  }
+
+  function getSelectedLineageLevel() {
+    var sel = document.getElementById('fetchLineageLevel');
+    var value = String((sel && sel.value) || 'resource').trim().toLowerCase();
+    if (value === 'field' || value === 'table' || value === 'all' || value === 'resource') return value;
+    return 'resource';
+  }
+
+  function openFetchModal(projectId) {
+    fetchModalProjectId = projectId;
+    var project = projects.find(function(p) { return p.id === projectId; });
+    var projectName = project ? project.name : ('Projekt ' + projectId);
+    document.getElementById('fetchModalProject').textContent = 'Projekt: ' + projectName;
+    renderFetchStepList(true);
+    var lineageLevelSel = document.getElementById('fetchLineageLevel');
+    if (lineageLevelSel) lineageLevelSel.value = 'resource';
+    openModal('fetchModal');
+  }
+
+  async function startFetch(projectId, steps, lineageLevel) {
     var project = projects.find(function(p) { return p.id === projectId; });
     var projectName = project ? project.name : 'Projekt ' + projectId;
     var btn = document.getElementById('fetchBtn-' + projectId);
@@ -664,7 +928,7 @@
       var res = await apiFetch('/api/fetch/jobs', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({project_id: projectId, steps: null})
+        body: JSON.stringify({project_id: projectId, steps: steps, lineageLevel: lineageLevel || 'resource'})
       });
       if (!res.ok) {
         var err = await res.json().catch(function(){ return {}; });
@@ -686,6 +950,22 @@
 
   function openModal(id) { document.getElementById(id).classList.add('open'); }
   function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.getElementById('fetchModalCancel').addEventListener('click', function() { closeModal('fetchModal'); });
+  document.getElementById('fetchModal').addEventListener('click', function(e) { if (e.target === this) closeModal('fetchModal'); });
+  document.getElementById('fetchSelectAll').addEventListener('click', function() { renderFetchStepList(true); });
+  document.getElementById('fetchSelectNone').addEventListener('click', function() { renderFetchStepList(false); });
+  document.getElementById('fetchModalStart').addEventListener('click', async function() {
+    if (fetchModalProjectId == null) return;
+    var steps = getSelectedFetchSteps();
+    var lineageLevel = getSelectedLineageLevel();
+    if (!steps.length) {
+      showToast('Bitte mindestens einen Step auswaehlen');
+      return;
+    }
+    closeModal('fetchModal');
+    await startFetch(fetchModalProjectId, steps, lineageLevel);
+  });
 
   function resetForm() {
     document.getElementById('editingId').value = '';
@@ -785,6 +1065,127 @@
     deleteTargetId = null;
   });
 
+  document.getElementById('navCustomerSelect').addEventListener('change', function() {
+    focusState.customer = String(this.value || '').trim();
+    renderFocusProjectSelect();
+    loadMainReadme();
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function() {
+    focusState.project = String(this.value || '').trim();
+    syncCustomerFromProject();
+    renderFocusCustomerSelect();
+    applyFocusPersistence();
+    updateFocusNavLinks(focusState.project, focusState.customer);
+    syncFocusInUrl(focusState.project, focusState.customer);
+    loadMainReadme();
+  });
+
+  /* ── Main Project README ── */
+  var readmeEditor = null, readmeId = null, readmeAutoSaveTimer = null;
+
+  function getMainProject() {
+    if (!focusState.project) return null;
+    var p = projects.find(function(x) { return String(x.id) === String(focusState.project); });
+    return (p && p.name === 'Main') ? p : null;
+  }
+
+  async function loadMainReadme() {
+    var section = document.getElementById('mainReadmeSection');
+    var mainProj = getMainProject();
+    if (!mainProj) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+
+    var statusEl = document.getElementById('readmeStatus');
+    var bannerEl = document.getElementById('readmeBanner');
+    try {
+      var res = await apiFetch('/api/readmes?project_id=' + encodeURIComponent(mainProj.id) + '&readme_type=project_readme');
+      if (!res.ok) throw new Error();
+      var data = await res.json();
+      var readme = Array.isArray(data) ? data[0] : data;
+      if (readme && readme.id) {
+        readmeId = readme.id;
+        bannerEl.style.display = 'none';
+        initReadmeEditor(readme.content || '');
+        statusEl.textContent = 'Gespeichert';
+      } else { throw new Error('empty'); }
+    } catch (e) {
+      readmeId = null;
+      bannerEl.style.display = 'block';
+      var tpl = '';
+      try {
+        var tRes = await apiFetch('/api/templates?type=project_readme');
+        if (tRes.ok) { var d = await tRes.json(); tpl = d.body || d.content || d.template || ''; }
+      } catch (_) {}
+      initReadmeEditor(tpl);
+      statusEl.textContent = 'Nicht gespeichert';
+    }
+  }
+
+  function initReadmeEditor(content) {
+    if (readmeEditor) readmeEditor.destroy();
+    readmeEditor = AtlasSmartCompose.readme('readmeEditorContainer', {
+      readmeType: 'project_readme',
+      initialValue: content,
+      onChange: function () { debounceReadmeSave(); },
+    });
+  }
+
+  function debounceReadmeSave() {
+    document.getElementById('readmeStatus').textContent = 'Nicht gespeichert — Änderungen gehen verloren';
+    clearTimeout(readmeAutoSaveTimer);
+    readmeAutoSaveTimer = setTimeout(saveReadme, 2000);
+  }
+
+  async function saveReadme() {
+    var statusEl = document.getElementById('readmeStatus');
+    if (!readmeEditor) return;
+    var mainProj = getMainProject();
+    if (!mainProj) return;
+    var content = readmeEditor.getValue();
+    statusEl.textContent = 'Wird gespeichert...';
+    try {
+      if (readmeId) {
+        var res = await apiFetch('/api/readmes/' + readmeId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: content }) });
+        if (!res.ok) throw new Error();
+      } else {
+        var res = await apiFetch('/api/readmes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: parseInt(mainProj.id, 10), readme_type: 'project_readme', content: content }) });
+        if (!res.ok) throw new Error();
+        var saved = await res.json();
+        readmeId = saved.id;
+        document.getElementById('readmeBanner').style.display = 'none';
+      }
+      statusEl.textContent = 'Gespeichert vor wenigen Sekunden';
+    } catch (e) {
+      statusEl.textContent = 'Fehler beim Speichern';
+    }
+  }
+
+  // Anchor navigation — scroll to the matching Smart-Compose field
+  var _anchorKeyMap = {
+    'tenant-übersicht': 'beschreibung',
+    'architektur':      'architektur',
+    'reload-automation':'reload',
+    'ansprechpartner':  'ansprechpartner',
+    'entscheidungen':   'entscheidungen',
+    'einschränkungen':  'einschraenkungen',
+  };
+  document.getElementById('readmeNav').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-anchor]');
+    if (!btn) return;
+    var key = _anchorKeyMap[btn.getAttribute('data-anchor')];
+    if (!key) return;
+    var el = document.querySelector('#readmeEditorContainer [data-sc-key="' + key + '"]');
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
+  });
+
+  // Override loadData to also load readme
+  var _originalLoadData = loadData;
+  loadData = async function() {
+    await _originalLoadData();
+    await loadMainReadme();
+  };
+
+  updateFocusNavLinks(focusState.project, focusState.customer);
   loadData();
 </script>
 </body>

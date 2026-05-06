@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from shared.qlik_client import QlikClient, resolve_logger
 
@@ -13,6 +14,8 @@ async def fetch_all_apps(
     limit = 100
     next_url: Optional[str] = None
     seen_ids = set()
+    parsed = urlparse(client.base_url)
+    tenant = parsed.netloc or parsed.path or client.base_url
 
     while True:
         if next_url:
@@ -54,12 +57,32 @@ async def fetch_all_apps(
                 or item.get("title")
                 or app_id
             )
+            attrs = item.get("resourceAttributes") if isinstance(item.get("resourceAttributes"), dict) else {}
+            custom_attrs = item.get("resourceCustomAttributes")
             apps.append(
                 {
                     "appId": app_id,
                     "name": str(name),
                     "spaceId": str(space_id or ""),
                     "itemType": str(item_type or ""),
+                    "id": item.get("id"),
+                    "ownerId": item.get("ownerId"),
+                    "description": item.get("description"),
+                    "resourceType": item.get("resourceType"),
+                    "resourceId": item.get("resourceId"),
+                    "thumbnail": item.get("thumbnail"),
+                    "resourceAttributes_id": attrs.get("id"),
+                    "resourceAttributes_name": attrs.get("name"),
+                    "resourceAttributes_description": attrs.get("description"),
+                    "resourceAttributes_createdDate": attrs.get("createdDate"),
+                    "resourceAttributes_modifiedDate": attrs.get("modifiedDate"),
+                    "resourceAttributes_modifiedByUserName": attrs.get("modifiedByUserName"),
+                    "resourceAttributes_publishTime": attrs.get("publishTime"),
+                    "resourceAttributes_lastReloadTime": attrs.get("lastReloadTime"),
+                    "resourceAttributes_trashed": attrs.get("trashed"),
+                    "resourceCustomAttributes_json": custom_attrs if isinstance(custom_attrs, list) else [],
+                    "source": "/api/v1/items",
+                    "tenant": tenant,
                 }
             )
             if limit_apps and len(apps) >= limit_apps:

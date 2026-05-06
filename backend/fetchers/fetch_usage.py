@@ -9,11 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from shared.qlik_client import QlikApiError, QlikClient, resolve_logger
-from shared.utils import ensure_dir, sanitize_name, write_json
 
 
 DEFAULT_WINDOW_DAYS = 90
-DEFAULT_OUTDIR = Path("./output/appusage")
+DEFAULT_OUTDIR: Path | str | None = None
 DEFAULT_CONCURRENCY = int(os.getenv("QLIK_USAGE_CONCURRENCY", "5"))
 DEFAULT_PAGE_LIMIT = int(os.getenv("QLIK_AUDIT_PAGE_LIMIT", "500"))
 
@@ -570,7 +569,8 @@ async def _process_app(
     window_days: int,
     core_types: Dict[str, str],
     connection_types: List[str],
-    outdir: Path,
+    outdir: Optional[Path],
+    collector: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     app_id = str(app.get("appId") or app.get("id") or "").strip()
     if not app_id:
@@ -690,9 +690,8 @@ async def _process_app(
             "connections": connection_entries,
         }
 
-        file_name = f"{sanitize_name(app_name)}__{app_id}.json"
-        out_path = outdir / file_name
-        write_json(out_path, payload)
+        if collector is not None:
+            collector.append(payload)
         logger.info(
             "[%s/%s] usage %s (%s) -> views=%s reloads=%s connections=%s -> %s",
             idx,
@@ -702,7 +701,7 @@ async def _process_app(
             sheet_views,
             reloads,
             len(connection_entries),
-            out_path,
+            "memory",
         )
 
 
@@ -738,14 +737,16 @@ async def fetch_usage_async(
     apps: List[Dict[str, Any]],
     client: QlikClient,
     window_days: Optional[int] = None,
-    outdir: Path | str = DEFAULT_OUTDIR,
+    outdir: Path | str | None = DEFAULT_OUTDIR,
     concurrency: Optional[int] = None,
     close_client: bool = True,
     logger: Optional[logging.Logger] = None,
+    collector: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     resolved_logger = _get_logger(logger or getattr(client, "logger", None))
-    outdir = Path(outdir)
-    ensure_dir(outdir)
+    resolved_outdir: Optional[Path] = None
+    if outdir is not None:
+        resolved_logger.warning("fetch_usage outdir is ignored (local artifacts are disabled)")
 
     window_days = _resolve_window_days(window_days)
     end = _utc_now()
@@ -778,7 +779,8 @@ async def fetch_usage_async(
                 window_days,
                 core_types,
                 connection_types,
-                outdir,
+                resolved_outdir,
+                collector,
             )
         )
 
@@ -792,7 +794,7 @@ def fetch_usage(
     *,
     client: Optional[QlikClient] = None,
     window_days: Optional[int] = None,
-    outdir: Path | str = DEFAULT_OUTDIR,
+    outdir: Path | str | None = DEFAULT_OUTDIR,
     concurrency: Optional[int] = None,
     logger: Optional[logging.Logger] = None,
 ) -> None:

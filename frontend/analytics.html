@@ -1,0 +1,2278 @@
+<!doctype html>
+<html lang="de" style="background:#1a1a2e;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analytics - Lineage Explorer</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --text: #fff;
+      --muted: rgba(255,255,255,0.58);
+      --dim: rgba(255,255,255,0.34);
+      --accent: #667eea;
+      --accent2: #14b8a6;
+      --ok: #4ade80;
+      --warn: #fbbf24;
+      --bad: #f87171;
+      --r: 14px;
+      --rs: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.72); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
+    .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
+    .brand-icon { width: 32px; height: 32px; border-radius: 8px; overflow: hidden; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .nav-project-badge {
+      margin-left: 0.5rem;
+      padding: 0.25rem 0.55rem;
+      border: 1px solid rgba(148,163,184,0.35);
+      border-radius: 999px;
+      background: rgba(30,41,59,0.45);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.42rem;
+      min-width: 0;
+    }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-select {
+      height: 28px;
+      min-width: 220px;
+      max-width: 280px;
+      background: rgba(15,23,42,0.82);
+      border: 1px solid rgba(148,163,184,0.35);
+      color: #fff;
+      border-radius: 999px;
+      padding: 0 0.6rem;
+      font-size: 0.76rem;
+      outline: none;
+    }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.28) inset; }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
+    .nav-spacer { flex: 1; }
+    .nav-user { display: flex; align-items: center; gap: 0.75rem; }
+    .nav-user-email { color: var(--muted); font-size: 0.8rem; }
+    .btn-sm, .btn { border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: var(--rs); cursor: pointer; }
+    .btn-sm { padding: 0.4rem 0.9rem; font-size: 0.8rem; }
+    .btn { height: 34px; padding: 0 0.9rem; font-size: 0.82rem; }
+    .btn:hover, .btn-sm:hover { background: var(--surface-hover); color: var(--text); }
+    .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border-color: transparent; font-weight: 600; }
+
+    main { max-width: 1500px; margin: 0 auto; padding: 1.2rem; }
+    .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+    .title { font-size: 1.6rem; font-weight: 700; }
+    .subtitle { margin-top: 0.25rem; color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
+    .chip { border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 0.76rem; padding: 0.3rem 0.7rem; }
+
+    .toolbar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.8rem; padding: 0.75rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+    .toolbar label { font-size: 0.78rem; color: var(--muted); }
+    .toolbar select { height: 34px; background: rgba(255,255,255,0.08); border: 1px solid var(--border); border-radius: var(--rs); color: var(--text); padding: 0 0.65rem; font-size: 0.84rem; outline: none; }
+    .toolbar select option { background: #1a1a2e; color: #fff; }
+    .toolbar-status { margin-left: auto; font-size: 0.78rem; color: var(--dim); }
+
+    .error { display: none; margin: 0 0 0.8rem; padding: 0.65rem 0.8rem; border: 1px solid rgba(248,113,113,0.45); background: rgba(239,68,68,0.12); border-radius: 10px; color: #fecaca; font-size: 0.8rem; }
+
+    .module-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 0.55rem; margin-bottom: 1rem; }
+    @media (max-width: 1180px) { .module-grid { grid-template-columns: repeat(3, minmax(130px, 1fr)); } }
+    @media (max-width: 700px) { .module-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); } }
+    .module-card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 0.6rem; min-height: 92px; cursor: pointer; text-align: left; width: 100%; color: var(--text); font: inherit; }
+    .module-card:hover { background: var(--surface-hover); }
+    .module-card.active { border-color: rgba(102,126,234,0.72); background: rgba(102,126,234,0.14); box-shadow: 0 0 0 1px rgba(102,126,234,0.35) inset; }
+    .module-card:focus-visible { outline: 2px solid rgba(102,126,234,0.8); outline-offset: 1px; }
+    .module-card .m { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.3rem; }
+    .module-card .n { font-size: 0.86rem; font-weight: 600; line-height: 1.35; }
+    .badge { display: inline-block; margin-top: 0.35rem; border-radius: 999px; padding: 0.14rem 0.5rem; font-size: 0.67rem; border: 1px solid var(--border); color: var(--muted); }
+    .badge.live { color: var(--ok); border-color: rgba(74,222,128,0.45); background: rgba(74,222,128,0.1); }
+    .badge.plan { color: var(--warn); border-color: rgba(251,191,36,0.45); background: rgba(251,191,36,0.1); }
+
+    .section { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r); margin-bottom: 0.9rem; overflow: hidden; }
+    .module-section { display: none; }
+    .module-section.active { display: block; }
+    .section-head { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; border-bottom: 1px solid var(--border); padding: 0.72rem 0.85rem; background: rgba(255,255,255,0.03); }
+    .section-title { font-size: 0.9rem; font-weight: 700; }
+    .section-sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+    .section-body { padding: 0.75rem 0.85rem 0.85rem; }
+
+    .stats { display: grid; gap: 0.55rem; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 0.65rem; }
+    .stat { border: 1px solid var(--border); border-radius: 10px; padding: 0.55rem 0.65rem; background: rgba(255,255,255,0.03); }
+    .stat .k { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.18rem; }
+    .stat .v { font-size: 1.05rem; font-weight: 700; }
+    .stat .s { font-size: 0.72rem; color: var(--dim); margin-top: 0.2rem; line-height: 1.3; }
+    .cv-filter-row { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.65rem; }
+    .cv-filter-row label { font-size: 0.76rem; color: var(--muted); }
+    .cv-filter-row select {
+      height: 32px;
+      min-width: 220px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      color: var(--text);
+      padding: 0 0.6rem;
+      font-size: 0.8rem;
+      outline: none;
+    }
+    .cv-filter-row select option { background: #1a1a2e; color: #fff; }
+    .cv-toggle { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: 0.4rem; font-size: 0.76rem; color: var(--muted); user-select: none; }
+    .cv-toggle input { accent-color: #667eea; width: 15px; height: 15px; cursor: pointer; }
+
+    .split { display: grid; gap: 0.75rem; grid-template-columns: 1.2fr 1fr; }
+    @media (max-width: 1100px) { .split { grid-template-columns: 1fr; } }
+    .panel { border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,0.03); overflow: hidden; }
+    .panel-h { padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .panel-h-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.45rem; }
+    .panel-h-actions .btn { height: 26px; padding: 0 0.6rem; font-size: 0.7rem; text-transform: none; letter-spacing: normal; }
+    .panel-b { padding: 0.55rem; }
+    .dm-legend { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.6rem; }
+    .dm-chip {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      font-size: 0.68rem;
+      letter-spacing: 0.02em;
+      padding: 0.14rem 0.52rem;
+      color: #e2e8f0;
+      background: rgba(255,255,255,0.05);
+    }
+    .dm-chip-cap { border-color: rgba(20,184,166,0.58); background: rgba(20,184,166,0.16); }
+    .dm-chip-deep { border-color: rgba(245,158,11,0.58); background: rgba(245,158,11,0.16); }
+    .dm-chip-pack { border-color: rgba(96,165,250,0.58); background: rgba(96,165,250,0.16); }
+    .dm-chip-bloat { border-color: rgba(34,197,94,0.58); background: rgba(34,197,94,0.16); }
+    [data-module-section="data-model"] .section-head {
+      background: linear-gradient(90deg, rgba(20,184,166,0.18), rgba(96,165,250,0.1) 46%, rgba(255,255,255,0.03));
+      border-bottom-color: rgba(96,165,250,0.24);
+    }
+    [data-module-section="data-model"] .viz-doc {
+      border-color: rgba(96,165,250,0.24);
+      background: linear-gradient(180deg, rgba(7,12,24,0.78), rgba(8,12,24,0.48));
+    }
+    .dm-stat {
+      position: relative;
+      border-color: rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+    }
+    .dm-stat::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: 10px 0 0 10px;
+      background: rgba(255,255,255,0.22);
+    }
+    .dm-footprint::before, .dm-efficiency::before, .dm-hclv::before { background: #14b8a6; }
+    .dm-peak-ram::before, .dm-peak-cpu::before { background: #60a5fa; }
+    .dm-drift::before { background: #f59e0b; }
+    .dm-panel { border-color: rgba(255,255,255,0.12); }
+    .dm-panel > .panel-h { font-weight: 700; color: #dbeafe; }
+    .dm-panel.dm-deep {
+      border-color: rgba(245,158,11,0.45);
+      background: linear-gradient(180deg, rgba(245,158,11,0.1), rgba(255,255,255,0.03));
+    }
+    .dm-panel.dm-deep > .panel-h {
+      background: rgba(245,158,11,0.14);
+      border-bottom-color: rgba(245,158,11,0.35);
+    }
+    .dm-panel.dm-pack {
+      border-color: rgba(96,165,250,0.42);
+      background: linear-gradient(180deg, rgba(96,165,250,0.08), rgba(255,255,255,0.03));
+    }
+    .dm-panel.dm-pack > .panel-h {
+      background: rgba(96,165,250,0.13);
+      border-bottom-color: rgba(96,165,250,0.34);
+    }
+    .dm-panel.dm-bloat {
+      border-color: rgba(34,197,94,0.38);
+      background: linear-gradient(180deg, rgba(34,197,94,0.07), rgba(255,255,255,0.03));
+    }
+    .dm-panel.dm-bloat > .panel-h {
+      background: rgba(34,197,94,0.12);
+      border-bottom-color: rgba(34,197,94,0.3);
+    }
+    .dm-panel.dm-drift {
+      border-color: rgba(245,158,11,0.38);
+      background: linear-gradient(180deg, rgba(245,158,11,0.08), rgba(255,255,255,0.03));
+    }
+    .dm-panel.dm-drift > .panel-h {
+      background: rgba(245,158,11,0.13);
+      border-bottom-color: rgba(245,158,11,0.32);
+    }
+
+    .canvas-wrap { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; }
+    #costValueChart { display: block; width: 100%; height: 300px; background: rgba(6,10,24,0.72); }
+    #costValueModalChart { display: block; width: 100%; height: 100%; min-height: 420px; background: rgba(6,10,24,0.88); }
+    .cv-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1200;
+      background: rgba(2,6,16,0.68);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .cv-modal-backdrop.open { display: flex; }
+    .cv-modal {
+      width: min(1280px, calc(100vw - 2rem));
+      height: min(86vh, 860px);
+      border: 1px solid rgba(148,163,184,0.38);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(15,23,42,0.98), rgba(10,16,32,0.97));
+      box-shadow: 0 22px 56px rgba(2,6,23,0.58);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .cv-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.7rem;
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid rgba(148,163,184,0.24);
+      background: rgba(255,255,255,0.04);
+      font-size: 0.77rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #cbd5e1;
+    }
+    .cv-modal-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 0; flex: 1; }
+    .cv-modal-canvas-wrap { flex: 1; min-height: 0; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; }
+    body.cv-modal-open { overflow: hidden; }
+    .dmp-toolbar { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.55rem; }
+    .dmp-toolbar label { font-size: 0.76rem; color: var(--muted); }
+    .dmp-toolbar select { height: 32px; background: rgba(255,255,255,0.08); border: 1px solid var(--border); border-radius: var(--rs); color: var(--text); padding: 0 0.6rem; font-size: 0.8rem; }
+    .dmp-toolbar select option { background: #1a1a2e; color: #fff; }
+    .dmp-meta { margin-left: auto; font-size: 0.74rem; color: var(--dim); }
+    .dmp-breadcrumb { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.55rem; }
+    .dmp-crumb {
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border-radius: 999px;
+      font-size: 0.72rem;
+      padding: 0.18rem 0.52rem;
+      cursor: pointer;
+    }
+    .dmp-crumb:hover { background: rgba(255,255,255,0.12); }
+    .dmp-crumb.active { border-color: rgba(102,126,234,0.65); background: rgba(102,126,234,0.2); cursor: default; }
+    .dmp-sep { color: var(--dim); font-size: 0.76rem; }
+    .dmp-wrap { background: rgba(6,10,24,0.72); }
+    #dataModelPackSvg { display: block; width: 100%; height: 520px; touch-action: none; cursor: grab; }
+    #dataModelPackSvg.panning { cursor: grabbing; }
+    .legend { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 0.45rem; font-size: 0.72rem; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .d-hclv { background: #ef4444; } .d-hchv { background: #f59e0b; } .d-ev { background: #22c55e; } .d-lclv { background: #94a3b8; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+    th, td { text-align: left; padding: 0.38rem 0.42rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    th { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; position: sticky; top: 0; background: rgba(10,14,30,0.96); }
+    .table-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.45rem; margin-bottom: 0.45rem; }
+    .table-filter { display: flex; flex-direction: column; gap: 0.2rem; }
+    .table-filter span { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .table-filter select {
+      height: 30px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      color: var(--text);
+      padding: 0 0.55rem;
+      font-size: 0.76rem;
+      outline: none;
+    }
+    .table-filter select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.25) inset; }
+    .table-filter select option { background: #1a1a2e; color: #fff; }
+    .table-filter-actions { display: flex; align-items: flex-end; }
+    .table-filter-reset { width: 100%; min-height: 30px; }
+    .table-filter-reset:disabled { opacity: 0.45; cursor: default; }
+    .table-filter-meta { margin: 0 0 0.35rem; font-size: 0.72rem; color: var(--dim); }
+    .table-pager { display: flex; align-items: center; justify-content: center; gap: 0.45rem; margin-top: 0.45rem; font-size: 0.72rem; color: var(--muted); }
+    .table-pager button { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #e2e8f0; border-radius: 5px; padding: 0.2rem 0.55rem; font-size: 0.72rem; cursor: pointer; transition: background 0.15s; }
+    .table-pager button:hover:not(:disabled) { background: rgba(102,126,234,0.25); border-color: rgba(102,126,234,0.5); }
+    .table-pager button:disabled { opacity: 0.35; cursor: default; }
+    .table-pager .pager-info { font-variant-numeric: tabular-nums; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.7rem; color: #c7d2fe; }
+    .empty { border: 1px dashed rgba(255,255,255,0.18); border-radius: 10px; padding: 0.7rem; color: var(--dim); font-size: 0.78rem; }
+
+    .planned { border: 1px dashed rgba(251,191,36,0.45); background: rgba(251,191,36,0.08); border-radius: 10px; padding: 0.7rem; color: #fde68a; font-size: 0.8rem; }
+    .viz-doc { border: 1px solid rgba(255,255,255,0.12); background: rgba(8,12,24,0.48); border-radius: 10px; padding: 0.55rem 0.65rem; margin-bottom: 0.55rem; }
+    .viz-doc-title { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 0.2rem; }
+    .viz-doc p { margin: 0 0 0.36rem; font-size: 0.77rem; line-height: 1.4; color: #dbeafe; }
+    .viz-doc ul { margin: 0; padding-left: 1rem; }
+    .viz-doc li { font-size: 0.75rem; line-height: 1.35; color: #bfdbfe; margin: 0 0 0.16rem; }
+    .detail-grid { display: grid; gap: 0.55rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .detail-card { border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(255,255,255,0.03); padding: 0.5rem 0.6rem; }
+    .detail-k { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+    .detail-v { font-size: 0.9rem; color: #e2e8f0; font-weight: 600; }
+    .jump-btn { margin-top: 0.6rem; }
+    #cvSelectedWrap.jump-animate { animation: portalPulse 420ms cubic-bezier(.22,.61,.36,1); }
+    #linTableWrap.jump-animate { animation: portalPulse 420ms cubic-bezier(.22,.61,.36,1); }
+    .lin-jump-btn {
+      border: none;
+      background: none;
+      color: #bfdbfe;
+      padding: 0;
+      font: inherit;
+      cursor: pointer;
+      text-align: left;
+      text-decoration: underline;
+      text-decoration-color: rgba(191,219,254,0.42);
+      text-underline-offset: 2px;
+    }
+    .lin-jump-btn:hover { color: #fff; text-decoration-color: rgba(255,255,255,0.92); }
+    .lin-jump-btn:focus-visible {
+      outline: 2px solid rgba(102,126,234,0.8);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+    @keyframes portalPulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(102,126,234,0.0); }
+      40% { transform: scale(1.012); box-shadow: 0 0 0 3px rgba(102,126,234,0.38); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(102,126,234,0.0); }
+    }
+
+    #toast { position: fixed; right: 1rem; bottom: 1rem; border: 1px solid var(--border); border-radius: var(--rs); background: rgba(30,40,70,0.95); color: var(--text); font-size: 0.84rem; padding: 0.72rem 0.96rem; opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 200; }
+    #toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
+</head>
+<body>
+<nav>
+  <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>Atlas</a>
+  <div class="nav-links">
+    <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/">Dashboard</a>
+    <a class="nav-link active" href="/analytics.html">Analytics</a>
+    <a class="nav-link" href="/lineage.html">Lineage</a>
+    <a class="nav-link" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/app-hub.html">App Hub</a>
+    <a class="nav-link" href="/theme-builder.html">Theme</a>
+  </div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-user"><span class="nav-user-email" id="userEmail">-</span><button class="btn-sm" id="logoutBtn">Sign out</button></div>
+</nav>
+
+<main>
+  <div class="page-head">
+    <div>
+      <h1 class="title">Analytics Insight Hub</h1>
+      <div class="subtitle">Neue Struktur mit 5 Modulen. Waehle ein Modul oben aus, um den jeweiligen Bereich zu oeffnen.</div>
+    </div>
+    <div class="chip" id="lastLoaded">Nicht geladen</div>
+  </div>
+
+  <div class="toolbar">
+    <label for="daysSelect">Zeitraum</label>
+    <select id="daysSelect"><option value="7">7 Tage</option><option value="30" selected>30 Tage</option><option value="90">90 Tage</option><option value="180">180 Tage</option><option value="365">365 Tage</option></select>
+    <button class="btn primary" id="reloadBtn">Reload</button>
+    <span class="toolbar-status" id="toolbarStatus">Bereit</span>
+  </div>
+  <div id="errorBanner" class="error"></div>
+
+  <div class="module-grid" id="moduleGrid">
+    <button type="button" class="module-card active" data-module="portfolio-insights"><div class="m">1 Portfolio Insights</div><div class="n">Cost vs Value Map</div><span class="badge live">live</span></button>
+    <button type="button" class="module-card" data-module="data-model"><div class="m">2 Data Model & Capacity</div><div class="n">Bloat, Growth, Efficiency</div><span class="badge live">live</span></button>
+    <button type="button" class="module-card" data-module="lineage-risk"><div class="m">3 Lineage Risk</div><div class="n">Criticality and Blast Radius</div><span class="badge live">live</span></button>
+    <button type="button" class="module-card" data-module="data-quality"><div class="m">4 Data Quality</div><div class="n">Profiling and Distributions</div><span class="badge plan">planned</span></button>
+    <button type="button" class="module-card" data-module="governance-ops"><div class="m">5 Governance Ops</div><div class="n">Usage Signals and Actions</div><span class="badge live">live</span></button>
+  </div>
+
+  <section class="section module-section active" data-module-section="portfolio-insights">
+    <div class="section-head">
+      <div><div class="section-title">1) Portfolio Insights - Cost vs Value Map</div><div class="section-sub">High-Cost-Low-Value Kandidaten, Benchmarks und Effizienz</div></div>
+    </div>
+    <div class="section-body">
+      <div class="viz-doc">
+        <div class="viz-doc-title">Abbildung: KPI-Uebersicht</div>
+        <p><strong>Analyse:</strong> Schnellbewertung des Portfolio-Zustands mit Fokus auf potenzielle Rationalisierungskandidaten.</p>
+        <p><strong>Daten:</strong> Aggregierte Werte aus der Cost-vs-Value Berechnung ueber alle im Filter sichtbaren Apps.</p>
+        <ul>
+          <li><strong>Apps:</strong> Anzahl beruecksichtigter Apps.</li>
+          <li><strong>High Cost Low Value:</strong> Apps mit hohem Cost- und niedrigem Value-Score.</li>
+          <li><strong>Avg Cost Score:</strong> Mittelwert der Cost-Scores.</li>
+          <li><strong>Avg Value Score:</strong> Mittelwert der Value-Scores.</li>
+        </ul>
+      </div>
+      <div class="viz-doc">
+        <div class="viz-doc-title">Kennzahlendefinitionen</div>
+        <p><strong>Cost Score:</strong> `0.8 * norm(static_byte_size + peak_memory + cpu_ms*1024 + complexity*131072) + 0.2 * norm(complexity)`.</p>
+        <p><strong>Complexity:</strong> `fields_count + tables_count * 8`.</p>
+        <p><strong>Value Score:</strong> Kombination aus Usage-Signal und technischem Value-Proxy. Bei fehlendem/identischem Usage-Signal wird der Proxy staerker gewichtet.</p>
+        <p><strong>Efficiency Score:</strong> `((value_score + 1) / (cost_score + 1)) * 100`.</p>
+        <p id="cvValueMode" class="mono">Value-Modus wird geladen ...</p>
+      </div>
+      <div class="cv-filter-row">
+        <label for="cvAreaSelect">Bereich</label>
+        <select id="cvAreaSelect"><option value="">Alle Bereiche</option></select>
+        <label class="cv-toggle" for="cvLabelToggle"><input id="cvLabelToggle" type="checkbox" checked /> App-Namen</label>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k">Apps</div><div class="v" id="cvApps">-</div></div>
+        <div class="stat"><div class="k">High Cost Low Value</div><div class="v" id="cvHclv">-</div></div>
+        <div class="stat"><div class="k">Avg Cost Score</div><div class="v" id="cvAvgCost">-</div></div>
+        <div class="stat"><div class="k">Avg Value Score</div><div class="v" id="cvAvgValue">-</div></div>
+      </div>
+      <div class="split">
+        <div class="panel">
+          <div class="panel-h panel-h-actions">
+            <span>Cost vs Value Scatter</span>
+            <button type="button" class="btn" id="cvExpandBtn">Groesser anzeigen</button>
+          </div>
+          <div class="panel-b">
+            <div class="viz-doc"><div class="viz-doc-title">Analyse + Daten</div><p><strong>Analyse:</strong> Positioniert jede App nach Kosten (Y) und Nutzen (X), um Handlungscluster zu erkennen.</p><p><strong>Daten:</strong> Je App: `cost_score`, `value_score`, `quadrant`, `value_usage_score`, `value_proxy_score`.</p><p><strong>Hinweis:</strong> Bei gleichen Koordinaten werden Punkte minimal aufgefaechert, damit Ueberlagerungen sichtbar bleiben.</p></div>
+            <div class="canvas-wrap"><div id="costValueChart" style="width:100%;height:300px;"></div></div>
+            <div class="legend"><span><i class="dot d-hclv"></i>High-Cost-Low-Value</span><span><i class="dot d-hchv"></i>High-Cost-High-Value</span><span><i class="dot d-ev"></i>Efficient-Value</span><span><i class="dot d-lclv"></i>Low-Cost-Low-Value</span></div>
+          </div>
+        </div>
+        <div class="panel"><div class="panel-h">Top High-Cost-Low-Value</div><div class="panel-b"><div class="viz-doc"><div class="viz-doc-title">Analyse + Spalten</div><p><strong>Analyse:</strong> Priorisierte Liste der kritischsten Kosten/Nutzen-Kandidaten fuer Deep-Dive und Massnahmenplanung.</p><p><strong>Daten:</strong> Gefilterte Apps aus dem Quadranten `high-cost-low-value`.</p><ul><li><strong>App:</strong> Anzeigename der App.</li><li><strong>Bereich:</strong> Zugeordneter Space/Bereich.</li><li><strong>Cost:</strong> Normierter Kosten-Score 0-100.</li><li><strong>Value:</strong> Kombinierter Nutzen-Score 0-100.</li><li><strong>Usage Sig.:</strong> Normiertes Usage-Signal (Opens/Views/Users/Reloads).</li><li><strong>Proxy Sig.:</strong> Normierter technischer Value-Proxy.</li><li><strong>Eff.:</strong> Verhaeltnis Nutzen zu Kosten.</li></ul></div><div id="cvTableWrap"></div></div></div>
+      </div>
+      <div style="height:0.7rem"></div>
+      <div class="panel">
+        <div class="panel-h">Ausgewaehlter Scatter-Punkt</div>
+        <div class="panel-b">
+          <div id="cvSelectedWrap" class="empty">Klicke im Scatter auf einen App-Punkt, um alle Recheninputs und Scores zu sehen.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section module-section" data-module-section="data-model">
+    <div class="section-head">
+      <div><div class="section-title">2) Data Model & Capacity</div><div class="section-sub">Bloat, Capacity Footprint, Effizienz und gezielter Trend-Deep-Dive pro App</div></div>
+    </div>
+    <div class="section-body">
+      <div class="viz-doc">
+        <div class="viz-doc-title">Capacity Snapshot</div>
+        <p><strong>Analyse:</strong> Kompakte Kapazitaetssicht ohne neue Backend-Logik, direkt aus vorhandenen Analytics-Payloads.</p>
+        <p><strong>Daten:</strong> `cost-value` (Footprint, RAM, CPU, Efficiency, HCLV) und `bloat.summary` (Schema Drift Pressure).</p>
+      </div>
+      <div class="dm-legend">
+        <span class="dm-chip dm-chip-cap">Capacity KPIs</span>
+        <span class="dm-chip dm-chip-deep">Deep Dive</span>
+        <span class="dm-chip dm-chip-pack">Circle Pack</span>
+        <span class="dm-chip dm-chip-bloat">Bloat Explorer</span>
+      </div>
+      <div class="stats">
+        <div class="stat dm-stat dm-footprint"><div class="k">Capacity Footprint</div><div class="v" id="capFootprint">-</div><div class="s">Summe static_byte_size_latest</div></div>
+        <div class="stat dm-stat dm-peak-ram"><div class="k">Peak RAM App</div><div class="v" id="capPeakRam">-</div><div class="s" id="capPeakRamApp">-</div></div>
+        <div class="stat dm-stat dm-peak-cpu"><div class="k">Peak CPU App</div><div class="v" id="capPeakCpu">-</div><div class="s" id="capPeakCpuApp">-</div></div>
+        <div class="stat dm-stat dm-efficiency"><div class="k">Avg Efficiency</div><div class="v" id="capAvgEfficiency">-</div><div class="s">Mittelwert efficiency_score</div></div>
+        <div class="stat dm-stat dm-hclv"><div class="k">High-Cost-Low-Value</div><div class="v" id="capHclvCount">-</div><div class="s">count aus cost-value summary</div></div>
+        <div class="stat dm-stat dm-drift"><div class="k">Schema Drift Pressure</div><div class="v" id="capDriftPressure">-</div><div class="s" id="capDriftDetail">-</div></div>
+      </div>
+      <div class="panel dm-panel dm-deep">
+        <div class="panel-h">Selected App Capacity Deep Dive</div>
+        <div class="panel-b">
+          <div class="dmp-toolbar">
+            <label for="capacityAppSelect">App</label>
+            <select id="capacityAppSelect"><option value="">App waehlen</option></select>
+            <button type="button" class="btn primary" id="capacityLoadBtn">Deep Dive laden</button>
+            <div class="dmp-meta" id="capacityDiveMeta">Kein Deep Dive geladen.</div>
+          </div>
+          <div id="capacityDiveWrap" class="empty">Waehle eine App und lade den Deep Dive.</div>
+        </div>
+      </div>
+      <div style="height:0.7rem"></div>
+      <div class="panel dm-panel dm-pack">
+        <div class="panel-h">Area -> App Circle Pack</div>
+        <div class="panel-b">
+          <div class="viz-doc">
+            <div class="viz-doc-title">Analyse + Interaktion</div>
+            <p><strong>Analyse:</strong> Hierarchische Sicht auf Bereiche und Apps mit relativer Kreisgroesse je Ebene.</p>
+            <p><strong>Daten:</strong> Analytics latest Snapshot je App. Default-Metrik ist statische Modellgroesse, optional umschaltbar auf Komplexitaet oder Reload RAM (Peak).</p>
+            <p><strong>Interaktion:</strong> Klick auf Bereich/App zoomt in die Ebene; Breadcrumb ermoeglicht die Navigation zurueck.</p>
+          </div>
+          <div class="dmp-toolbar">
+            <label for="dmpMetricSelect">Kreisgroesse</label>
+            <select id="dmpMetricSelect">
+              <option value="static_byte_size_latest">Static Byte Size</option>
+              <option value="complexity_latest">Complexity (Fields + Tables*8)</option>
+              <option value="reload_meta_peak_memory_bytes_latest">Reload RAM (Peak)</option>
+            </select>
+            <div class="dmp-meta" id="dataModelPackMeta">Metrik wird geladen ...</div>
+          </div>
+          <div class="dmp-breadcrumb" id="dataModelPackBreadcrumb"></div>
+          <div class="canvas-wrap dmp-wrap">
+            <svg id="dataModelPackSvg" viewBox="0 0 960 520" preserveAspectRatio="xMidYMid meet"></svg>
+          </div>
+        </div>
+      </div>
+      <div style="height:0.7rem"></div>
+      <div class="split">
+        <div class="panel dm-panel dm-bloat"><div class="panel-h">Top Tables by Byte Size</div><div class="panel-b"><div class="viz-doc"><div class="viz-doc-title">Analyse + Spalten</div><p><strong>Analyse:</strong> Identifiziert Tabellen mit dem groessten Speicherhebel fuer Modelloptimierung.</p><p><strong>Daten:</strong> Tabellen aus latest Snapshot je App, sortiert nach `byte_size`.</p><ul><li><strong>Table:</strong> Tabellenname.</li><li><strong>App:</strong> Zugehoerige App.</li><li><strong>Byte Size:</strong> Tabellengroesse in Bytes.</li><li><strong>Rows:</strong> Anzahl Zeilen.</li><li><strong>Fields:</strong> Anzahl Felder.</li><li><strong>Keys:</strong> Anzahl Schluesselfelder.</li></ul></div><div id="bloatTablesWrap"></div></div></div>
+        <div class="panel dm-panel dm-bloat"><div class="panel-h">Top Fields by Byte Size</div><div class="panel-b"><div class="viz-doc"><div class="viz-doc-title">Analyse + Spalten</div><p><strong>Analyse:</strong> Zeigt Felder mit hohem Volumen oder hoher Kardinalitaet als Bloat-Treiber.</p><p><strong>Daten:</strong> Felder aus latest Snapshot je App, sortiert nach `byte_size`.</p><ul><li><strong>Field:</strong> Feldname oder Hash (Fallback).</li><li><strong>App:</strong> Zugehoerige App.</li><li><strong>Byte Size:</strong> Feldgroesse in Bytes.</li><li><strong>Cardinal:</strong> Anzahl unterschiedlicher Auspraegungen.</li><li><strong>Total:</strong> Gesamtanzahl Werte.</li></ul></div><div id="bloatFieldsWrap"></div></div></div>
+      </div>
+      <div style="height:0.7rem"></div>
+      <div class="split">
+        <div class="panel dm-panel dm-bloat"><div class="panel-h">Top Apps by Size</div><div class="panel-b"><div class="viz-doc"><div class="viz-doc-title">Analyse + Spalten</div><p><strong>Analyse:</strong> App-Ranking fuer Groessen- und Komplexitaetsvergleich auf Portfolio-Ebene.</p><p><strong>Daten:</strong> Latest Snapshot pro App inkl. Feld-/Tabellenzaehlung und Drift-Zaehler.</p><ul><li><strong>App:</strong> Anzeigename der App.</li><li><strong>Size:</strong> Statisches Modellvolumen der App.</li><li><strong>Fields:</strong> Anzahl Felder im latest Snapshot.</li><li><strong>Tables:</strong> Anzahl Tabellen im latest Snapshot.</li><li><strong>Drift:</strong> Anzahl Schema-Hash-Wechsel im Zeitfenster.</li></ul></div><div id="bloatAppsWrap"></div></div></div>
+        <div class="panel dm-panel dm-drift"><div class="panel-h">Schema Drift Apps</div><div class="panel-b"><div class="viz-doc"><div class="viz-doc-title">Analyse + Spalten</div><p><strong>Analyse:</strong> Fokusliste fuer Apps mit strukturellen Aenderungen im Modell ueber die Zeit.</p><p><strong>Daten:</strong> Apps mit `schema_drift_count_in_window > 0`.</p><ul><li><strong>App:</strong> Anzeigename der App.</li><li><strong>Drift:</strong> Anzahl erkannter Hash-Aenderungen.</li><li><strong>Size:</strong> Aktuelle App-Groesse zur Priorisierung.</li></ul></div><div id="bloatDriftWrap"></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section module-section" data-module-section="lineage-risk">
+    <div class="section-head">
+      <div><div class="section-title">3) Lineage Risk - Criticality and Blast Radius</div><div class="section-sub">Critical Nodes und Impact Potenzial aus Abhaengigkeiten</div></div>
+    </div>
+    <div class="section-body">
+      <div class="viz-doc">
+        <div class="viz-doc-title">Score-Definition</div>
+        <p><strong>Criticality Score:</strong> `0.65 * degree_norm + 0.35 * blast_norm`.</p>
+        <p><strong>degree_norm:</strong> Min-Max-Normalisierung von `degree` auf 0-100.</p>
+        <p><strong>blast_norm:</strong> Min-Max-Normalisierung von `blast_radius` auf 0-100.</p>
+        <p><strong>degree:</strong> `in_degree + out_degree`.</p>
+        <p><strong>in_degree:</strong> Anzahl eingehender Kanten auf den Node.</p>
+        <p><strong>out_degree:</strong> Anzahl ausgehender Kanten vom Node.</p>
+        <p><strong>blast_radius:</strong> Downstream-Reichweite per BFS bis Tiefe 4 (mit Sicherheitslimit auf max. Knoten).</p>
+      </div>
+      <div class="viz-doc">
+        <div class="viz-doc-title">Abbildung: KPI-Uebersicht</div>
+        <p><strong>Analyse:</strong> Baseline zur Netzwerkgroesse und Anzahl priorisierter Risikoknoten.</p>
+        <p><strong>Daten:</strong> Aggregierte Graphwerte aus `lineage_nodes` und `lineage_edges`.</p>
+        <ul>
+          <li><strong>Nodes:</strong> Anzahl beruecksichtigter Knoten.</li>
+          <li><strong>Edges:</strong> Anzahl gueltiger Kanten zwischen vorhandenen Knoten.</li>
+          <li><strong>Critical Nodes:</strong> Anzahl der im Ranking ausgegebenen Top-Knoten.</li>
+        </ul>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k">Nodes</div><div class="v" id="linNodes">-</div></div>
+        <div class="stat"><div class="k">Edges</div><div class="v" id="linEdges">-</div></div>
+        <div class="stat"><div class="k">Critical Nodes</div><div class="v" id="linCritical">-</div></div>
+      </div>
+      <div class="panel"><div class="panel-h">Top Critical Nodes</div><div class="panel-b"><div class="viz-doc"><div class="viz-doc-title">Analyse + Spalten</div><p><strong>Analyse:</strong> Priorisiert Knoten mit hoher Zentralitaet und grossem potenziellen Blast Radius.</p><p><strong>Daten:</strong> Degree- und Reichweitenmetriken pro Knoten aus dem aktuellen Lineage-Graph.</p><ul><li><strong>Node:</strong> Knotenlabel.</li><li><strong>Type:</strong> Knotentyp.</li><li><strong>App:</strong> Zugehoerige App (falls vorhanden).</li><li><strong>Degree:</strong> Summe aus In- und Out-Degree.</li><li><strong>Blast:</strong> Erreichbare Downstream-Knoten (begrenzt).</li><li><strong>Score:</strong> Kombinierter Kritikalitaetsscore.</li></ul></div><div id="linTableWrap"></div></div></div>
+    </div>
+  </section>
+
+  <section class="section module-section" data-module-section="data-quality">
+    <div class="section-head"><div><div class="section-title">4) Data Quality</div><div class="section-sub">Profiling, Verteilungen und Dominanz fuer Qualitaets- und KPI-Risiken</div></div></div>
+    <div class="section-body"><div class="planned">Optionales, gated Modul. Geplante Abbildungen: Verteilungsdiagramme, Dominanzraten und Most-Frequent-Tabellen mit klaren Spaltenbeschreibungen und Qualitaetsindikatoren.</div></div>
+  </section>
+
+  <section class="section module-section" data-module-section="governance-ops">
+    <div class="section-head"><div><div class="section-title">5) Governance & Operations</div><div class="section-sub">Low/No-Usage Signale fuer Apps, Tabellen, Felder und QVDs plus konkreter Maßnahmenplan</div></div></div>
+    <div class="section-body">
+      <div class="viz-doc">
+        <div class="viz-doc-title">Abbildung: Governance KPI-Uebersicht</div>
+        <p><strong>Analyse:</strong> Zeigt den schnellen Governance-Zustand des Portfolios auf Basis der aktuellsten App-Metadaten, Usage-Werte und Lineage-Struktur.</p>
+        <p><strong>Daten:</strong> Latest Metadata Snapshot je App (`app_data_metadata_snapshot`), App Usage (`qlik_app_usage`) und QVD-/Node-Verknuepfungen (`lineage_nodes`, `lineage_edges`).</p>
+        <ul>
+          <li><strong>Apps total:</strong> Anzahl Apps mit latest Metadata Snapshot.</li>
+          <li><strong>Low/No Usage Apps:</strong> Apps mit keiner oder sehr niedriger Nutzung.</li>
+          <li><strong>Low Signal Tables/Fields:</strong> Große Tabellen/Felder in Low/No-Usage Apps.</li>
+          <li><strong>Low Signal QVDs:</strong> QVD-Knoten mit geringer Einbindung oder Low-Usage App-Anbindung.</li>
+        </ul>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k">Apps Total</div><div class="v" id="govAppsTotal">-</div></div>
+        <div class="stat"><div class="k">Low/No Usage Apps</div><div class="v" id="govLowApps">-</div><div class="s" id="govLowAppsSplit">-</div></div>
+        <div class="stat"><div class="k">Low Signal Tables</div><div class="v" id="govLowTables">-</div></div>
+        <div class="stat"><div class="k">Low Signal Fields</div><div class="v" id="govLowFields">-</div></div>
+        <div class="stat"><div class="k">Low Signal QVDs</div><div class="v" id="govLowQvds">-</div></div>
+      </div>
+      <div id="govEmptyCta" class="empty" style="display:none;">Keine Governance-Daten verfuegbar. Fuehre einen Fetch-Job mit `apps`, `app-data-metadata`, `usage` und `lineage` aus.</div>
+      <div class="panel">
+        <div class="panel-h">Low/No Usage Apps</div>
+        <div class="panel-b">
+          <div class="viz-doc">
+            <div class="viz-doc-title">Analyse + Spalten</div>
+            <p><strong>Analyse:</strong> Priorisierte App-Liste fuer Rationalisierung und Ownership-Review.</p>
+            <p><strong>Daten:</strong> Usage-Signal wird aus Opens/Views/Users/Reloads gebildet und mit Metadata-Footprint kombiniert.</p>
+            <ul>
+              <li><strong>Usage Class:</strong> `no-usage` oder `low-usage`.</li>
+              <li><strong>Usage Signal:</strong> Gewichteter Nutzungswert aus `usage_app_opens`, `usage_sheet_views`, `usage_unique_users`, `usage_reloads`.</li>
+              <li><strong>Size:</strong> `static_byte_size_latest` als grober Kostenhebel.</li>
+              <li><strong>Reason:</strong> Kurzbegruendung fuer die Kandidatenlogik.</li>
+            </ul>
+          </div>
+          <div id="govAppsWrap"></div>
+        </div>
+      </div>
+      <div style="height:0.7rem"></div>
+      <div class="split">
+        <div class="panel">
+          <div class="panel-h">Low Signal Tables</div>
+          <div class="panel-b">
+            <div class="viz-doc">
+              <div class="viz-doc-title">Analyse + Spalten</div>
+              <p><strong>Analyse:</strong> Zeigt große Tabellen in Apps mit schwacher Nutzung als direkte Bloat-/Kostenhebel.</p>
+              <p><strong>Daten:</strong> Tabellen aus `app_data_metadata_tables` gefiltert auf Low/No-Usage App-Kontext.</p>
+            </div>
+            <div id="govTablesWrap"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-h">Low Signal Fields</div>
+          <div class="panel-b">
+            <div class="viz-doc">
+              <div class="viz-doc-title">Analyse + Spalten</div>
+              <p><strong>Analyse:</strong> Zeigt Felder mit hohem Volumen in Apps mit schwacher Nutzung als Bereinigungskandidaten.</p>
+              <p><strong>Daten:</strong> Felder aus `app_data_metadata_fields` gefiltert auf Low/No-Usage App-Kontext.</p>
+            </div>
+            <div id="govFieldsWrap"></div>
+          </div>
+        </div>
+      </div>
+      <div style="height:0.7rem"></div>
+      <div class="panel">
+        <div class="panel-h">Low Signal QVD Nodes</div>
+        <div class="panel-b">
+          <div class="viz-doc">
+            <div class="viz-doc-title">Analyse + Spalten</div>
+            <p><strong>Analyse:</strong> Identifiziert QVD-Knoten mit schwachem Lineage-Signal oder Low-Usage-App-Kopplung.</p>
+            <p><strong>Daten:</strong> `lineage_nodes`/`lineage_edges` + App Usage Verknuepfung (wo `app_id` vorhanden).</p>
+          </div>
+          <div id="govQvdsWrap"></div>
+        </div>
+      </div>
+      <div style="height:0.7rem"></div>
+      <div class="panel">
+        <div class="panel-h">Geplante Maßnahmen (Auto-Plan)</div>
+        <div class="panel-b">
+          <div class="viz-doc">
+            <div class="viz-doc-title">Analyse + Daten</div>
+            <p><strong>Analyse:</strong> Datengetriebener Maßnahmenplan, automatisch aus den aktuellen Low-Signal-Mustern erstellt.</p>
+            <p><strong>Daten:</strong> Ableitung aus Governance Summary und Kandidatenlisten; kein Zugriff auf produktive Fachdaten.</p>
+          </div>
+          <div id="govActionsWrap"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<div class="cv-modal-backdrop" id="cvModalBackdrop" aria-hidden="true">
+  <div class="cv-modal" role="dialog" aria-modal="true" aria-labelledby="cvModalTitle">
+    <div class="cv-modal-head">
+      <span id="cvModalTitle">Cost vs Value Scatter - Grossansicht</span>
+      <button type="button" class="btn" id="cvModalCloseBtn">Schliessen</button>
+    </div>
+    <div class="cv-modal-body">
+      <div class="cv-modal-canvas-wrap">
+        <div id="costValueModalChart" style="width:100%;height:100%;min-height:420px;"></div>
+      </div>
+      <div class="legend"><span><i class="dot d-hclv"></i>High-Cost-Low-Value</span><span><i class="dot d-hchv"></i>High-Cost-High-Value</span><span><i class="dot d-ev"></i>Efficient-Value</span><span><i class="dot d-lclv"></i>Low-Cost-Low-Value</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="/assets/atlas-shared.js"></script>
+<script>
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail' });
+  window.AtlasShared.bindLogout('logoutBtn');
+
+  function showToast(msg){ window.AtlasShared.showToast(msg, 2600, 'toast'); }
+  function setError(message){ var e=document.getElementById('errorBanner'); if(!message){ e.style.display='none'; e.textContent=''; return; } e.textContent=message; e.style.display='block'; }
+  function esc(v){ return window.AtlasShared.escapeHtml(v); }
+  function n(v){ var x=Number(v||0); if(!isFinite(x)) x=0; return x.toLocaleString(); }
+  function pct(v){ var x=Number(v||0); if(!isFinite(x)) x=0; return x.toFixed(1); }
+  function bytes(v){ var x=Number(v||0); if(!isFinite(x)||x<=0) return '0 B'; var u=['B','KB','MB','GB','TB']; var i=Math.min(u.length-1,Math.floor(Math.log(x)/Math.log(1024))); var y=x/Math.pow(1024,i); return y.toFixed(y>=100||i===0?0:1)+' '+u[i]; }
+
+  async function apiFetch(path){ return window.AtlasShared.apiFetch(path); }
+  async function apiFetchJson(path, fallback){ return window.AtlasShared.apiFetchJson(path, fallback); }
+
+  var MODULE_KEYS = ['portfolio-insights','data-model','lineage-risk','data-quality','governance-ops'];
+  var MODULE_ALIASES = { 'performance-capacity': 'data-model' };
+  var DATA_MODEL_METRICS = ['static_byte_size_latest','complexity_latest','reload_meta_peak_memory_bytes_latest'];
+  function normalizeModule(raw){
+    var k=String(raw||'').trim().toLowerCase();
+    if(MODULE_ALIASES[k]) k = MODULE_ALIASES[k];
+    return MODULE_KEYS.indexOf(k)>=0 ? k : 'portfolio-insights';
+  }
+  function normalizeDataModelMetric(raw){ var k=String(raw||'').trim(); return DATA_MODEL_METRICS.indexOf(k)>=0 ? k : 'static_byte_size_latest'; }
+  function normalizeCostArea(raw){ return String(raw || '').trim(); }
+  function normalizeCvLabels(raw){ return String(raw || '1').trim() !== '0'; }
+  function dataModelMetricLabel(metric){
+    if(metric === 'complexity_latest') return 'Complexity (Fields + Tables*8)';
+    if(metric === 'reload_meta_peak_memory_bytes_latest') return 'Reload RAM (Peak)';
+    return 'Static Byte Size';
+  }
+  function formatMetricValue(metric, value){
+    if(metric === 'complexity_latest') return n(value);
+    if(metric === 'reload_meta_peak_memory_bytes_latest') return bytes(value);
+    return bytes(value);
+  }
+  function truncateCircleLabel(text, maxWidthPx){
+    var raw = String(text || '');
+    if(!raw) return '-';
+    var maxChars = Math.max(4, Math.floor((Number(maxWidthPx) || 0) / 6.6));
+    if(raw.length <= maxChars) return raw;
+    if(maxChars <= 4) return raw.slice(0, maxChars);
+    return raw.slice(0, maxChars - 1) + '...';
+  }
+  var state=(function(){
+    var q=new URLSearchParams(window.location.search);
+    var focus = window.AtlasShared.readFocusState(window.location.search);
+    return {
+      project:focus.project,
+      customer:focus.customer,
+      days:parseInt(q.get('days')||'30',10)||30,
+      module:normalizeModule(q.get('module')),
+      dataModelMetric:normalizeDataModelMetric(q.get('dm_metric') || 'static_byte_size_latest'),
+      costArea:normalizeCostArea(q.get('cv_area')),
+      showCvLabels:normalizeCvLabels(q.get('cv_labels'))
+    };
+  })();
+  function setUrl(){
+    var q=new URLSearchParams();
+    if(state.project) q.set('project',state.project);
+    if(state.customer) q.set('customer',state.customer);
+    if(state.days) q.set('days',String(state.days));
+    if(state.module) q.set('module',state.module);
+    if(state.dataModelMetric) q.set('dm_metric',state.dataModelMetric);
+    if(state.costArea) q.set('cv_area', state.costArea);
+    if(!state.showCvLabels) q.set('cv_labels', '0');
+    history.replaceState(null,'', q.toString()?('/analytics.html?'+q.toString()):'/analytics.html');
+  }
+  var allProjects = [];
+  var allCustomers = [];
+  var projectsById = {};
+  var customersById = {};
+  function projectCustomerId(project){
+    return window.AtlasShared.projectCustomerId(project);
+  }
+  function updateNavProjectContext(projectId, customerId){
+    window.AtlasShared.updateNavProjectContext(projectId, customerId, 'a.nav-link');
+  }
+  function applyFocusStatePersistence(){
+    window.AtlasShared.persistFocusState(state);
+  }
+  function syncCustomerFromProject(){
+    window.AtlasShared.syncCustomerFromProject(state, projectsById);
+  }
+  function renderCustomerSelect(){
+    var sel = document.getElementById('navCustomerSelect');
+    if(!allCustomers.length){
+      state.customer = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Kunden verfuegbar</option>';
+      return;
+    }
+    sel.disabled = false;
+    if(!state.customer || !customersById[String(state.customer)]){
+      state.customer = String(allCustomers[0].id);
+    }
+    sel.innerHTML = allCustomers.map(function(c){
+      var selected = String(c.id) === String(state.customer) ? ' selected' : '';
+      return '<option value="' + esc(String(c.id)) + '"' + selected + '>' + esc(c.name || ('Kunde ' + c.id)) + '</option>';
+    }).join('');
+    sel.value = String(state.customer);
+  }
+  function renderProjectSelectForCustomer(){
+    var sel = document.getElementById('navProjectSelect');
+    var filtered = allProjects.filter(function(p){ return String(projectCustomerId(p)) === String(state.customer || ''); });
+    if(!filtered.length){
+      state.project = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Projekte fuer Kunden</option>';
+      applyFocusStatePersistence();
+      updateNavProjectContext('', state.customer);
+      setUrl();
+      return filtered;
+    }
+    sel.disabled = false;
+    if(!state.project || !filtered.find(function(p){ return String(p.id)===String(state.project); })){
+      state.project = String(filtered[0].id);
+    }
+    sel.innerHTML = filtered.map(function(p){
+      var s=String(p.id)===String(state.project)?' selected':'';
+      return '<option value="'+esc(String(p.id))+'"'+s+'>'+esc(p.name||('Projekt '+p.id))+'</option>';
+    }).join('');
+    sel.value = String(state.project);
+    applyFocusStatePersistence();
+    updateNavProjectContext(state.project, state.customer);
+    setUrl();
+    return filtered;
+  }
+  function requireAnalyticsProject(){
+    if(state.project) return true;
+    var msg = 'Analytics ist projektgefiltert. Bitte zuerst ein Projekt waehlen.';
+    setError(msg);
+    showToast(msg);
+    document.getElementById('toolbarStatus').textContent = 'Projekt fehlt';
+    return false;
+  }
+  function setActiveModule(moduleKey){
+    var active = normalizeModule(moduleKey);
+    state.module = active;
+    document.querySelectorAll('.module-card[data-module]').forEach(function(card){
+      card.classList.toggle('active', card.getAttribute('data-module')===active);
+    });
+    document.querySelectorAll('.module-section[data-module-section]').forEach(function(section){
+      section.classList.toggle('active', section.getAttribute('data-module-section')===active);
+    });
+    if(active === 'data-model' && payloads.dataModelPack){
+      window.requestAnimationFrame(function(){
+        renderDataModelPack();
+      });
+    }
+    if(active === 'data-model' && (payloads.costValue || payloads.bloat)){
+      window.requestAnimationFrame(function(){
+        renderDataModelCapacity();
+      });
+    }
+  }
+
+  var payloads = { costValue: null, bloat: null, lineage: null, dataModelPack: null, governance: null };
+  var costScatterState = { selectedKey: '', modalOpen: false };
+  var costScatterChart = null;
+  var costScatterModalChart = null;
+  var tableFilterState = {
+    costTop: {},
+    apps: {},
+    tables: {},
+    fields: {},
+    drift: {},
+    lineage: {},
+    govApps: {},
+    govTables: {},
+    govFields: {},
+    govQvds: {},
+    govActions: {}
+  };
+  var tablePaginationState = {};
+  var capacityState = { selectedKey: '', trendByKey: {}, errors: {}, loadingKey: '' };
+
+  function cvKey(row){ return String(row && row.project_id || '') + '::' + String(row && row.app_id || ''); }
+  function cvAreaKey(row){
+    var sid = String(row && row.space_id || '').trim();
+    if(sid) return 'space:' + sid;
+    var sn = String(row && row.space_name || '').trim();
+    if(sn && sn.toLowerCase() !== 'unassigned') return 'name:' + sn.toLowerCase();
+    return '__unassigned__';
+  }
+  function cvAreaLabel(row){ var sn = String(row && row.space_name || '').trim(); return sn || 'Unassigned'; }
+  function yn(v){ if(v===null || v===undefined) return '-'; return v ? 'ja' : 'nein'; }
+  function meanOf(rows, pickFn){
+    var list = Array.isArray(rows) ? rows : [];
+    if(!list.length) return 0;
+    var sum = list.reduce(function(acc, item){
+      var val = Number(pickFn(item));
+      if(!isFinite(val)) val = 0;
+      return acc + val;
+    }, 0);
+    return sum / list.length;
+  }
+  function medianOf(values){
+    var nums = (Array.isArray(values) ? values : []).map(function(v){
+      var nVal = Number(v);
+      return isFinite(nVal) ? nVal : 0;
+    }).sort(function(a,b){ return a-b; });
+    if(!nums.length) return 0;
+    var mid = Math.floor(nums.length / 2);
+    if(nums.length % 2) return nums[mid];
+    return (nums[mid - 1] + nums[mid]) / 2;
+  }
+  function fmtTs(ts){
+    if(!ts) return '-';
+    var d = new Date(ts);
+    if(!isFinite(d.getTime())) return String(ts);
+    return d.toLocaleString('de-DE');
+  }
+  function capParseKey(key){
+    var raw = String(key || '');
+    var idx = raw.indexOf('::');
+    if(idx < 0) return { project_id: 0, app_id: '' };
+    return {
+      project_id: parseInt(raw.slice(0, idx), 10) || 0,
+      app_id: raw.slice(idx + 2)
+    };
+  }
+  function capAppLabel(app){
+    var name = String((app && (app.app_name || app.app_id)) || 'unknown-app');
+    var pid = String(app && app.project_id || '');
+    return pid ? (name + ' (P' + pid + ')') : name;
+  }
+  function renderDataModelCapacity(){
+    var costPayload = payloads.costValue || { apps: [], summary: {} };
+    var bloatPayload = payloads.bloat || { summary: {} };
+    var apps = Array.isArray(costPayload.apps) ? costPayload.apps : [];
+    var summary = costPayload.summary || {};
+    var bloatSummary = bloatPayload.summary || {};
+
+    var footprint = apps.reduce(function(acc, app){
+      var value = Number(app && app.static_byte_size_latest);
+      if(!isFinite(value)) value = 0;
+      return acc + value;
+    }, 0);
+    var peakRamApp = null;
+    var peakRam = 0;
+    var peakCpuApp = null;
+    var peakCpu = 0;
+    apps.forEach(function(app){
+      var ram = Number(app && app.reload_meta_peak_memory_bytes_latest);
+      if(!isFinite(ram) || ram < 0) ram = 0;
+      if(!peakRamApp || ram > peakRam){
+        peakRam = ram;
+        peakRamApp = app;
+      }
+      var cpu = Number(app && app.reload_meta_cpu_time_spent_ms_latest);
+      if(!isFinite(cpu) || cpu < 0) cpu = 0;
+      if(!peakCpuApp || cpu > peakCpu){
+        peakCpu = cpu;
+        peakCpuApp = app;
+      }
+    });
+    var avgEfficiency = meanOf(apps, function(app){ return app && app.efficiency_score; });
+    var hclvCount = Number(summary.high_cost_low_value_count);
+    if(!isFinite(hclvCount) || hclvCount < 0) hclvCount = 0;
+    var driftAppsCount = Number(bloatSummary.schema_drift_apps_count);
+    if(!isFinite(driftAppsCount) || driftAppsCount < 0) driftAppsCount = 0;
+    var bloatAppsCount = Number(bloatSummary.apps_count);
+    if(!isFinite(bloatAppsCount) || bloatAppsCount < 0) bloatAppsCount = 0;
+    var driftPressure = bloatAppsCount > 0 ? ((driftAppsCount / bloatAppsCount) * 100.0) : 0;
+
+    document.getElementById('capFootprint').textContent = bytes(footprint);
+    document.getElementById('capPeakRam').textContent = bytes(peakRam);
+    document.getElementById('capPeakRamApp').textContent = peakRamApp ? capAppLabel(peakRamApp) : '-';
+    document.getElementById('capPeakCpu').textContent = n(peakCpu) + ' ms';
+    document.getElementById('capPeakCpuApp').textContent = peakCpuApp ? capAppLabel(peakCpuApp) : '-';
+    document.getElementById('capAvgEfficiency').textContent = pct(avgEfficiency) + '%';
+    document.getElementById('capHclvCount').textContent = n(hclvCount);
+    document.getElementById('capDriftPressure').textContent = pct(driftPressure) + '%';
+    document.getElementById('capDriftDetail').textContent = n(driftAppsCount) + ' / ' + n(bloatAppsCount) + ' Apps';
+
+    var select = document.getElementById('capacityAppSelect');
+    var meta = document.getElementById('capacityDiveMeta');
+    var wrap = document.getElementById('capacityDiveWrap');
+    if(!select || !meta || !wrap) return;
+
+    var sortedApps = apps.slice().sort(function(a,b){
+      return capAppLabel(a).localeCompare(capAppLabel(b), 'de', { numeric: true, sensitivity: 'base' });
+    });
+    var byKey = {};
+    sortedApps.forEach(function(app){ byKey[cvKey(app)] = app; });
+    if(capacityState.selectedKey && !byKey[capacityState.selectedKey]){
+      capacityState.selectedKey = '';
+    }
+    if(!capacityState.selectedKey && sortedApps.length){
+      var preferred = apps.find(function(app){ return cvKey(app) === costScatterState.selectedKey; });
+      capacityState.selectedKey = preferred ? cvKey(preferred) : cvKey(sortedApps[0]);
+    }
+    select.innerHTML = '<option value="">App waehlen</option>' + sortedApps.map(function(app){
+      var key = cvKey(app);
+      var selected = capacityState.selectedKey === key ? ' selected' : '';
+      return '<option value="' + esc(key) + '"' + selected + '>' + esc(capAppLabel(app)) + '</option>';
+    }).join('');
+    select.value = capacityState.selectedKey || '';
+
+    var selectedApp = capacityState.selectedKey ? byKey[capacityState.selectedKey] : null;
+    if(!selectedApp){
+      meta.textContent = 'Keine App fuer Deep Dive verfuegbar.';
+      wrap.className = 'empty';
+      wrap.textContent = 'Keine App-Daten im aktuellen Filter.';
+      return;
+    }
+    if(capacityState.loadingKey === capacityState.selectedKey){
+      meta.textContent = 'Deep Dive wird geladen ...';
+      wrap.className = 'empty';
+      wrap.textContent = 'Trenddaten werden geladen.';
+      return;
+    }
+    if(capacityState.errors[capacityState.selectedKey]){
+      meta.textContent = 'Deep Dive Fehler';
+      wrap.className = 'empty';
+      wrap.textContent = String(capacityState.errors[capacityState.selectedKey] || 'Deep Dive konnte nicht geladen werden.');
+      return;
+    }
+    var trendState = capacityState.trendByKey[capacityState.selectedKey];
+    if(!trendState){
+      meta.textContent = 'Kein Deep Dive geladen.';
+      wrap.className = 'empty';
+      wrap.textContent = 'Waehle eine App und lade den Deep Dive.';
+      return;
+    }
+
+    var metrics = trendState.metrics || {};
+    var points = Array.isArray(trendState.points) ? trendState.points : [];
+    wrap.className = '';
+    meta.textContent = 'Letzter Deep Dive: ' + fmtTs(trendState.loaded_at) + ' | Zeitfenster: ' + n(trendState.days || state.days) + ' Tage';
+    wrap.innerHTML =
+      '<div class="detail-grid">' +
+        '<div class="detail-card"><div class="detail-k">App</div><div class="detail-v">' + esc(capAppLabel(selectedApp)) + '</div></div>' +
+        '<div class="detail-card"><div class="detail-k">History Points</div><div class="detail-v">' + n(metrics.history_points || 0) + '</div></div>' +
+        '<div class="detail-card"><div class="detail-k">Zeitraum</div><div class="detail-v">' + esc(fmtTs(metrics.first_fetched_at)) + ' -> ' + esc(fmtTs(metrics.last_fetched_at)) + '</div></div>' +
+        '<div class="detail-card"><div class="detail-k">Schema Changes</div><div class="detail-v">' + n(metrics.schema_change_count || 0) + '</div></div>' +
+      '</div>' +
+      '<div style="height:0.55rem"></div>' +
+      (metrics.enough_history
+        ? renderSimpleTable(
+            [
+              { h: 'KPI', f: function(r){ return r.k; } },
+              { h: 'Wert', f: function(r){ return r.v; } },
+              { h: 'Formel/Quelle', f: function(r){ return r.d; } }
+            ],
+            [
+              { k: 'size_growth_pct', v: pct(metrics.size_growth_pct) + '%', d: '(last_size - first_size) / max(first_size,1) * 100' },
+              { k: 'ram_spike_factor', v: Number(metrics.ram_spike_factor || 0).toFixed(2) + 'x', d: 'max(ram) / max(median(ram),1)' },
+              { k: 'cpu_spike_factor', v: Number(metrics.cpu_spike_factor || 0).toFixed(2) + 'x', d: 'max(cpu) / max(median(cpu),1)' },
+              { k: 'schema_change_count', v: n(metrics.schema_change_count || 0), d: 'Anzahl Hash-Wechsel in der Zeitreihe' },
+              { k: 'history_points', v: n(metrics.history_points || 0), d: 'Anzahl Trendpunkte' }
+            ]
+          )
+        : '<div class="empty">Nicht genug Historie fuer Growth/Spike KPIs (mindestens 2 Punkte erforderlich).</div>') +
+      '<div style="height:0.55rem"></div>' +
+      renderSimpleTable(
+        [
+          { h: 'Timestamp', f: function(r){ return fmtTs(r.fetched_at); } },
+          { h: 'Size', f: function(r){ return bytes(r.static_byte_size); } },
+          { h: 'RAM', f: function(r){ return bytes(r.reload_meta_peak_memory_bytes); } },
+          { h: 'CPU (ms)', f: function(r){ return n(r.reload_meta_cpu_time_spent_ms); } },
+          { h: 'Schema Hash', f: function(r){ return r.schema_hash || '-'; } }
+        ],
+        points
+      );
+  }
+  function buildCapacityTrendMetrics(points){
+    var rows = (Array.isArray(points) ? points : []).slice().sort(function(a,b){
+      var ta = new Date(a && a.fetched_at || 0).getTime();
+      var tb = new Date(b && b.fetched_at || 0).getTime();
+      return ta - tb;
+    });
+    var historyPoints = rows.length;
+    if(!historyPoints){
+      return {
+        enough_history: false,
+        history_points: 0,
+        size_growth_pct: 0,
+        ram_spike_factor: 0,
+        cpu_spike_factor: 0,
+        schema_change_count: 0,
+        first_fetched_at: null,
+        last_fetched_at: null
+      };
+    }
+    var sizes = rows.map(function(item){
+      var v = Number(item && item.static_byte_size);
+      return isFinite(v) ? v : 0;
+    });
+    var ramVals = rows.map(function(item){
+      var v = Number(item && item.reload_meta_peak_memory_bytes);
+      return isFinite(v) ? v : 0;
+    });
+    var cpuVals = rows.map(function(item){
+      var v = Number(item && item.reload_meta_cpu_time_spent_ms);
+      return isFinite(v) ? v : 0;
+    });
+    var firstSize = Number(sizes[0] || 0);
+    var lastSize = Number(sizes[sizes.length - 1] || 0);
+    var ramMax = Math.max.apply(null, ramVals.concat([0]));
+    var cpuMax = Math.max.apply(null, cpuVals.concat([0]));
+    var ramMedian = medianOf(ramVals);
+    var cpuMedian = medianOf(cpuVals);
+    var schemaChanges = 0;
+    var prevHash = '';
+    rows.forEach(function(item){
+      var current = String(item && item.schema_hash || '').trim();
+      if(!current) return;
+      if(prevHash && current !== prevHash) schemaChanges += 1;
+      prevHash = current;
+    });
+    return {
+      enough_history: historyPoints >= 2,
+      history_points: historyPoints,
+      size_growth_pct: ((lastSize - firstSize) / Math.max(firstSize, 1)) * 100.0,
+      ram_spike_factor: ramMax / Math.max(ramMedian, 1),
+      cpu_spike_factor: cpuMax / Math.max(cpuMedian, 1),
+      schema_change_count: schemaChanges,
+      first_fetched_at: rows[0] && rows[0].fetched_at,
+      last_fetched_at: rows[rows.length - 1] && rows[rows.length - 1].fetched_at
+    };
+  }
+  async function loadCapacityDeepDive(){
+    var key = String(capacityState.selectedKey || '').trim();
+    if(!key){
+      renderDataModelCapacity();
+      return;
+    }
+    var parsed = capParseKey(key);
+    if(!parsed.project_id || !parsed.app_id){
+      capacityState.errors[key] = 'Ungueltige App-Auswahl fuer Deep Dive.';
+      renderDataModelCapacity();
+      return;
+    }
+    capacityState.loadingKey = key;
+    delete capacityState.errors[key];
+    renderDataModelCapacity();
+    try{
+      var q = '?project_id=' + encodeURIComponent(String(parsed.project_id)) + '&days=' + encodeURIComponent(String(state.days || 30));
+      var payload = await apiFetchJson('/api/analytics/apps/' + encodeURIComponent(parsed.app_id) + '/trend' + q, 'Capacity Deep Dive konnte nicht geladen werden');
+      var points = Array.isArray(payload && payload.points) ? payload.points : [];
+      capacityState.trendByKey[key] = {
+        app_id: payload && payload.app_id ? payload.app_id : parsed.app_id,
+        project_id: payload && payload.project_id ? payload.project_id : parsed.project_id,
+        days: payload && payload.days ? payload.days : (state.days || 30),
+        points: points,
+        metrics: buildCapacityTrendMetrics(points),
+        loaded_at: new Date().toISOString()
+      };
+    } catch (err){
+      var msg = (err && err.message) ? err.message : 'Capacity Deep Dive konnte nicht geladen werden';
+      capacityState.errors[key] = msg;
+    } finally {
+      capacityState.loadingKey = '';
+      renderDataModelCapacity();
+    }
+  }
+  function getCostAreaFilteredApps(rows){
+    var list = Array.isArray(rows) ? rows : [];
+    var sel = document.getElementById('cvAreaSelect');
+    var labelsByKey = {};
+    list.forEach(function(app){
+      labelsByKey[cvAreaKey(app)] = cvAreaLabel(app);
+    });
+    var keys = Object.keys(labelsByKey).sort(function(a,b){
+      return String(labelsByKey[a]).localeCompare(String(labelsByKey[b]), 'de', { numeric: true, sensitivity: 'base' });
+    });
+    if(state.costArea && !labelsByKey[state.costArea]) state.costArea = '';
+    if(sel){
+      sel.innerHTML = '<option value="">Alle Bereiche</option>' + keys.map(function(key){
+        var selected = key === state.costArea ? ' selected' : '';
+        return '<option value="' + esc(key) + '"' + selected + '>' + esc(labelsByKey[key]) + '</option>';
+      }).join('');
+      sel.value = state.costArea || '';
+    }
+    return !state.costArea ? list : list.filter(function(app){ return cvAreaKey(app) === state.costArea; });
+  }
+  function jumpToLineage(app){
+    if(!app) return;
+    var wrap = document.getElementById('cvSelectedWrap');
+    if(wrap){
+      wrap.classList.remove('jump-animate');
+      void wrap.offsetWidth;
+      wrap.classList.add('jump-animate');
+    }
+    var params = new URLSearchParams();
+    if(state.project) params.set('project', String(state.project));
+    var appFilterVal = String((app.app_id || app.app_name || '')).trim().toLowerCase();
+    if(appFilterVal) params.set('app', appFilterVal);
+    if(app.app_id) params.set('app_id', String(app.app_id));
+    setTimeout(function(){
+      window.location.href = '/lineage.html' + (params.toString() ? ('?' + params.toString()) : '');
+    }, 360);
+  }
+  function lineageNodeKey(row){
+    return String(row && row.project_id || '') + '::' + String(row && row.node_id || '');
+  }
+  function jumpToLineageNode(row){
+    if(!row || !row.node_id) return;
+    var wrap = document.getElementById('linTableWrap');
+    if(wrap){
+      wrap.classList.remove('jump-animate');
+      void wrap.offsetWidth;
+      wrap.classList.add('jump-animate');
+    }
+    var params = new URLSearchParams();
+    if(state.project) params.set('project', String(state.project));
+    params.set('node_id', String(row.node_id));
+    var appFilterVal = String((row.app_id || row.app_name || '')).trim().toLowerCase();
+    if(appFilterVal) params.set('app', appFilterVal);
+    if(row.app_id) params.set('app_id', String(row.app_id));
+    setTimeout(function(){
+      window.location.href = '/lineage.html' + (params.toString() ? ('?' + params.toString()) : '');
+    }, 360);
+  }
+
+  function renderSimpleTable(columns, rows){
+    if(!rows || !rows.length) return '<div class="empty">Keine Daten.</div>';
+    var h='<table><thead><tr>'+columns.map(function(c){ return '<th>'+esc(c.h)+'</th>'; }).join('')+'</tr></thead><tbody>';
+    h += rows.map(function(r, idx){
+      return '<tr>'+columns.map(function(c){
+        var val = c.f(r, idx);
+        var text = (val === null || val === undefined) ? '' : String(val);
+        return '<td'+(c.cls?' class="'+c.cls+'"':'')+'>' + (c && c.raw ? text : esc(text)) + '</td>';
+      }).join('')+'</tr>';
+    }).join('');
+    h += '</tbody></table>';
+    return h;
+  }
+
+  function getFilterCellText(raw){
+    if(raw === null || raw === undefined || String(raw).trim() === '') return '-';
+    return String(raw).trim();
+  }
+
+  function getFilterCellDisplay(column, row){
+    var raw = '';
+    if(column && typeof column.filterLabel === 'function'){
+      raw = column.filterLabel(row);
+    } else if(column && column.raw && typeof column.filter === 'function'){
+      raw = column.filter(row);
+    } else if(column && typeof column.f === 'function'){
+      raw = column.f(row);
+    } else if(column && typeof column.filter === 'function'){
+      raw = column.filter(row);
+    }
+    return getFilterCellText(raw);
+  }
+
+  function getFilterCellValue(column, row){
+    var raw = '';
+    if(column && typeof column.filter === 'function'){
+      raw = column.filter(row);
+    } else if(column && typeof column.filterLabel === 'function'){
+      raw = column.filterLabel(row);
+    } else if(column && typeof column.f === 'function'){
+      raw = column.f(row);
+    }
+    return getFilterCellText(raw).toLowerCase();
+  }
+
+  function getColumnFilterOptions(rows, columns, filters){
+    return columns.map(function(column, idx){
+      var mapObj = {};
+      var scopedRows = applyColumnFilters(rows, columns, filters, idx);
+      scopedRows.forEach(function(row){
+        var value = getFilterCellValue(column, row);
+        var label = getFilterCellDisplay(column, row);
+        if(!mapObj[value]) mapObj[value] = label;
+      });
+      var options = Object.keys(mapObj).map(function(value){
+        return { value: value, label: mapObj[value] };
+      });
+      options.sort(function(a, b){
+        return a.label.localeCompare(b.label, 'de', { numeric: true, sensitivity: 'base' });
+      });
+      return options;
+    });
+  }
+
+  function applyColumnFilters(rows, columns, filters, skipIdx){
+    var list = Array.isArray(rows) ? rows : [];
+    if(!list.length) return [];
+    return list.filter(function(row){
+      return columns.every(function(column, idx){
+        if(column && column.filterable === false) return true;
+        if(idx === skipIdx) return true;
+        var selected = String(filters[String(idx)] || '').trim().toLowerCase();
+        if(!selected) return true;
+        return getFilterCellValue(column, row) === selected;
+      });
+    });
+  }
+
+  function renderFilterableTable(containerId, tableKey, columns, rows, config){
+    var host = document.getElementById(containerId);
+    if(!host) return;
+    var list = Array.isArray(rows) ? rows : [];
+    if(!list.length){
+      host.innerHTML = renderSimpleTable(columns, list);
+      return;
+    }
+    var cfg = config && typeof config === 'object' ? config : {};
+    var filters = tableFilterState[tableKey] || {};
+    tableFilterState[tableKey] = filters;
+    var optionSets = getColumnFilterOptions(list, columns, filters);
+    var filterableColumns = [];
+    columns.forEach(function(column, idx){
+      if(column && column.filterable === false){
+        delete filters[String(idx)];
+        return;
+      }
+      filterableColumns.push({ column: column, idx: idx });
+    });
+    columns.forEach(function(_, idx){
+      var key = String(idx);
+      if(!filters[key]) return;
+      var exists = (optionSets[idx] || []).some(function(opt){ return opt.value === filters[key]; });
+      if(!exists) filters[key] = '';
+    });
+    var filtered = applyColumnFilters(list, columns, filters);
+    var hasActiveFilters = filterableColumns.some(function(item){
+      return !!String(filters[String(item.idx)] || '').trim();
+    });
+    var filterHtml = filterableColumns.length ? ('<div class="table-filter-grid">' + filterableColumns.map(function(item){
+      var column = item.column;
+      var idx = item.idx;
+      var key = String(idx);
+      var value = String(filters[key] || '');
+      var options = optionSets[idx] || [];
+      return '<label class="table-filter">' +
+        '<span>' + esc(column.h) + '</span>' +
+        '<select data-filter-table="' + esc(tableKey) + '" data-filter-col="' + esc(key) + '">' +
+          '<option value="">Alle</option>' +
+          options.map(function(opt){
+            var selected = String(opt.value) === value ? ' selected' : '';
+            return '<option value="' + esc(String(opt.value)) + '"' + selected + '>' + esc(String(opt.label)) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</label>';
+    }).join('') + (cfg.showReset ? (
+      '<div class="table-filter-actions">' +
+        '<button type="button" class="btn table-filter-reset" data-filter-reset="' + esc(tableKey) + '"' + (hasActiveFilters ? '' : ' disabled') + '>Filter aufheben</button>' +
+      '</div>'
+    ) : '') + '</div>') : '';
+    var pageSize = Number(cfg.pageSize) || 0;
+    var pageVisible = filtered;
+    var pagerHtml = '';
+    if(pageSize > 0 && filtered.length > pageSize){
+      var page = tablePaginationState[tableKey] || 0;
+      var totalPages = Math.ceil(filtered.length / pageSize);
+      if(page >= totalPages) page = totalPages - 1;
+      if(page < 0) page = 0;
+      tablePaginationState[tableKey] = page;
+      pageVisible = filtered.slice(page * pageSize, (page + 1) * pageSize);
+      pagerHtml = '<div class="table-pager">' +
+        '<button type="button" data-pager-table="' + esc(tableKey) + '" data-pager-dir="first"' + (page === 0 ? ' disabled' : '') + '>&laquo;</button>' +
+        '<button type="button" data-pager-table="' + esc(tableKey) + '" data-pager-dir="prev"' + (page === 0 ? ' disabled' : '') + '>&lsaquo;</button>' +
+        '<span class="pager-info">Seite ' + (page + 1) + ' / ' + totalPages + '</span>' +
+        '<button type="button" data-pager-table="' + esc(tableKey) + '" data-pager-dir="next"' + (page >= totalPages - 1 ? ' disabled' : '') + '>&rsaquo;</button>' +
+        '<button type="button" data-pager-table="' + esc(tableKey) + '" data-pager-dir="last"' + (page >= totalPages - 1 ? ' disabled' : '') + '>&raquo;</button>' +
+      '</div>';
+    }
+    var metaHtml = '<div class="table-filter-meta">Treffer: ' + n(filtered.length) + ' / ' + n(list.length) + '</div>';
+    host.innerHTML = filterHtml + metaHtml + renderSimpleTable(columns, pageVisible) + pagerHtml;
+    host.querySelectorAll('select[data-filter-table]').forEach(function(select){
+      select.addEventListener('change', function(){
+        var colKey = String(select.getAttribute('data-filter-col') || '');
+        filters[colKey] = String(select.value || '').toLowerCase();
+        tablePaginationState[tableKey] = 0;
+        renderFilterableTable(containerId, tableKey, columns, list, cfg);
+      });
+    });
+    host.querySelectorAll('button[data-filter-reset]').forEach(function(button){
+      button.addEventListener('click', function(){
+        tableFilterState[tableKey] = {};
+        tablePaginationState[tableKey] = 0;
+        renderFilterableTable(containerId, tableKey, columns, list, cfg);
+      });
+    });
+    host.querySelectorAll('button[data-pager-table]').forEach(function(button){
+      button.addEventListener('click', function(){
+        var dir = button.getAttribute('data-pager-dir');
+        var cur = tablePaginationState[tableKey] || 0;
+        var total = Math.ceil(filtered.length / pageSize);
+        if(dir === 'first') cur = 0;
+        else if(dir === 'prev') cur = Math.max(0, cur - 1);
+        else if(dir === 'next') cur = Math.min(total - 1, cur + 1);
+        else if(dir === 'last') cur = total - 1;
+        tablePaginationState[tableKey] = cur;
+        renderFilterableTable(containerId, tableKey, columns, list, cfg);
+      });
+    });
+  }
+
+  function buildCostValueScatterOption(rows){
+    var quadrantColors = {
+      'high-cost-low-value': '#ef4444',
+      'high-cost-high-value': '#f59e0b',
+      'efficient-value': '#22c55e',
+      'low-cost-low-value': '#94a3b8'
+    };
+    var quadrantLabels = {
+      'high-cost-low-value': 'High-Cost-Low-Value',
+      'high-cost-high-value': 'High-Cost-High-Value',
+      'efficient-value': 'Efficient-Value',
+      'low-cost-low-value': 'Low-Cost-Low-Value'
+    };
+    var quadrants = ['high-cost-low-value','high-cost-high-value','efficient-value','low-cost-low-value'];
+    var seriesData = {};
+    quadrants.forEach(function(q){ seriesData[q] = []; });
+
+    (rows || []).forEach(function(a){
+      var pointKey = cvKey(a);
+      var q = a.quadrant || 'low-cost-low-value';
+      if(!seriesData[q]) q = 'low-cost-low-value';
+      var label = String(a.app_name || a.app_id || '-');
+      if(label.length > 22) label = label.slice(0, 21) + '\u2026';
+      var point = {
+        value: [Number(a.value_score || 0), Number(a.cost_score || 0)],
+        name: label,
+        _key: pointKey,
+        _appData: a
+      };
+      if(costScatterState.selectedKey === pointKey){
+        point.itemStyle = { borderColor: 'rgba(255,255,255,0.95)', borderWidth: 2.5 };
+        point.symbolSize = 14;
+      }
+      seriesData[q].push(point);
+    });
+
+    var seriesList = [];
+    quadrants.forEach(function(q, idx){
+      var s = {
+        name: quadrantLabels[q],
+        type: 'scatter',
+        symbolSize: 9,
+        data: seriesData[q],
+        itemStyle: { color: quadrantColors[q], borderColor: 'rgba(5,10,20,0.85)', borderWidth: 1 },
+        label: {
+          show: !!state.showCvLabels,
+          formatter: function(params){ return params.data.name; },
+          position: 'right',
+          fontSize: 10,
+          color: 'rgba(226,232,240,0.95)',
+          textBorderColor: 'rgba(3,8,20,0.92)',
+          textBorderWidth: 3,
+          fontFamily: '"Segoe UI", sans-serif'
+        },
+        emphasis: { itemStyle: { borderColor: '#fff', borderWidth: 2.2 } }
+      };
+      if(idx === 0){
+        s.markArea = {
+          silent: true,
+          data: [
+            [{xAxis:0, yAxis:50, itemStyle:{color:'rgba(239,68,68,0.06)'}}, {xAxis:50, yAxis:100}],
+            [{xAxis:50, yAxis:50, itemStyle:{color:'rgba(245,158,11,0.06)'}}, {xAxis:100, yAxis:100}],
+            [{xAxis:50, yAxis:0, itemStyle:{color:'rgba(34,197,94,0.06)'}}, {xAxis:100, yAxis:50}],
+            [{xAxis:0, yAxis:0, itemStyle:{color:'rgba(148,163,184,0.04)'}}, {xAxis:50, yAxis:50}]
+          ]
+        };
+      }
+      seriesList.push(s);
+    });
+
+    return {
+      backgroundColor: 'rgba(8,12,26,0.9)',
+      grid: { left: 50, right: 34, top: 34, bottom: 50, containLabel: false },
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: 'rgba(15,23,42,0.95)',
+        borderColor: 'rgba(148,163,184,0.38)',
+        textStyle: { color: '#e2e8f0', fontSize: 12 },
+        formatter: function(params){
+          var d = params.data._appData;
+          if(!d) return '';
+          return '<strong>' + esc(d.app_name || d.app_id) + '</strong><br/>'
+            + 'Value Score: ' + pct(d.value_score) + '<br/>'
+            + 'Cost Score: ' + pct(d.cost_score) + '<br/>'
+            + 'Quadrant: ' + esc(d.quadrant || '-');
+        }
+      },
+      legend: {
+        show: true, bottom: 2, left: 'center',
+        textStyle: { color: 'rgba(255,255,255,0.58)', fontSize: 10 },
+        itemWidth: 10, itemHeight: 10
+      },
+      xAxis: {
+        name: 'Value Score', nameLocation: 'end',
+        nameTextStyle: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontFamily: 'Segoe UI' },
+        min: 0, max: 100, splitNumber: 2,
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+        axisLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10 }
+      },
+      yAxis: {
+        name: 'Cost Score', nameLocation: 'end',
+        nameTextStyle: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontFamily: 'Segoe UI' },
+        min: 0, max: 100, splitNumber: 2,
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+        axisLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10 }
+      },
+      series: seriesList
+    };
+  }
+
+  function _initScatterChart(elId){
+    var el = document.getElementById(elId);
+    if(!el) return null;
+    var chart = echarts.init(el);
+    chart.on('click', function(params){
+      if(params.data && params.data._key){
+        costScatterState.selectedKey = params.data._key;
+        renderCostValue();
+      }
+    });
+    return chart;
+  }
+
+  function drawCostValueScatter(rows){
+    var option = buildCostValueScatterOption(rows);
+    var inlineEl = document.getElementById('costValueChart');
+    if(inlineEl){
+      if(!costScatterChart) costScatterChart = _initScatterChart('costValueChart');
+      if(costScatterChart) costScatterChart.setOption(option, true);
+    }
+    if(costScatterState.modalOpen){
+      var modalEl = document.getElementById('costValueModalChart');
+      if(modalEl){
+        if(!costScatterModalChart) costScatterModalChart = _initScatterChart('costValueModalChart');
+        if(costScatterModalChart){
+          costScatterModalChart.setOption(option, true);
+          costScatterModalChart.resize();
+        }
+      }
+    }
+  }
+
+  function renderCostValueSelection(app, summary){
+    var wrap = document.getElementById('cvSelectedWrap');
+    if(!wrap) return;
+    if(!app){
+      wrap.className = 'empty';
+      wrap.textContent = 'Klicke im Scatter auf einen App-Punkt, um alle Recheninputs und Scores zu sehen.';
+      return;
+    }
+    wrap.className = '';
+    var usageW = Number(summary && summary.value_usage_weight);
+    if(!isFinite(usageW)) usageW = 0.85;
+    var proxyW = Number(summary && summary.value_proxy_weight);
+    if(!isFinite(proxyW)) proxyW = 0.15;
+    var mode = String(summary && summary.value_signal_mode || app.value_signal_mode || 'usage-primary');
+    var complexityRaw = Number(app.complexity_raw);
+    if(!isFinite(complexityRaw) || complexityRaw<=0){
+      complexityRaw = Number(app.fields_count_latest||0) + (Number(app.tables_count_latest||0) * 8);
+    }
+    wrap.innerHTML =
+      '<div class="detail-grid">' +
+        '<div class="detail-card"><div class="detail-k">App</div><div class="detail-v">'+esc(app.app_name||app.app_id)+'</div></div>' +
+        '<div class="detail-card"><div class="detail-k">Bereich</div><div class="detail-v">'+esc(app.space_name||'-')+'</div></div>' +
+        '<div class="detail-card"><div class="detail-k">Quadrant</div><div class="detail-v">'+esc(app.quadrant||'-')+'</div></div>' +
+        '<div class="detail-card"><div class="detail-k">Value-Modus</div><div class="detail-v">'+esc(mode)+' (usage '+pct(usageW*100)+'%, proxy '+pct(proxyW*100)+'%)</div></div>' +
+      '</div>' +
+      '<div style="height:0.55rem"></div>' +
+      renderSimpleTable(
+        [
+          {h:'Komponente', f:function(r){ return r.k; }},
+          {h:'Wert', f:function(r){ return r.v; }},
+          {h:'Beschreibung', f:function(r){ return r.d; }}
+        ],
+        [
+          {k:'static_byte_size', v:bytes(app.static_byte_size_latest), d:'Statische Modellgroesse.'},
+          {k:'peak_memory_bytes', v:bytes(app.reload_meta_peak_memory_bytes_latest), d:'Peak-Memory beim Reload.'},
+          {k:'cpu_time_spent_ms', v:n(app.reload_meta_cpu_time_spent_ms_latest), d:'CPU-Zeit beim Reload in ms.'},
+          {k:'fields_count', v:n(app.fields_count_latest), d:'Felder im latest Snapshot.'},
+          {k:'tables_count', v:n(app.tables_count_latest), d:'Tabellen im latest Snapshot.'},
+          {k:'complexity_raw', v:pct(complexityRaw), d:'fields_count + tables_count*8.'},
+          {k:'has_section_access', v:yn(app.has_section_access_latest), d:'Input fuer Proxy-Signal.'},
+          {k:'is_direct_query_mode', v:yn(app.is_direct_query_mode_latest), d:'Input fuer Proxy-Signal.'},
+          {k:'usage_app_opens', v:n(app.usage_app_opens), d:'Usage-Eingangswert.'},
+          {k:'usage_sheet_views', v:n(app.usage_sheet_views), d:'Usage-Eingangswert.'},
+          {k:'usage_unique_users', v:n(app.usage_unique_users), d:'Usage-Eingangswert.'},
+          {k:'usage_reloads', v:n(app.usage_reloads), d:'Usage-Eingangswert.'},
+          {k:'cost_raw', v:n(app.cost_raw), d:'Rohkosten vor Normalisierung.'},
+          {k:'value_usage_raw', v:pct(app.value_usage_raw), d:'Roh-Usage-Signal vor Normalisierung.'},
+          {k:'value_proxy_raw', v:pct(app.value_proxy_raw), d:'Roh-Proxy-Signal vor Normalisierung.'},
+          {k:'cost_score', v:pct(app.cost_score), d:'Normierter Kosten-Score (0-100).'},
+          {k:'value_usage_score', v:pct(app.value_usage_score), d:'Normierter Usage-Anteil (0-100).'},
+          {k:'value_proxy_score', v:pct(app.value_proxy_score), d:'Normierter Proxy-Anteil (0-100).'},
+          {k:'value_score', v:pct(app.value_score), d:'Finaler Value-Score (0-100).'},
+          {k:'efficiency_score', v:pct(app.efficiency_score), d:'(value+1)/(cost+1)*100.'}
+        ]
+      ) +
+      '<button type="button" class="btn primary jump-btn" id="cvJumpLineageBtn">Open In Lineage</button>';
+    var jumpBtn = document.getElementById('cvJumpLineageBtn');
+    if(jumpBtn){
+      jumpBtn.addEventListener('click', function(){
+        jumpToLineage(app);
+      });
+    }
+  }
+
+  function getCostValueFilteredApps(){
+    var p = payloads.costValue || {apps:[],summary:{}};
+    return getCostAreaFilteredApps(p.apps || []);
+  }
+
+  function setCostValueModalOpen(open){
+    var show = !!open;
+    var backdrop = document.getElementById('cvModalBackdrop');
+    if(!backdrop) return;
+    costScatterState.modalOpen = show;
+    backdrop.classList.toggle('open', show);
+    backdrop.setAttribute('aria-hidden', show ? 'false' : 'true');
+    document.body.classList.toggle('cv-modal-open', show);
+    if(show){
+      drawCostValueScatter(getCostValueFilteredApps());
+      setTimeout(function(){ if(costScatterModalChart) costScatterModalChart.resize(); }, 60);
+    }
+  }
+
+  function renderCostValue(){
+    var p = payloads.costValue || {apps:[],summary:{}};
+    var s = p.summary || {};
+    var apps = getCostAreaFilteredApps(p.apps || []);
+    if(apps.length){
+      var hasSelected = !!apps.find(function(a){ return cvKey(a)===costScatterState.selectedKey; });
+      if(!hasSelected) costScatterState.selectedKey = cvKey(apps[0]);
+    } else {
+      costScatterState.selectedKey = '';
+    }
+    var hclvCount = apps.filter(function(a){ return a.quadrant === 'high-cost-low-value'; }).length;
+    var avgCost = meanOf(apps, function(a){ return a.cost_score; });
+    var avgValue = meanOf(apps, function(a){ return a.value_score; });
+    document.getElementById('cvApps').textContent = n(apps.length);
+    document.getElementById('cvHclv').textContent = n(hclvCount);
+    document.getElementById('cvAvgCost').textContent = pct(avgCost);
+    document.getElementById('cvAvgValue').textContent = pct(avgValue);
+    var usageWeight = Number(s.value_usage_weight);
+    if(!isFinite(usageWeight)) usageWeight = 0.85;
+    var proxyWeight = Number(s.value_proxy_weight);
+    if(!isFinite(proxyWeight)) proxyWeight = 0.15;
+    var mode = String(s.value_signal_mode || 'usage-primary');
+    var modeLabel = mode === 'proxy-assisted' ? 'proxy-assisted (Usage-Signal schwach/gleich)' : 'usage-primary';
+    var modeInfo = document.getElementById('cvValueMode');
+    if(modeInfo){
+      modeInfo.textContent = 'Value-Modus: ' + modeLabel + ' | Value = usage_norm*' + pct(usageWeight*100) + '% + proxy_norm*' + pct(proxyWeight*100) + '%.';
+    }
+    drawCostValueScatter(apps);
+    var selectedApp = apps.find(function(a){ return cvKey(a)===costScatterState.selectedKey; }) || null;
+    if(selectedApp && !capacityState.selectedKey){
+      capacityState.selectedKey = cvKey(selectedApp);
+    }
+    renderCostValueSelection(selectedApp, s);
+    var top = apps.filter(function(a){ return a.quadrant === 'high-cost-low-value'; }).slice(0,12);
+    renderFilterableTable(
+      'cvTableWrap',
+      'costTop',
+      [{h:'App',f:function(r){return r.app_name||r.app_id;}},{h:'Bereich',f:function(r){return r.space_name||'-';}, filterable:false},{h:'Cost',f:function(r){return pct(r.cost_score);}},{h:'Value',f:function(r){return pct(r.value_score);}},{h:'Usage Sig.',f:function(r){return pct(r.value_usage_score);}},{h:'Proxy Sig.',f:function(r){return pct(r.value_proxy_score);}},{h:'Eff.',f:function(r){return pct(r.efficiency_score);}}],
+      top
+    );
+  }
+
+  function renderBloat(){
+    var p = payloads.bloat || {top_apps:[],top_tables:[],top_fields:[],schema_drift_apps:[]};
+    renderFilterableTable(
+      'bloatAppsWrap',
+      'apps',
+      [
+        {h:'App',f:function(r){return r.app_name||r.app_id;}, filter:function(r){return r.app_id||r.app_name;}, filterLabel:function(r){return r.app_name||r.app_id;}},
+        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}},
+        {h:'Size',f:function(r){return bytes(r.static_byte_size_latest);}},
+        {h:'Fields',f:function(r){return n(r.fields_count_latest);}},
+        {h:'Tables',f:function(r){return n(r.tables_count_latest);}},
+        {h:'Drift',f:function(r){return n(r.schema_drift_count_in_window);}}
+      ],
+      (p.top_apps||[]),
+      { showReset: true, pageSize: 10 }
+    );
+    renderFilterableTable(
+      'bloatTablesWrap',
+      'tables',
+      [
+        {h:'Table',f:function(r){return r.table_name;}},
+        {h:'App',f:function(r){return r.app_name||r.app_id;}, filter:function(r){return r.app_id||r.app_name;}, filterLabel:function(r){return r.app_name||r.app_id;}},
+        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}},
+        {h:'Byte Size',f:function(r){return bytes(r.byte_size);}},
+        {h:'Rows',f:function(r){return n(r.no_of_rows);}},
+        {h:'Fields',f:function(r){return n(r.no_of_fields);}},
+        {h:'Keys',f:function(r){return n(r.no_of_key_fields);}}
+      ],
+      (p.top_tables||[]),
+      { showReset: true, pageSize: 10 }
+    );
+    renderFilterableTable(
+      'bloatFieldsWrap',
+      'fields',
+      [
+        {h:'Field',f:function(r){return r.name||r.field_hash;}},
+        {h:'App',f:function(r){return r.app_name||r.app_id;}, filter:function(r){return r.app_id||r.app_name;}, filterLabel:function(r){return r.app_name||r.app_id;}},
+        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}},
+        {h:'Byte Size',f:function(r){return bytes(r.byte_size);}},
+        {h:'Cardinal',f:function(r){return n(r.cardinal);}},
+        {h:'Total',f:function(r){return n(r.total_count);}}
+      ],
+      (p.top_fields||[]),
+      { showReset: true, pageSize: 10 }
+    );
+    renderFilterableTable(
+      'bloatDriftWrap',
+      'drift',
+      [
+        {h:'App',f:function(r){return r.app_name||r.app_id;}, filter:function(r){return r.app_id||r.app_name;}, filterLabel:function(r){return r.app_name||r.app_id;}},
+        {h:'Bereich',f:function(r){return r.space_name||'Unassigned';}, filterable:false},
+        {h:'Drift',f:function(r){return n(r.schema_drift_count_in_window);}},
+        {h:'Size',f:function(r){return bytes(r.static_byte_size_latest);}}
+      ],
+      (p.schema_drift_apps||[]),
+      { pageSize: 10 }
+    );
+  }
+
+  function renderDataModelPack(){
+    var metricSelect = document.getElementById('dmpMetricSelect');
+    var metricMeta = document.getElementById('dataModelPackMeta');
+    var breadcrumb = document.getElementById('dataModelPackBreadcrumb');
+    var svgEl = document.getElementById('dataModelPackSvg');
+    var payload = payloads.dataModelPack || {metric: state.dataModelMetric, areas: [], summary: {}};
+    var metric = normalizeDataModelMetric(payload.metric || state.dataModelMetric);
+    state.dataModelMetric = metric;
+    if(metricSelect){
+      var options = Array.isArray(payload.metric_options) && payload.metric_options.length ? payload.metric_options : DATA_MODEL_METRICS;
+      metricSelect.innerHTML = options.map(function(opt){
+        return '<option value="' + esc(opt) + '">' + esc(dataModelMetricLabel(opt)) + '</option>';
+      }).join('');
+      metricSelect.value = metric;
+    }
+    if(metricMeta){
+      var summary = payload.summary || {};
+      metricMeta.textContent = 'Metrik: ' + dataModelMetricLabel(metric) + ' | Bereiche: ' + n(summary.areas_count || 0) + ' | Apps: ' + n(summary.apps_count || 0) + ' | Gesamt: ' + formatMetricValue(metric, summary.total_metric_value || 0);
+    }
+    if(!svgEl) return;
+    if(typeof d3 === 'undefined'){
+      svgEl.innerHTML = '';
+      if(breadcrumb) breadcrumb.innerHTML = '<span class="empty">D3 konnte nicht geladen werden.</span>';
+      return;
+    }
+
+    var areas = Array.isArray(payload.areas) ? payload.areas : [];
+    if(!areas.length){
+      d3.select(svgEl).selectAll('*').remove();
+      if(breadcrumb) breadcrumb.innerHTML = '<span class="empty">Keine Data-Model-Pack Daten fuer den aktuellen Filter.</span>';
+      return;
+    }
+
+    var measuredWidth = Math.floor(
+      (svgEl.getBoundingClientRect && svgEl.getBoundingClientRect().width) ||
+      svgEl.clientWidth ||
+      (svgEl.parentElement && svgEl.parentElement.clientWidth) ||
+      960
+    );
+    var width = Math.max(620, measuredWidth);
+    var height = 520;
+    var diameter = Math.min(width, height);
+    var svg = d3.select(svgEl);
+    svg.selectAll('*').remove();
+    svg
+      .attr('viewBox', '0 0 ' + width + ' ' + height)
+      .attr('preserveAspectRatio', 'xMidYMid meet')
+      .attr('width', width)
+      .attr('height', height);
+
+    var rootData = {
+      name: 'Alle Bereiche',
+      metric_value: Number((payload.summary && payload.summary.total_metric_value) || 0),
+      children: areas.map(function(area){
+        var apps = Array.isArray(area.apps) ? area.apps : [];
+        return {
+          name: area.area_name || area.area_key || 'Unassigned',
+          area_key: area.area_key,
+          metric_value: Number(area.metric_value || 0),
+          children: apps.map(function(app){
+            return {
+              name: app.app_name || app.app_id || 'unknown-app',
+              app_id: app.app_id,
+              project_id: app.project_id,
+              metric_value: Number(app.metric_value || 0)
+            };
+          })
+        };
+      })
+    };
+
+    function packInputValue(raw){
+      var v = Number(raw || 0);
+      return v > 0 ? v : 0.0001;
+    }
+
+    var root = d3.hierarchy(rootData)
+      .sum(function(d){ return packInputValue(d.metric_value); })
+      .sort(function(a,b){ return b.value - a.value; });
+    d3.pack().size([width, height]).padding(4)(root);
+
+    var focus = root;
+    var view = [root.x, root.y, root.r * 2];
+    var didDrag = false;
+    var lastDragAt = 0;
+    var minDiameter = Math.max(24, root.r * 0.06);
+    var maxDiameter = root.r * 2.3;
+    var color = d3.scaleLinear()
+      .domain([0, 2])
+      .range(['#1d2748', '#14b8a6'])
+      .interpolate(d3.interpolateHcl);
+    var nodes = root.descendants();
+
+    function recentlyDragged(){
+      return (Date.now() - lastDragAt) < 180;
+    }
+
+    function clampView(v){
+      var d = Math.max(minDiameter, Math.min(maxDiameter, Number(v[2]) || (root.r * 2)));
+      var worldW = d * (width / diameter);
+      var worldH = d * (height / diameter);
+      var minX = worldW / 2;
+      var maxX = width - (worldW / 2);
+      var minY = worldH / 2;
+      var maxY = height - (worldH / 2);
+      var x = Number(v[0]) || (width / 2);
+      var y = Number(v[1]) || (height / 2);
+      if(minX > maxX) x = width / 2; else x = Math.max(minX, Math.min(maxX, x));
+      if(minY > maxY) y = height / 2; else y = Math.max(minY, Math.min(maxY, y));
+      return [x, y, d];
+    }
+
+    var circle = svg.append('g')
+      .attr('stroke', 'rgba(255,255,255,0.2)')
+      .attr('stroke-width', 1)
+      .selectAll('circle')
+      .data(nodes)
+      .join('circle')
+      .attr('fill', function(d){ return d.children ? color(d.depth) : 'rgba(255,255,255,0.08)'; })
+      .attr('pointer-events', function(d){ return d.depth === 0 ? 'all' : null; })
+      .style('cursor', function(d){ return d.children ? 'pointer' : 'default'; })
+      .on('click', function(event, d){
+        if(recentlyDragged()) return;
+        if(focus !== d){
+          zoom(d);
+          event.stopPropagation();
+        }
+      });
+
+    circle.append('title').text(function(d){
+      return String(d.data.name || '-') + '\n' + dataModelMetricLabel(metric) + ': ' + formatMetricValue(metric, d.data.metric_value || 0);
+    });
+
+    var label = svg.append('g')
+      .style('font', '12px "Segoe UI", sans-serif')
+      .attr('fill', '#fff')
+      .attr('text-anchor', 'middle')
+      .attr('pointer-events', 'none')
+      .selectAll('text')
+      .data(nodes)
+      .join('text')
+      .style('fill-opacity', function(d){ return d.parent === root ? 1 : 0; })
+      .style('display', function(d){ return d.parent === root ? 'inline' : 'none'; })
+      .text(function(d){ return truncateCircleLabel(d.data.name, d.r * 1.7); });
+
+    function updateBreadcrumb(target){
+      if(!breadcrumb) return;
+      var path = target.ancestors().reverse();
+      breadcrumb.innerHTML = '';
+      path.forEach(function(node, idx){
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'dmp-crumb' + (idx === path.length - 1 ? ' active' : '');
+        btn.textContent = String(node.data && node.data.name || '-');
+        if(idx === path.length - 1){
+          btn.disabled = true;
+        } else {
+          btn.addEventListener('click', function(ev){
+            ev.stopPropagation();
+            zoom(node);
+          });
+        }
+        breadcrumb.appendChild(btn);
+        if(idx < path.length - 1){
+          var sep = document.createElement('span');
+          sep.className = 'dmp-sep';
+          sep.textContent = '>';
+          breadcrumb.appendChild(sep);
+        }
+      });
+    }
+
+    function zoomTo(v){
+      var clamped = clampView(v);
+      var k = diameter / clamped[2];
+      view = clamped;
+      label
+        .attr('transform', function(d){ return 'translate(' + (((d.x - clamped[0]) * k) + (width / 2)) + ',' + (((d.y - clamped[1]) * k) + (height / 2)) + ')'; })
+        .text(function(d){ return truncateCircleLabel(d.data.name, d.r * k * 1.7); });
+      circle
+        .attr('transform', function(d){ return 'translate(' + (((d.x - clamped[0]) * k) + (width / 2)) + ',' + (((d.y - clamped[1]) * k) + (height / 2)) + ')'; })
+        .attr('r', function(d){ return d.r * k; });
+    }
+
+    function zoom(target){
+      focus = target;
+      updateBreadcrumb(focus);
+      var transition = svg.transition()
+        .duration(480)
+        .tween('zoom', function(){
+          var i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2]);
+          return function(t){ zoomTo(i(t)); };
+        });
+      label
+        .filter(function(d){ return d.parent === focus || this.style.display === 'inline'; })
+        .transition(transition)
+        .style('fill-opacity', function(d){ return d.parent === focus ? 1 : 0; })
+        .on('start', function(d){ if(d.parent === focus) this.style.display = 'inline'; })
+        .on('end', function(d){ if(d.parent !== focus) this.style.display = 'none'; });
+    }
+
+    var panDrag = d3.drag()
+      .on('start', function(){
+        didDrag = false;
+        svgEl.classList.add('panning');
+      })
+      .on('drag', function(event){
+        var dx = Number(event.dx || 0);
+        var dy = Number(event.dy || 0);
+        if(Math.abs(dx) + Math.abs(dy) > 0.5) didDrag = true;
+        var worldPerPx = view[2] / diameter;
+        zoomTo([view[0] - (dx * worldPerPx), view[1] - (dy * worldPerPx), view[2]]);
+      })
+      .on('end', function(){
+        svgEl.classList.remove('panning');
+        if(didDrag) lastDragAt = Date.now();
+      });
+
+    svg.call(panDrag);
+    svg.on('wheel', function(event){
+      event.preventDefault();
+      var factor = event.deltaY > 0 ? 1.12 : 0.88;
+      var rect = svgEl.getBoundingClientRect();
+      var px = event.clientX - rect.left;
+      var py = event.clientY - rect.top;
+      var worldPerPx = view[2] / diameter;
+      var anchorX = view[0] + ((px - (width / 2)) * worldPerPx);
+      var anchorY = view[1] + ((py - (height / 2)) * worldPerPx);
+      var nextDiameter = Math.max(minDiameter, Math.min(maxDiameter, view[2] * factor));
+      var ratio = nextDiameter / view[2];
+      var nextX = anchorX - ((anchorX - view[0]) * ratio);
+      var nextY = anchorY - ((anchorY - view[1]) * ratio);
+      zoomTo([nextX, nextY, nextDiameter]);
+      lastDragAt = Date.now();
+    }, { passive: false });
+
+    svg.on('click', function(){
+      if(recentlyDragged()) return;
+      zoom(root);
+    });
+    zoomTo([root.x, root.y, root.r * 2]);
+    updateBreadcrumb(root);
+  }
+
+  function renderLineage(){
+    var p = payloads.lineage || {critical_nodes:[],summary:{}};
+    var s = p.summary || {};
+    var rows = (p.critical_nodes||[]).slice(0,40);
+    var rowByKey = {};
+    rows.forEach(function(row){ rowByKey[lineageNodeKey(row)] = row; });
+    document.getElementById('linNodes').textContent = n(s.nodes_count || 0);
+    document.getElementById('linEdges').textContent = n(s.edges_count || 0);
+    document.getElementById('linCritical').textContent = n(s.critical_nodes_count || 0);
+    renderFilterableTable(
+      'linTableWrap',
+      'lineage',
+      [
+        {
+          h:'Node',
+          raw:true,
+          filter:function(r){ return r.label || r.node_id || '-'; },
+          f:function(r){
+            var key = encodeURIComponent(lineageNodeKey(r));
+            var label = esc(String(r.label || r.node_id || '-'));
+            return '<button type="button" class="lin-jump-btn" data-lineage-node-key="' + key + '" title="In Lineage oeffnen">' + label + '</button>';
+          }
+        },
+        {h:'Type',f:function(r){return r.node_type;}},
+        {h:'App',f:function(r){return r.app_name||r.app_id||'-';}},
+        {h:'Degree',f:function(r){return n(r.degree);}},
+        {h:'Blast',f:function(r){return n(r.blast_radius);}},
+        {h:'Score',f:function(r){return pct(r.criticality_score);}}
+      ],
+      rows
+    );
+    var wrap = document.getElementById('linTableWrap');
+    if(!wrap) return;
+    wrap.onclick = function(ev){
+      var target = ev && ev.target;
+      var btn = (target && typeof target.closest === 'function')
+        ? target.closest('button[data-lineage-node-key]')
+        : null;
+      if(!btn || !wrap.contains(btn)) return;
+      var key = decodeURIComponent(String(btn.getAttribute('data-lineage-node-key') || ''));
+      var row = rowByKey[key];
+      if(!row) return;
+      jumpToLineageNode(row);
+    };
+  }
+
+  function renderGovernanceOps(){
+    var payload = payloads.governance || {
+      summary: {},
+      low_usage_apps: [],
+      low_signal_tables: [],
+      low_signal_fields: [],
+      low_signal_qvds: [],
+      action_plan: []
+    };
+    var summary = payload.summary || {};
+    document.getElementById('govAppsTotal').textContent = n(summary.apps_total || 0);
+    document.getElementById('govLowApps').textContent = n(summary.low_or_no_usage_apps_count || 0);
+    document.getElementById('govLowAppsSplit').textContent = 'no: ' + n(summary.no_usage_apps_count || 0) + ' | low: ' + n(summary.low_usage_apps_count || 0);
+    document.getElementById('govLowTables').textContent = n(summary.low_signal_tables_count || 0);
+    document.getElementById('govLowFields').textContent = n(summary.low_signal_fields_count || 0);
+    document.getElementById('govLowQvds').textContent = n(summary.low_signal_qvds_count || 0);
+    var cta = document.getElementById('govEmptyCta');
+    if(cta){
+      cta.style.display = Number(summary.apps_total || 0) > 0 ? 'none' : 'block';
+    }
+
+    renderFilterableTable(
+      'govAppsWrap',
+      'govApps',
+      [
+        {h:'App', f:function(r){ return r.app_name || r.app_id; }},
+        {h:'Bereich', f:function(r){ return r.space_name || 'Unassigned'; }},
+        {h:'Usage Class', f:function(r){ return r.usage_classification || '-'; }},
+        {h:'Usage Signal', f:function(r){ return pct(r.usage_signal_score); }},
+        {h:'Opens', f:function(r){ return n(r.usage_app_opens); }},
+        {h:'Views', f:function(r){ return n(r.usage_sheet_views); }},
+        {h:'Users', f:function(r){ return n(r.usage_unique_users); }},
+        {h:'Reloads', f:function(r){ return n(r.usage_reloads); }},
+        {h:'Size', f:function(r){ return bytes(r.static_byte_size_latest); }},
+        {h:'Reason', f:function(r){ return r.reason || '-'; }}
+      ],
+      (payload.low_usage_apps || []).slice(0, 80)
+    );
+
+    renderFilterableTable(
+      'govTablesWrap',
+      'govTables',
+      [
+        {h:'Table', f:function(r){ return r.table_name || '-'; }},
+        {h:'App', f:function(r){ return r.app_name || r.app_id; }},
+        {h:'Bereich', f:function(r){ return r.space_name || 'Unassigned'; }},
+        {h:'Usage Class', f:function(r){ return r.usage_classification || '-'; }},
+        {h:'Usage Signal', f:function(r){ return pct(r.usage_signal_score); }},
+        {h:'Byte Size', f:function(r){ return bytes(r.byte_size); }},
+        {h:'Rows', f:function(r){ return n(r.no_of_rows); }},
+        {h:'Fields', f:function(r){ return n(r.no_of_fields); }},
+        {h:'Keys', f:function(r){ return n(r.no_of_key_fields); }},
+        {h:'Reason', f:function(r){ return r.reason || '-'; }}
+      ],
+      (payload.low_signal_tables || []).slice(0, 80)
+    );
+
+    renderFilterableTable(
+      'govFieldsWrap',
+      'govFields',
+      [
+        {h:'Field', f:function(r){ return r.name || r.field_hash; }},
+        {h:'App', f:function(r){ return r.app_name || r.app_id; }},
+        {h:'Bereich', f:function(r){ return r.space_name || 'Unassigned'; }},
+        {h:'Usage Class', f:function(r){ return r.usage_classification || '-'; }},
+        {h:'Usage Signal', f:function(r){ return pct(r.usage_signal_score); }},
+        {h:'Byte Size', f:function(r){ return bytes(r.byte_size); }},
+        {h:'Cardinal', f:function(r){ return n(r.cardinal); }},
+        {h:'Total', f:function(r){ return n(r.total_count); }},
+        {h:'Src Tables', f:function(r){ return Array.isArray(r.src_tables) ? r.src_tables.join(', ') : '-'; }},
+        {h:'Reason', f:function(r){ return r.reason || '-'; }}
+      ],
+      (payload.low_signal_fields || []).slice(0, 80)
+    );
+
+    renderFilterableTable(
+      'govQvdsWrap',
+      'govQvds',
+      [
+        {h:'QVD Node', f:function(r){ return r.label || r.node_id; }},
+        {h:'App', f:function(r){ return r.app_name || r.app_id || '-'; }},
+        {h:'Bereich', f:function(r){ return r.space_name || 'Unassigned'; }},
+        {h:'Signal', f:function(r){ return r.signal_classification || '-'; }},
+        {h:'Degree', f:function(r){ return n(r.degree); }},
+        {h:'In', f:function(r){ return n(r.in_degree); }},
+        {h:'Out', f:function(r){ return n(r.out_degree); }},
+        {h:'Usage Signal', f:function(r){ return pct(r.usage_signal_score); }},
+        {h:'Reason', f:function(r){ return r.reason || '-'; }}
+      ],
+      (payload.low_signal_qvds || []).slice(0, 80)
+    );
+
+    var actions = (payload.action_plan || []).map(function(item){
+      return {
+        priority: item.priority || '-',
+        title: item.title || '-',
+        scope: item.scope || '-',
+        candidate_count: Number(item.candidate_count || 0),
+        target_metric: item.target_metric || '-',
+        rationale: item.rationale || '-',
+        suggested_steps: Array.isArray(item.suggested_steps) ? item.suggested_steps : []
+      };
+    });
+    renderFilterableTable(
+      'govActionsWrap',
+      'govActions',
+      [
+        {h:'Priority', f:function(r){ return r.priority; }},
+        {h:'Massnahme', f:function(r){ return r.title; }},
+        {h:'Scope', f:function(r){ return r.scope; }},
+        {h:'Kandidaten', f:function(r){ return n(r.candidate_count); }},
+        {h:'Zielmetrik', f:function(r){ return r.target_metric; }},
+        {h:'Rationale', f:function(r){ return r.rationale; }},
+        {h:'Naechste Schritte', f:function(r){ return (r.suggested_steps || []).join(' | '); }}
+      ],
+      actions
+    );
+  }
+
+  async function loadFocusSelectors(){
+    var results = await Promise.all([
+      apiFetchJson('/api/projects', 'Projekte konnten nicht geladen werden'),
+      apiFetchJson('/api/customers/names', 'Kunden konnten nicht geladen werden')
+    ]);
+    allProjects = Array.isArray(results[0]) ? results[0] : [];
+    allCustomers = Array.isArray(results[1]) ? results[1] : [];
+
+    projectsById = {};
+    allProjects.forEach(function(p){ projectsById[String(p.id)] = p; });
+    customersById = {};
+    allCustomers.forEach(function(c){ customersById[String(c.id)] = c; });
+
+    syncCustomerFromProject();
+    renderCustomerSelect();
+    return renderProjectSelectForCustomer();
+  }
+
+  async function reloadDataModelPackOnly(){
+    if(!requireAnalyticsProject()) return;
+    document.getElementById('toolbarStatus').textContent = 'Lade Data Model ...';
+    setError('');
+    try{
+      var qPack = '?metric=' + encodeURIComponent(state.dataModelMetric || 'static_byte_size_latest')
+        + '&project_id=' + encodeURIComponent(String(state.project));
+      payloads.dataModelPack = await apiFetchJson('/api/analytics/insights/data-model-pack' + qPack, 'Data-Model-Pack konnte nicht geladen werden');
+      renderDataModelPack();
+      setUrl();
+      document.getElementById('toolbarStatus').textContent = 'Bereit';
+      document.getElementById('lastLoaded').textContent = 'Aktualisiert ' + new Date().toLocaleTimeString('de-DE');
+    } catch (err){
+      var msg = (err && err.message) ? err.message : 'Data-Model-Pack konnte nicht geladen werden';
+      setError(msg);
+      showToast(msg);
+      document.getElementById('toolbarStatus').textContent = 'Fehler';
+    }
+  }
+
+  async function reloadInsights(){
+    if(!requireAnalyticsProject()) return;
+    document.getElementById('toolbarStatus').textContent = 'Lade Insights ...';
+    setError('');
+    try {
+      var q = '?days=' + encodeURIComponent(String(state.days||30)) + '&project_id=' + encodeURIComponent(String(state.project));
+      var qLin = '?limit=40&project_id=' + encodeURIComponent(String(state.project));
+      var qPack = '?metric=' + encodeURIComponent(state.dataModelMetric || 'static_byte_size_latest')
+        + '&project_id=' + encodeURIComponent(String(state.project));
+      var qGov = '?project_id=' + encodeURIComponent(String(state.project)) + '&limit=40';
+      var results = await Promise.all([
+        apiFetchJson('/api/analytics/insights/cost-value' + q, 'Cost-vs-Value konnte nicht geladen werden'),
+        apiFetchJson('/api/analytics/insights/bloat' + q + '&limit=200', 'Bloat-Explorer konnte nicht geladen werden'),
+        apiFetchJson('/api/analytics/insights/lineage-criticality' + qLin, 'Lineage-Kritikalitaet konnte nicht geladen werden'),
+        apiFetchJson('/api/analytics/insights/data-model-pack' + qPack, 'Data-Model-Pack konnte nicht geladen werden'),
+        apiFetchJson('/api/analytics/insights/governance-ops' + qGov, 'Governance-Operations konnte nicht geladen werden')
+      ]);
+      payloads.costValue = results[0];
+      payloads.bloat = results[1];
+      payloads.lineage = results[2];
+      payloads.dataModelPack = results[3];
+      payloads.governance = results[4];
+      capacityState.trendByKey = {};
+      capacityState.errors = {};
+      capacityState.loadingKey = '';
+      renderCostValue();
+      renderBloat();
+      renderDataModelCapacity();
+      renderLineage();
+      renderDataModelPack();
+      renderGovernanceOps();
+      setUrl();
+      document.getElementById('toolbarStatus').textContent = 'Bereit';
+      document.getElementById('lastLoaded').textContent = 'Aktualisiert ' + new Date().toLocaleTimeString('de-DE');
+    } catch (err) {
+      var msg = (err && err.message) ? err.message : 'Fehler beim Laden';
+      setError(msg);
+      showToast(msg);
+      document.getElementById('toolbarStatus').textContent = 'Fehler';
+    }
+  }
+
+  document.querySelectorAll('.module-card[data-module]').forEach(function(card){
+    card.addEventListener('click', function(){
+      setActiveModule(card.getAttribute('data-module') || 'portfolio-insights');
+      setUrl();
+    });
+  });
+  document.getElementById('dmpMetricSelect').addEventListener('change', function(){
+    state.dataModelMetric = normalizeDataModelMetric(this.value);
+    reloadDataModelPackOnly();
+  });
+  document.getElementById('cvExpandBtn').addEventListener('click', function(){
+    setCostValueModalOpen(true);
+  });
+  document.getElementById('cvModalCloseBtn').addEventListener('click', function(){
+    setCostValueModalOpen(false);
+  });
+  document.getElementById('cvModalBackdrop').addEventListener('click', function(ev){
+    if(ev.target === ev.currentTarget){
+      setCostValueModalOpen(false);
+    }
+  });
+  document.addEventListener('keydown', function(ev){
+    if(ev.key === 'Escape' && costScatterState.modalOpen){
+      setCostValueModalOpen(false);
+    }
+  });
+  document.getElementById('cvAreaSelect').addEventListener('change', function(){
+    state.costArea = normalizeCostArea(this.value);
+    renderCostValue();
+    setUrl();
+  });
+  document.getElementById('cvLabelToggle').addEventListener('change', function(){
+    state.showCvLabels = !!this.checked;
+    renderCostValue();
+    setUrl();
+  });
+  document.getElementById('capacityAppSelect').addEventListener('change', function(){
+    capacityState.selectedKey = String(this.value || '').trim();
+    renderDataModelCapacity();
+  });
+  document.getElementById('capacityLoadBtn').addEventListener('click', function(){
+    loadCapacityDeepDive();
+  });
+  document.getElementById('navCustomerSelect').addEventListener('change', function(){
+    state.customer = String(this.value || '').trim();
+    renderProjectSelectForCustomer();
+    reloadInsights();
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function(){
+    state.project = String(this.value || '').trim();
+    syncCustomerFromProject();
+    renderCustomerSelect();
+    applyFocusStatePersistence();
+    updateNavProjectContext(state.project, state.customer);
+    setUrl();
+    reloadInsights();
+  });
+  document.getElementById('daysSelect').addEventListener('change', function(){ state.days=parseInt(this.value||'30',10)||30; reloadInsights(); });
+  document.getElementById('reloadBtn').addEventListener('click', reloadInsights);
+  window.addEventListener('resize', function(){
+    if(costScatterChart) costScatterChart.resize();
+    if(costScatterModalChart && costScatterState.modalOpen) costScatterModalChart.resize();
+    renderDataModelPack();
+  });
+
+  async function init(){
+    try {
+      setActiveModule(state.module);
+      setUrl();
+      document.getElementById('daysSelect').value = String(state.days||30);
+      document.getElementById('dmpMetricSelect').value = state.dataModelMetric;
+      document.getElementById('cvLabelToggle').checked = !!state.showCvLabels;
+      await loadFocusSelectors();
+      if(state.customer) document.getElementById('navCustomerSelect').value = String(state.customer);
+      if(state.project) document.getElementById('navProjectSelect').value = String(state.project);
+      setUrl();
+      await reloadInsights();
+    } catch (err) {
+      var msg = (err && err.message) ? err.message : 'Initialisierung fehlgeschlagen';
+      setError(msg);
+      showToast(msg);
+    }
+  }
+  init();
+</script>
+</body>
+</html>

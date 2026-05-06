@@ -1,0 +1,340 @@
+/* Atlas UI Responsive Retrofit v1
+   - Focus: navigation wrap, small-screen readability, table overflow, chart sizing
+   - Scope: static frontend pages (index/projects/analytics/lineage/admin/theme-builder)
+*/
+
+@media (max-width: 1400px) {
+  nav {
+    height: auto !important;
+    min-height: 60px;
+    padding: 0.55rem 1rem !important;
+    gap: 0.55rem !important;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .nav-brand {
+    order: 1;
+  }
+
+  .nav-project-badge {
+    order: 2;
+    margin-left: 0 !important;
+  }
+
+  .nav-user {
+    order: 3;
+    margin-left: auto;
+  }
+
+  .nav-links {
+    order: 4;
+    width: 100%;
+    margin-left: 0 !important;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.12rem;
+  }
+
+  .nav-link {
+    white-space: nowrap;
+  }
+
+  .nav-spacer {
+    display: none;
+  }
+
+  .nav-project-select {
+    min-width: 180px !important;
+    max-width: 240px !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .sidebar {
+    position: sticky !important;
+    top: 0;
+    bottom: auto;
+    left: 0;
+    width: 100% !important;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    padding: 0.55rem 0.7rem;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-header {
+    border-bottom: none !important;
+    padding: 0 !important;
+    margin-right: 0.5rem;
+  }
+
+  .sidebar-brand {
+    margin-bottom: 0 !important;
+    font-size: 0.95rem !important;
+  }
+
+  .sidebar-back,
+  .sidebar-footer {
+    display: none !important;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    flex: 1;
+    padding: 0 !important;
+    gap: 0.35rem;
+    overflow-x: auto;
+  }
+
+  .sidebar-link {
+    border-left: none !important;
+    border-bottom: 2px solid transparent;
+    padding: 0.45rem 0.7rem !important;
+    white-space: nowrap;
+    font-size: 0.82rem !important;
+  }
+
+  .sidebar-link.active {
+    border-left: none !important;
+    border-bottom-color: var(--accent);
+  }
+
+  .admin-content {
+    margin-left: 0 !important;
+    padding: 1rem 0.75rem !important;
+  }
+}
+
+@media (max-width: 900px) {
+  main {
+    padding: 1rem 0.8rem !important;
+  }
+
+  .page-header,
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.65rem;
+    margin-bottom: 1.25rem !important;
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 0.5rem !important;
+    padding: 0.58rem 0.7rem !important;
+  }
+
+  body.lineage-page .toolbar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    gap: 0.45rem !important;
+    padding: 0.46rem 0.58rem !important;
+    min-height: 48px;
+  }
+
+  body.lineage-page .toolbar select,
+  body.lineage-page .toolbar .toolbar-input,
+  body.lineage-page .toolbar .btn-toolbar,
+  body.lineage-page .toolbar .stat-pill,
+  body.lineage-page .toolbar .toolbar-sep {
+    flex: 0 0 auto;
+  }
+
+  .toolbar-status,
+  .dmp-meta {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .cv-filter-row {
+    flex-wrap: wrap;
+  }
+
+  .cv-filter-row select {
+    width: 100%;
+    min-width: 0 !important;
+  }
+
+  .dmp-toolbar select {
+    min-width: 0;
+    flex: 1 1 220px;
+    max-width: 100%;
+  }
+
+  .panel-b,
+  .table-wrap,
+  #usersTableWrap,
+  #customersTableWrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .panel-b table,
+  .table-wrap table {
+    min-width: 620px;
+  }
+
+  #usersTableWrap table,
+  #customersTableWrap table {
+    min-width: 720px;
+  }
+
+  #detailPanel {
+    width: min(92vw, 340px) !important;
+    right: 0.55rem !important;
+    top: 0.55rem !important;
+    max-height: 72vh;
+    overflow: auto;
+  }
+
+  #legend {
+    left: 0.55rem !important;
+    bottom: 0.55rem !important;
+    max-width: calc(100vw - 6rem);
+  }
+
+  #zoomControls {
+    right: 0.55rem !important;
+    bottom: 0.55rem !important;
+  }
+
+  #toast {
+    max-width: min(92vw, 420px);
+  }
+
+  #dataModelPackSvg {
+    height: 440px !important;
+  }
+
+  #costValueCanvas {
+    height: 260px !important;
+  }
+
+  body.lineage-page .graph-wrap {
+    min-height: 52vh;
+  }
+}
+
+@media (max-width: 760px) {
+  nav {
+    padding: 0.48rem 0.65rem !important;
+    gap: 0.42rem !important;
+  }
+
+  .nav-brand {
+    font-size: 0.95rem !important;
+  }
+
+  .brand-icon {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .nav-project-badge {
+    width: 100%;
+    justify-content: space-between;
+    border-radius: 12px !important;
+    padding: 0.32rem 0.5rem !important;
+  }
+
+  body.lineage-page .nav-project-badge {
+    width: auto !important;
+    flex: 1 1 calc(50% - 0.25rem);
+  }
+
+  .nav-project-badge .k {
+    font-size: 0.62rem !important;
+    min-width: 44px;
+  }
+
+  .nav-project-select {
+    width: 100%;
+    min-width: 0 !important;
+    max-width: none !important;
+    border-radius: 10px !important;
+  }
+
+  .nav-user-email {
+    display: none !important;
+  }
+
+  .nav-user {
+    margin-left: 0;
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.68rem !important;
+    font-size: 0.74rem !important;
+  }
+
+  .module-grid,
+  .projects-grid,
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .table-filter-grid,
+  .detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .job-row {
+    grid-template-columns: 1fr !important;
+    gap: 0.38rem !important;
+    align-items: flex-start !important;
+  }
+
+  .log-popup {
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.6rem;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  .toolbar-label,
+  .toolbar-sep,
+  #legend {
+    display: none !important;
+  }
+
+  body.lineage-page #legend {
+    display: block !important;
+    left: 0.5rem !important;
+    right: 0.5rem;
+    bottom: 0.5rem !important;
+    max-width: none !important;
+    max-height: 34vh;
+    overflow: auto;
+  }
+
+  body.lineage-page .toolbar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .toolbar-input {
+    min-width: 0 !important;
+    flex: 1 1 160px;
+  }
+
+  #detailPanel {
+    left: 0.5rem;
+    right: 0.5rem !important;
+    width: calc(100vw - 1rem) !important;
+  }
+
+  #dataModelPackSvg {
+    height: 360px !important;
+  }
+
+  #costValueCanvas {
+    height: 220px !important;
+  }
+}

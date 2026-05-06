@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="de" style="background:#1a1a2e;">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard – Lineage Explorer</title>
+  <title>Dashboard – Atlas</title>
   <style>
     :root {
       --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -20,270 +20,327 @@
       --error: #ef4444;
       --radius: 14px;
       --radius-sm: 8px;
+      /* Priority colors */
+      --pri-critical: #E24B4A;
+      --pri-high: #EF9F27;
+      --pri-medium: #378ADD;
+      --pri-low: #B4B2A9;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      min-height: 100vh;
-      background: var(--bg);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: var(--text);
-    }
+    body { min-height: 100vh; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); }
 
     /* ── NAV ── */
-    nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(15,20,40,0.7);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
-      padding: 0 1.5rem;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    .nav-brand {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      font-weight: 700;
-      font-size: 1.05rem;
-      text-decoration: none;
-      color: var(--text);
-    }
-    .brand-icon {
-      width: 32px; height: 32px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1rem;
-    }
-    .nav-links {
-      display: flex;
-      gap: 0.25rem;
-      margin-left: 1rem;
-    }
-    .nav-link {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.875rem;
-      padding: 0.4rem 0.75rem;
-      border-radius: var(--radius-sm);
-      transition: color 0.15s, background 0.15s;
-    }
-    .nav-link:hover, .nav-link.active {
-      color: var(--text);
-      background: var(--surface-hover);
-    }
-    .nav-link.active { color: var(--accent); }
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
+    .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
+    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; min-width: 0; }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.28) inset; }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
     .nav-spacer { flex: 1; }
-    .nav-user {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    .nav-user-email {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-    }
-    .btn-sm {
-      padding: 0.4rem 0.9rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .btn-sm:hover {
-      background: var(--surface-hover);
-      color: var(--text);
-      border-color: rgba(255,255,255,0.2);
-    }
+    .nav-user { display: flex; align-items: center; gap: 0.75rem; }
+    .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
+    .btn-sm { padding: 0.4rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
+    .btn-sm:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(255,255,255,0.2); }
 
     /* ── LAYOUT ── */
-    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
 
-    .page-header {
-      margin-bottom: 2rem;
-    }
-    .page-title {
-      font-size: 1.6rem;
-      font-weight: 700;
-      margin-bottom: 0.25rem;
-    }
-    .page-subtitle { color: var(--text-muted); font-size: 0.9rem; }
+    /* ── VIEW TOGGLE ── */
+    .view-toggle { display: inline-flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 100px; padding: 3px; gap: 0; }
+    .view-toggle-btn { padding: 0.35rem 0.9rem; border: none; background: none; color: var(--text-muted); font-size: 0.76rem; font-weight: 600; border-radius: 100px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+    .view-toggle-btn.active { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
+    .view-toggle-btn:not(.active):hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .ctx-badge { display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.64rem; padding: 0.1rem 0.4rem; border-radius: 4px; background: rgba(102,126,234,0.12); color: #a5b4fc; font-weight: 600; white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 
-    /* ── CARDS ── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.5rem;
-      backdrop-filter: blur(10px);
-    }
-
-    .card-title {
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-muted);
-      margin-bottom: 0.75rem;
-    }
-
-    /* ── STATS GRID ── */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    .stat-icon {
-      width: 44px; height: 44px;
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.3rem;
-      flex-shrink: 0;
-    }
-    .stat-icon.purple { background: rgba(102,126,234,0.15); }
-    .stat-icon.teal   { background: rgba(20,184,166,0.15); }
-    .stat-icon.orange { background: rgba(245,158,11,0.15); }
-    .stat-icon.green  { background: rgba(34,197,94,0.15); }
-    .stat-value { font-size: 1.75rem; font-weight: 700; line-height: 1; }
-    .stat-label { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.2rem; }
-
-    /* ── CONTENT GRID ── */
-    .content-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-    }
-    @media (max-width: 700px) { .content-grid { grid-template-columns: 1fr; } }
-
-    /* ── STATUS BADGE ── */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0.25rem 0.65rem;
-      border-radius: 100px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-    .badge-green  { background: rgba(34,197,94,0.15);  color: #4ade80; }
-    .badge-yellow { background: rgba(245,158,11,0.15); color: #fbbf24; }
-    .badge-red    { background: rgba(239,68,68,0.15);  color: #f87171; }
-    .badge-gray   { background: rgba(255,255,255,0.08); color: var(--text-muted); }
-    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-
-    /* ── STATUS ROW ── */
-    .status-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.75rem 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .status-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .status-row:first-child { padding-top: 0; }
-    .status-label { font-size: 0.875rem; color: var(--text-muted); }
-
-    /* ── JOBS TABLE ── */
-    .jobs-list { margin-top: 0.5rem; }
-    .job-row {
-      display: grid;
-      grid-template-columns: auto 1fr auto auto;
-      gap: 0.75rem;
-      align-items: center;
-      padding: 0.7rem 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.85rem;
-    }
-    .job-row:last-child { border-bottom: none; }
-    .job-id { color: var(--text-dim); font-family: monospace; font-size: 0.75rem; }
-    .job-steps { color: var(--text-muted); font-size: 0.78rem; }
-    .job-time { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
-
-    /* ── FETCH BUTTON ── */
-    .btn-primary {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.6rem 1.2rem;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-sm);
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
-    }
+    /* ── TOPBAR ── */
+    .dash-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem; }
+    .dash-topbar-left h1 { font-size: 1.4rem; font-weight: 700; }
+    .dash-topbar-left p { color: var(--text-muted); font-size: 0.82rem; margin-top: 0.15rem; }
+    .dash-topbar-actions { display: flex; gap: 0.5rem; }
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 1.1rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.1s; }
     .btn-primary:hover { opacity: 0.9; }
     .btn-primary:active { transform: scale(0.98); }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.75rem;
-    }
+    /* ── STAT CARDS ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
+    @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 500px) { .stats-grid { grid-template-columns: 1fr; } }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.25rem; display: flex; align-items: center; gap: 0.85rem; }
+    .stat-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+    .stat-icon.blue { background: rgba(55,138,221,0.15); }
+    .stat-icon.yellow { background: rgba(245,158,11,0.15); }
+    .stat-icon.green { background: rgba(34,197,94,0.15); }
+    .stat-icon.orange { background: rgba(239,68,68,0.15); }
+    .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat-label { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.15rem; }
 
-    .empty-state {
-      text-align: center;
-      padding: 2rem 1rem;
-      color: var(--text-dim);
-      font-size: 0.875rem;
+    /* ── CARDS ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; backdrop-filter: blur(10px); }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .card-title { font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+    .card-link { font-size: 0.78rem; color: var(--accent); text-decoration: none; }
+    .card-link:hover { text-decoration: underline; }
+
+    /* ── TWO-COL GRIDS ── */
+    .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .grid-1-1 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    @media (max-width: 800px) { .grid-2-1, .grid-1-1 { grid-template-columns: 1fr; } }
+
+    /* ── TASK LIST ── */
+    .task-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer; transition: background 0.1s; }
+    .task-row:hover { background: rgba(255,255,255,0.03); }
+    .task-row:last-child { border-bottom: none; }
+    .task-pri { width: 3px; height: 28px; border-radius: 2px; flex-shrink: 0; }
+    .task-pri.critical { background: var(--pri-critical); }
+    .task-pri.high { background: var(--pri-high); }
+    .task-pri.medium { background: var(--pri-medium); }
+    .task-pri.low { background: var(--pri-low); }
+    .task-body { flex: 1; min-width: 0; }
+    .task-title { font-size: 0.84rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .task-meta { font-size: 0.72rem; color: var(--text-muted); display: flex; gap: 0.5rem; margin-top: 0.15rem; flex-wrap: wrap; align-items: center; }
+    .task-overdue { color: var(--error); }
+
+    /* ── STATUS / TYPE BADGES ── */
+    .badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem; border-radius: 100px; font-size: 0.68rem; font-weight: 600; flex-shrink: 0; }
+    .badge-open { background: rgba(55,138,221,0.15); color: #60a5fa; }
+    .badge-in_progress { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .badge-review { background: rgba(168,85,247,0.15); color: #c084fc; }
+    .badge-done { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-green { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-yellow { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .badge-red { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-gray { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+    /* ── TAG PILLS ── */
+    .tag-pill { display: inline-flex; align-items: center; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; gap: 0.2rem; }
+    .tag-pill .tag-rm { cursor: pointer; opacity: 0.6; font-size: 0.6rem; }
+    .tag-pill .tag-rm:hover { opacity: 1; }
+
+    /* ── AVATAR ── */
+    .avatar { width: 24px; height: 24px; border-radius: 50%; background: rgba(102,126,234,0.25); color: #a5b4fc; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; flex-shrink: 0; }
+
+    /* ── DOC ENTRY ROW ── */
+    .doc-row { display: flex; align-items: flex-start; gap: 0.55rem; padding: 0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer; transition: background 0.1s; }
+    .doc-row:hover { background: rgba(255,255,255,0.03); }
+    .doc-row:last-child { border-bottom: none; }
+    .doc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 0.35rem; }
+    .doc-dot.change { background: #60a5fa; }
+    .doc-dot.decision { background: #4ade80; }
+    .doc-dot.incident { background: #f87171; }
+    .doc-dot.note { background: rgba(255,255,255,0.35); }
+    .doc-body { flex: 1; min-width: 0; }
+    .doc-title { font-size: 0.84rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .doc-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+    /* ── NO-README ROW ── */
+    .noreadme-row { display: flex; justify-content: space-between; align-items: center; padding: 0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .noreadme-row:last-child { border-bottom: none; }
+    .noreadme-name { font-size: 0.84rem; font-weight: 500; }
+    .noreadme-since { font-size: 0.72rem; color: var(--text-muted); }
+
+    /* ── FILTER BAR ── */
+    .filter-bar { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+    .filter-bar select { height: 28px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #fff; border-radius: 6px; padding: 0 0.5rem; font-size: 0.72rem; outline: none; }
+    .filter-bar select option { background: #1a1a2e; }
+
+    /* ── EMPTY STATE ── */
+    .empty-state { text-align: center; padding: 2rem 1rem; color: var(--text-dim); font-size: 0.82rem; }
+    .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.35; }
+    .empty-action { color: var(--accent); cursor: pointer; text-decoration: underline; font-size: 0.82rem; }
+
+    /* ── MODAL ── */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: flex-start; justify-content: center; padding-top: 5vh; overflow-y: auto; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.75rem; width: 100%; max-width: 560px; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.5); margin-bottom: 2rem; }
+    .modal-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 1.25rem; }
+    .modal-close { position: absolute; top: 0.85rem; right: 0.85rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .modal-close:hover { color: var(--text); }
+    .form-group { margin-bottom: 1rem; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    label { display: block; color: rgba(255,255,255,0.7); font-size: 0.78rem; font-weight: 500; margin-bottom: 0.35rem; }
+    input[type="text"], input[type="url"], input[type="date"], input[type="number"], select, textarea {
+      width: 100%; padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-size: 0.85rem; outline: none; transition: border-color 0.2s; font-family: inherit;
     }
-    .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.4; }
+    input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.25); }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    select option { background: #1a1a2e; }
+    textarea { resize: vertical; min-height: 70px; }
+    .modal-footer { display: flex; gap: 0.65rem; justify-content: flex-end; margin-top: 1.25rem; }
+    .btn-modal-cancel { padding: 0.55rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.82rem; cursor: pointer; }
+    .btn-modal-cancel:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-modal-save { padding: 0.55rem 1.15rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+    .btn-modal-save:hover { opacity: 0.9; }
+    .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .alert { border-radius: var(--radius-sm); padding: 0.55rem 0.8rem; font-size: 0.82rem; margin-bottom: 0.75rem; display: none; }
+    .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
+
+    /* ── TAG MULTI-SELECT ── */
+    .tag-select-wrap { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.5rem; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; min-height: 38px; align-items: center; }
+    .tag-select-wrap .tag-pill { cursor: pointer; }
+    .tag-add-btn { font-size: 0.72rem; color: var(--accent); cursor: pointer; padding: 0.15rem 0.4rem; border: 1px dashed rgba(102,126,234,0.4); border-radius: 4px; background: none; }
+    .tag-add-btn:hover { border-color: var(--accent); background: rgba(102,126,234,0.1); }
+    .tag-create-inline { display: flex; gap: 0.35rem; align-items: center; margin-top: 0.4rem; }
+    .tag-create-inline input { width: 120px; padding: 0.3rem 0.5rem; font-size: 0.75rem; }
+    .tag-create-inline input[type="color"] { width: 30px; height: 28px; padding: 0; border: none; background: none; cursor: pointer; }
+    .tag-create-inline button { padding: 0.25rem 0.5rem; font-size: 0.72rem; }
+    .tag-dropdown { position: absolute; background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem; max-height: 180px; overflow-y: auto; z-index: 10; min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .tag-dropdown-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.78rem; }
+    .tag-dropdown-item:hover { background: rgba(255,255,255,0.08); }
+    .tag-dropdown-item.selected { opacity: 0.4; pointer-events: none; }
+
+    /* ── DOC SIDEBAR ── */
+    .doc-sidebar { position: fixed; top: 60px; right: 0; width: 420px; max-width: 90vw; height: calc(100vh - 60px); background: rgba(12,18,45,0.97); border-left: 1px solid var(--border); backdrop-filter: blur(20px); z-index: 150; transform: translateX(100%); transition: transform 0.25s ease; padding: 1.5rem; overflow-y: auto; }
+    .doc-sidebar.open { transform: translateX(0); }
+    .doc-sidebar-close { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .doc-sidebar-close:hover { color: var(--text); }
+    .doc-sidebar-type { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.3rem; }
+    .doc-sidebar-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .doc-sidebar-meta { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem; }
+    .doc-sidebar-content { font-size: 0.85rem; line-height: 1.65; color: rgba(255,255,255,0.85); }
+    .doc-sidebar-content h2 { font-size: 1rem; margin: 0.75rem 0 0.35rem; }
+    .doc-sidebar-content h3 { font-size: 0.9rem; margin: 0.6rem 0 0.3rem; }
+    .doc-sidebar-content p { margin: 0.35rem 0; }
+    .doc-sidebar-content code { background: rgba(255,255,255,0.08); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.8rem; }
+    .doc-sidebar-content table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+    .doc-sidebar-content th, .doc-sidebar-content td { border: 1px solid rgba(255,255,255,0.12); padding: 0.3rem 0.5rem; font-size: 0.78rem; text-align: left; }
+    .doc-sidebar-content th { background: rgba(255,255,255,0.05); }
+
+    /* ── TASK DETAIL POPUP ── */
+    .task-detail-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: flex-start; justify-content: center; padding-top: 5vh; overflow-y: auto; }
+    .task-detail-backdrop.open { display: flex; }
+    .task-detail { background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.75rem; width: 100%; max-width: 600px; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.5); margin-bottom: 2rem; }
+    .task-detail-close { position: absolute; top: 0.85rem; right: 0.85rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .task-detail-close:hover { color: var(--text); }
+    .td-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .td-title { font-size: 1.15rem; font-weight: 700; flex: 1; min-width: 0; }
+    .td-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1.5rem; margin-bottom: 1rem; }
+    .td-field-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.15rem; }
+    .td-field-value { font-size: 0.85rem; }
+    .td-desc { margin-bottom: 1rem; }
+    .td-desc-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; }
+    .td-desc-body { font-size: 0.85rem; line-height: 1.6; color: rgba(255,255,255,0.85); white-space: pre-wrap; }
+    .td-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .td-subtasks { margin-bottom: 1rem; }
+    .td-subtask { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.82rem; }
+    .td-subtask:last-child { border-bottom: none; }
+    .td-meta { font-size: 0.72rem; color: var(--text-dim); display: flex; gap: 1rem; }
+    .td-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+    /* ── APP HEALTH TABLE ── */
+    .health-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .health-table th { text-align: left; color: var(--text-muted); font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .health-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+    .health-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .health-table .app-name { font-weight: 500; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .health-table .app-name a { color: var(--text); text-decoration: none; }
+    .health-table .app-name a:hover { color: var(--accent); }
+    .health-check { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; font-size: 0.7rem; }
+    .health-check.yes { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .health-check.no { background: rgba(239,68,68,0.12); color: #f87171; }
+    .health-tasks { display: inline-flex; align-items: center; gap: 0.3rem; }
+    .health-tasks .open { color: #fbbf24; font-weight: 600; }
+    .health-tasks .done { color: #4ade80; }
+    .health-tasks .none { color: var(--text-dim); }
+    .health-log-type { font-size: 0.68rem; }
+
+    /* ── LOG FEED ── */
+    .log-feed { margin-top: 1rem; }
+    .log-feed .card-header { margin-bottom: 0.5rem; }
+    .feed-list { position: relative; padding-left: 1.4rem; }
+    .feed-list::before { content: ''; position: absolute; left: 0.45rem; top: 0.3rem; bottom: 0.3rem; width: 2px; background: rgba(255,255,255,0.08); border-radius: 1px; }
+    .feed-item { position: relative; padding: 0.65rem 0 0.65rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background 0.1s; }
+    .feed-item:hover { background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); }
+    .feed-item:last-child { border-bottom: none; }
+    .feed-dot { position: absolute; left: -1.35rem; top: 0.95rem; width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(15,20,50,0.97); box-sizing: content-box; }
+    .feed-dot.change { background: #60a5fa; }
+    .feed-dot.decision { background: #4ade80; }
+    .feed-dot.incident { background: #f87171; }
+    .feed-dot.note { background: rgba(255,255,255,0.35); }
+    .feed-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
+    .feed-type { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .feed-type.change { color: #60a5fa; }
+    .feed-type.decision { color: #4ade80; }
+    .feed-type.incident { color: #f87171; }
+    .feed-type.note { color: var(--text-muted); }
+    .feed-app { font-size: 0.7rem; color: var(--text-dim); }
+    .feed-time { font-size: 0.68rem; color: var(--text-dim); margin-left: auto; white-space: nowrap; }
+    .feed-snippet { font-size: 0.82rem; color: rgba(255,255,255,0.78); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .feed-author { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem; }
+    .feed-more { text-align: center; padding: 0.75rem; }
+    .feed-more-btn { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.45rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.78rem; cursor: pointer; transition: all 0.15s; }
+    .feed-more-btn:hover { background: var(--surface-hover); color: var(--text); }
 
     /* ── TOAST ── */
-    #toast {
-      position: fixed;
-      bottom: 1.5rem;
-      right: 1.5rem;
-      background: rgba(30,40,70,0.95);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 0.75rem 1rem;
-      font-size: 0.875rem;
-      color: var(--text);
-      backdrop-filter: blur(10px);
-      opacity: 0;
-      transform: translateY(10px);
-      transition: opacity 0.2s, transform 0.2s;
-      pointer-events: none;
-      max-width: 320px;
-    }
+    #toast { position: fixed; top: 1rem; right: 1.5rem; background: rgba(30,40,70,0.95); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.65rem 1rem; font-size: 0.82rem; color: var(--text); backdrop-filter: blur(10px); opacity: 0; transform: translateY(-10px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; max-width: 340px; z-index: 500; }
     #toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── ADMIN FAB ── */
+    .admin-fab { position: fixed; bottom: 1.5rem; left: 1.5rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; text-decoration: none; font-size: 0.85rem; font-weight: 600; border-radius: var(--radius-sm); z-index: 90; box-shadow: 0 4px 16px rgba(102,126,234,0.3); display: none; }
+
+    /* ── GANTT ── */
+    .gantt-outer { overflow-x: auto; padding-bottom: 0.5rem; }
+    .gantt-inner { min-width: 820px; }
+    /* Axis */
+    .gantt-axis { display: flex; border-bottom: 2px solid var(--border); background: rgba(255,255,255,0.015); }
+    .gantt-axis-label-col { flex: 0 0 220px; min-width: 220px; display: flex; align-items: flex-end; padding: 0 0.5rem 5px; font-size: 0.62rem; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .gantt-axis-timeline { flex: 1; position: relative; }
+    .gantt-axis-months { position: relative; height: 24px; }
+    .gantt-axis-month-block { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; font-size: 0.74rem; font-weight: 600; color: var(--text); border-left: 1px solid rgba(255,255,255,0.18); padding-left: 7px; white-space: nowrap; overflow: hidden; box-sizing: border-box; }
+    .gantt-axis-days { position: relative; height: 22px; border-top: 1px solid rgba(255,255,255,0.08); }
+    .gantt-axis-tick { position: absolute; top: 0; width: 1px; height: 7px; background: rgba(255,255,255,0.18); pointer-events: none; }
+    .gantt-axis-tick.major { height: 100%; background: rgba(255,255,255,0.22); }
+    .gantt-axis-day-lbl { position: absolute; font-size: 0.62rem; color: var(--text-muted); transform: translateX(-50%); top: 6px; white-space: nowrap; pointer-events: none; }
+    /* Rows */
+    .gantt-group-header { display: flex; }
+    .gantt-group-header-label { flex: 0 0 220px; min-width: 220px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 0.6rem 0.5rem 0.2rem; background: rgba(255,255,255,0.025); }
+    .gantt-group-header-track { flex: 1; background: rgba(255,255,255,0.01); }
+    .gantt-row { display: flex; align-items: center; min-height: 34px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .gantt-row:hover { background: rgba(255,255,255,0.025); }
+    .gantt-label { flex: 0 0 220px; min-width: 220px; display: flex; align-items: center; padding: 0 0.5rem; gap: 6px; overflow: hidden; }
+    .gantt-label-text { font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gantt-done { opacity: 0.38; text-decoration: line-through; }
+    .task-pri-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .gantt-track { flex: 1; position: relative; height: 24px; }
+    .gantt-grid-line { position: absolute; top: 0; bottom: 0; width: 1px; pointer-events: none; z-index: 0; }
+    .gantt-grid-line.major { background: rgba(255,255,255,0.22); }
+    .gantt-grid-line.minor { background: rgba(255,255,255,0.09); }
+    .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: #f59e0b; opacity: 0.8; z-index: 1; pointer-events: none; }
+    .gantt-bar { position: absolute; height: 20px; top: 2px; border-radius: 4px; cursor: pointer; transition: filter 0.15s; min-width: 6px; display: flex; align-items: center; overflow: hidden; z-index: 2; }
+    .gantt-bar:hover { filter: brightness(1.2); }
+    .gantt-bar-label { font-size: 0.62rem; color: #fff; padding: 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
 </head>
 <body>
 
 <nav>
   <a class="nav-brand" href="/">
-    <div class="brand-icon">⬡</div>
-    Lineage Explorer
+    <div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>
+    Atlas
   </a>
   <div class="nav-links">
-    <a class="nav-link active" href="/">Dashboard</a>
-    <a class="nav-link" href="/customers.html">Kunden</a>
     <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link active" href="/">Dashboard</a>
+    <a class="nav-link" href="/analytics.html">Analytics</a>
     <a class="nav-link" href="/lineage.html">Lineage</a>
+    <a class="nav-link" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/app-hub.html">App Hub</a>
+    <a class="nav-link" href="/theme-builder.html">Theme</a>
+  </div>
+  <div class="nav-project-badge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
   </div>
   <div class="nav-spacer"></div>
   <div class="nav-user">
@@ -293,239 +350,1468 @@
 </nav>
 
 <main>
-  <div class="page-header">
-    <h1 class="page-title">Dashboard</h1>
-    <p class="page-subtitle" id="lastUpdated">Loading…</p>
+  <!-- Topbar -->
+  <div class="dash-topbar">
+    <div class="dash-topbar-left">
+      <h1 id="dashTitle">Dashboard</h1>
+      <p id="dashSubtitle">Lade…</p>
+    </div>
+    <div class="dash-topbar-actions">
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-toggle-btn active" data-view="project">Projekt</button>
+        <button class="view-toggle-btn" data-view="general">General</button>
+      </div>
+      <button class="btn-primary" id="btnNewTask">+ Task</button>
+      <button class="btn-primary" id="btnNewDoc" style="background:linear-gradient(135deg,#14b8a6,#0d9488)">+ Log-Eintrag</button>
+    </div>
   </div>
 
-  <!-- Stats -->
+  <!-- Metrics -->
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-icon purple">⬡</div>
-      <div>
-        <div class="stat-value" id="statNodes">—</div>
-        <div class="stat-label">Graph nodes</div>
-      </div>
+      <div class="stat-icon blue">&#x2611;</div>
+      <div><div class="stat-value" id="mOpenTasks">—</div><div class="stat-label" id="mOpenDue">Offene Tasks</div></div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon teal">↔</div>
-      <div>
-        <div class="stat-value" id="statEdges">—</div>
-        <div class="stat-label">Graph edges</div>
-      </div>
+      <div class="stat-icon yellow">&#x21BB;</div>
+      <div><div class="stat-value" id="mInProgress">—</div><div class="stat-label" id="mInProgressSub">In Bearbeitung</div></div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon orange">📄</div>
-      <div>
-        <div class="stat-value" id="statFiles">—</div>
-        <div class="stat-label">Files loaded</div>
-      </div>
+      <div class="stat-icon green">&#x1F4DD;</div>
+      <div><div class="stat-value" id="mDocEntries">—</div><div class="stat-label" id="mDocEntriesSub">Log-Einträge</div></div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon green">✓</div>
-      <div>
-        <div class="stat-value" id="statStatus">—</div>
-        <div class="stat-label">System status</div>
-      </div>
+      <div class="stat-icon orange">&#x26A0;</div>
+      <div><div class="stat-value" id="mNoReadme">—</div><div class="stat-label" id="mNoReadmeSub">Apps ohne README</div></div>
     </div>
   </div>
 
-  <!-- Content grid -->
-  <div class="content-grid">
-
-    <!-- Qlik API Status -->
+  <!-- Main content: 2:1 -->
+  <div class="grid-2-1">
+    <!-- My open tasks -->
     <div class="card">
-      <div class="card-title">Qlik API Connection</div>
-      <div id="qlikStatus">
-        <div class="status-row">
-          <span class="status-label">Connection status</span>
-          <span class="badge badge-gray" id="qlikConnBadge"><span class="dot"></span> Checking…</span>
-        </div>
-        <div class="status-row">
-          <span class="status-label">Missing config</span>
-          <span id="qlikMissingEnv" style="font-size:0.8rem;color:var(--text-muted)">—</span>
-        </div>
-        <div class="status-row">
-          <span class="status-label">Active job</span>
-          <span id="qlikActiveJob" style="font-size:0.8rem;color:var(--text-muted)">None</span>
-        </div>
-        <div style="margin-top:1rem">
-          <button class="btn-primary" id="fetchBtn" disabled>
-            ▶ Start data fetch
-          </button>
-        </div>
+      <div class="card-header">
+        <span class="card-title">Meine offenen Tasks</span>
+        <a class="card-link" id="linkAllTasks" href="#">Alle ansehen →</a>
       </div>
+      <div id="myTasksList"></div>
     </div>
-
-    <!-- Recent Jobs -->
+    <!-- Apps without README -->
     <div class="card">
-      <div class="section-header">
-        <div class="card-title" style="margin-bottom:0">Recent fetch jobs</div>
-        <button class="btn-sm" id="refreshJobsBtn">↻ Refresh</button>
+      <div class="card-header">
+        <span class="card-title">Apps ohne README</span>
+        <button class="btn-sm" id="noReadmeToggle" style="display:none; margin-left:auto; font-size:0.72rem;" onclick="toggleNoReadme()"></button>
       </div>
-      <div id="jobsList" class="jobs-list">
-        <div class="empty-state">
-          <div class="empty-icon">📭</div>
-          No jobs yet
-        </div>
-      </div>
+      <div id="noReadmeList"></div>
     </div>
+  </div>
 
+  <!-- Bottom content: 1:1 -->
+  <div class="grid-1-1">
+    <!-- All project tasks -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Projektweite Tasks</span>
+      </div>
+      <div class="filter-bar">
+        <select id="filterStatus"><option value="">Alle Status</option><option value="open">Open</option><option value="in_progress">In Bearbeitung</option><option value="review">Review</option><option value="done">Done</option></select>
+        <select id="filterTag"><option value="">Alle Tags</option></select>
+      </div>
+      <div id="projectTasksList"></div>
+    </div>
+    <!-- Recent doc entries (compact) -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Letzte Log-Einträge</span>
+        <a class="card-link" href="#logFeed" id="linkLogFeed">Feed ansehen →</a>
+      </div>
+      <div id="recentDocsList"></div>
+    </div>
+  </div>
+
+  <!-- Log Feed (full-width timeline) -->
+  <div class="log-feed card" id="logFeed">
+    <div class="card-header">
+      <span class="card-title">Log Feed</span>
+      <span style="font-size:0.72rem;color:var(--text-dim)" id="feedCount"></span>
+    </div>
+    <div class="feed-list" id="feedList">
+      <div class="empty-state">Lade…</div>
+    </div>
+    <div class="feed-more" id="feedMore" style="display:none">
+      <button class="feed-more-btn" id="feedMoreBtn">Weitere laden</button>
+    </div>
+  </div>
+
+  <!-- Gantt chart -->
+  <div class="card" id="ganttCard" style="margin-top:1rem">
+    <div class="card-header">
+      <span class="card-title">Tasks — Gantt</span>
+      <span style="font-size:0.72rem;color:var(--text-dim)" id="ganttMeta"></span>
+    </div>
+    <div style="padding:0.55rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0.6rem">
+      <span style="font-size:0.7rem;color:var(--text-muted);font-weight:600;white-space:nowrap">Gruppieren nach</span>
+      <select id="ganttGroupBy" style="height:28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:6px;padding:0 0.5rem;font-size:0.72rem;outline:none">
+        <option value="assignee">Bearbeiter</option>
+        <option value="project">Projekt</option>
+        <option value="status">Status</option>
+        <option value="priority">Priorität</option>
+      </select>
+    </div>
+    <div id="ganttBody"><div class="empty-state">Lade…</div></div>
+  </div>
+
+  <!-- App Health (collapsible) -->
+  <div class="card" id="appHealthCard" style="margin-top:1rem">
+    <div class="card-header" style="cursor:pointer;user-select:none" onclick="toggleHealthCard()">
+      <span class="card-title">App-Übersicht</span>
+      <span style="font-size:0.72rem;color:var(--text-dim)" id="healthCount"></span>
+      <span class="health-toggle" id="healthToggle" style="margin-left:auto;font-size:0.72rem;color:var(--text-dim)">▶ Einblenden</span>
+    </div>
+    <div id="appHealthBody" style="display:none">
+      <div class="empty-state">Lade…</div>
+    </div>
   </div>
 </main>
 
+<!-- ── Task Modal ── -->
+<div class="modal-backdrop" id="taskModal">
+  <div class="modal" style="max-width:600px">
+    <button class="modal-close" id="taskModalClose">&#x2715;</button>
+    <div class="modal-title" id="taskModalTitle">Neuer Task</div>
+    <div class="alert alert-error" id="taskError"></div>
+    <form id="taskForm">
+      <div class="form-group" id="taskProjectGroup" style="display:none">
+        <label for="taskProjectId">Projekt *</label>
+        <select id="taskProjectId"></select>
+      </div>
+      <div class="form-group">
+        <label for="taskTitle">Titel *</label>
+        <input type="text" id="taskTitle" required placeholder="Task-Titel eingeben" />
+      </div>
+      <div class="form-group">
+        <label for="taskDesc">Beschreibung</label>
+        <textarea id="taskDesc" rows="3" placeholder="Beschreibung (optional)"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="taskStatus">Status</label>
+          <select id="taskStatus">
+            <option value="open" selected>Open</option>
+            <option value="in_progress">In Bearbeitung</option>
+            <option value="review">Review</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="taskPriority">Priorität</label>
+          <select id="taskPriority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="position:relative">
+        <label>Tags</label>
+        <div class="tag-select-wrap" id="taskTagsWrap">
+          <button type="button" class="tag-add-btn" id="taskTagAddBtn">+ Tag</button>
+        </div>
+        <div class="tag-dropdown" id="taskTagDropdown" style="display:none"></div>
+        <div class="tag-create-inline" id="taskTagCreate" style="display:none">
+          <input type="text" id="newTagName" placeholder="Tag-Name" />
+          <input type="color" id="newTagColor" value="#667eea" />
+          <button type="button" class="btn-sm" id="newTagSave">Erstellen</button>
+          <button type="button" class="btn-sm" id="newTagCancel" style="color:var(--text-dim)">×</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="taskAssignee">Zuweisen an</label>
+          <select id="taskAssignee"><option value="">— Niemand —</option></select>
+        </div>
+        <div class="form-group">
+          <label for="taskStartDate">Startdatum</label>
+          <input type="date" id="taskStartDate" />
+        </div>
+        <div class="form-group">
+          <label for="taskStartTime">Startzeit</label>
+          <input type="time" id="taskStartTime" />
+        </div>
+        <div class="form-group">
+          <label for="taskDueDate">Fälligkeit</label>
+          <input type="date" id="taskDueDate" />
+        </div>
+        <div class="form-group">
+          <label for="taskEndTime">Endzeit</label>
+          <input type="time" id="taskEndTime" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="taskMinutes">Geschätzte Minuten</label>
+          <input type="number" id="taskMinutes" min="0" placeholder="z.B. 60" />
+        </div>
+        <div class="form-group">
+          <label for="taskApp">App-Zuordnung</label>
+          <select id="taskApp"><option value="">— Keine App —</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="taskAppLink">App-Link (optional)</label>
+        <input type="url" id="taskAppLink" placeholder="https://..." />
+      </div>
+      <div class="form-group">
+        <label for="taskParent">Parent Task (optional)</label>
+        <select id="taskParent"><option value="">— Kein Parent —</option></select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="taskCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="taskSaveBtn">Task erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Doc Entry Modal ── -->
+<div class="modal-backdrop" id="docModal">
+  <div class="modal" style="max-width:720px">
+    <button class="modal-close" id="docModalClose">&#x2715;</button>
+    <div class="modal-title">Neuer Log-Eintrag</div>
+    <div class="alert alert-error" id="docError"></div>
+    <form id="docForm">
+      <div class="form-group" id="docProjectGroup" style="display:none">
+        <label for="docProjectId">Projekt *</label>
+        <select id="docProjectId"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="docType">Typ *</label>
+          <select id="docType">
+            <option value="change">Change</option>
+            <option value="decision">Decision</option>
+            <option value="note" selected>Note</option>
+            <option value="incident">Incident</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="docDate">Datum</label>
+          <input type="date" id="docDate" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="docApp">Betroffene App</label>
+        <select id="docApp"><option value="">— Keine spezifische App —</option></select>
+      </div>
+      <div class="form-group">
+        <label>Inhalt (Markdown)</label>
+        <div id="docEditorContainer"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="docCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save">Eintrag erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Doc Sidebar ── -->
+<div class="doc-sidebar" id="docSidebar">
+  <button class="doc-sidebar-close" id="docSidebarClose">&#x2715;</button>
+  <div class="doc-sidebar-type" id="sidebarType"></div>
+  <div class="doc-sidebar-title" id="sidebarTitle"></div>
+  <div class="doc-sidebar-meta" id="sidebarMeta"></div>
+  <div class="doc-sidebar-content" id="sidebarContent"></div>
+</div>
+
+<!-- ── Task Detail Popup ── -->
+<div class="task-detail-backdrop" id="taskDetailBackdrop">
+  <div class="task-detail" id="taskDetailPopup">
+    <button class="task-detail-close" id="taskDetailClose">&#x2715;</button>
+    <div id="taskDetailContent">Lade…</div>
+  </div>
+</div>
+
+<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
 <div id="toast"></div>
 
+<script src="/assets/atlas-shared.js"></script>
+<script src="/assets/markdownEditor.js"></script>
+<script src="/assets/smartCompose.js"></script>
 <script>
-  // ── Auth guard ──
-  const token = localStorage.getItem('auth_access_token');
-  if (!token) { window.location.href = '/login.html'; }
+(function () {
+  /* ── Auth / Shared ── */
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
+  window.AtlasShared.bindLogout('logoutBtn');
+  var apiFetch = window.AtlasShared.apiFetch;
+  var escHtml = window.AtlasShared.escapeHtml;
+  var showToast = function (msg, dur) { window.AtlasShared.showToast(msg, dur || 4000, 'toast'); };
 
-  // ── Helpers ──
-  function showToast(msg, duration) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, duration || 3000);
+  /* ── Focus state ── */
+  var state = window.AtlasShared.readFocusState(window.location.search);
+  var projectsById = {}, customersById = {}, allProjects = [], allCustomers = [];
+  var allTags = [], allApps = [], allUsers = [];
+  var selectedTaskTags = []; // [{id,name,color}]
+  var currentUser = window.AtlasShared.getCachedUser();
+  var viewMode = 'project'; // 'project' | 'general'
+
+  function isGeneral() { return viewMode === 'general'; }
+  /** Returns '&project_id=X' or '' depending on viewMode. */
+  function pidParam(prefix) { return isGeneral() ? '' : (prefix || '?') + 'project_id=' + encodeURIComponent(state.project); }
+  function projectCustomerId(p) { return window.AtlasShared.projectCustomerId(p); }
+
+  function setUrl() {
+    var q = new URLSearchParams(window.location.search);
+    if (state.project) q.set('project', state.project); else q.delete('project');
+    if (state.customer) q.set('customer', state.customer); else q.delete('customer');
+    var qs = q.toString();
+    history.replaceState(null, '', '/' + (qs ? ('?' + qs) : ''));
   }
 
-  async function apiFetch(path) {
-    var res = await fetch(path, {
-      headers: { 'Authorization': 'Bearer ' + token }
+  function persistState() { window.AtlasShared.persistFocusState(state); }
+  function updateNav() { window.AtlasShared.updateNavProjectContext(state.project, state.customer, 'a.nav-link'); }
+  function syncCustomer() { if (state.project && projectsById[state.project]) { var c = projectCustomerId(projectsById[state.project]); if (c) state.customer = String(c); } }
+
+  /* ── Helpers ── */
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    var diff = Date.now() - new Date(dateStr).getTime();
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'gerade eben';
+    if (mins < 60) return 'vor ' + mins + ' Min.';
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return 'vor ' + hours + ' Std.';
+    var days = Math.floor(hours / 24);
+    if (days === 1) return 'gestern';
+    if (days < 7) return 'vor ' + days + ' Tagen';
+    var weeks = Math.floor(days / 7);
+    if (weeks < 5) return 'vor ' + weeks + ' Wochen';
+    var months = Math.floor(days / 30);
+    return 'vor ' + months + ' Monaten';
+  }
+
+  function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('de-DE'); }
+
+  function isOverdue(dueDate) {
+    if (!dueDate) return false;
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    return new Date(dueDate) < today;
+  }
+
+  function avatarHtml(user) {
+    if (!user) return '';
+    var name = user.display_name || user.email || '';
+    var initials = name.split(/[\s@]/).filter(Boolean).slice(0, 2).map(function (s) { return s[0].toUpperCase(); }).join('');
+    return '<span class="avatar" title="' + escHtml(name) + '">' + escHtml(initials || '?') + '</span>';
+  }
+
+  function statusBadgeHtml(status) {
+    var labels = { open: 'Open', in_progress: 'In Bearb.', review: 'Review', done: 'Done' };
+    return '<span class="badge badge-' + escHtml(status || 'open') + '">' + escHtml(labels[status] || status || 'open') + '</span>';
+  }
+
+  function tagPillHtml(tag) {
+    var bg = tag.color || '#888780';
+    return '<span class="tag-pill" style="background:' + escHtml(bg) + '22;color:' + escHtml(bg) + '">' + escHtml(tag.name) + '</span>';
+  }
+
+  function priClass(priority) { return priority || 'medium'; }
+
+  function ctxBadgeHtml(item) {
+    if (!isGeneral() || (!item.customer_name && !item.project_name)) return '';
+    var txt = (item.customer_name || '') + (item.project_name ? ' / ' + item.project_name : '');
+    return '<span class="ctx-badge" title="' + escHtml(txt) + '">' + escHtml(txt) + '</span> ';
+  }
+
+  function appNameById(appId) {
+    if (!appId) return '';
+    var app = allApps.find(function (a) { return a.app_id === appId || String(a.id) === String(appId); });
+    return app ? (app.name || app.app_id || appId) : appId;
+  }
+
+  function buildDocAppSelectOptions(selectedId) {
+    var normalized = allApps.map(window.AtlasShared.normalizeAppItem).sort(function (a, b) {
+      var sc = a.space_name.localeCompare(b.space_name);
+      return sc !== 0 ? sc : a.name.localeCompare(b.name);
     });
-    if (res.status === 401) {
-      localStorage.removeItem('auth_access_token');
-      window.location.href = '/login.html';
+    return window.AtlasShared.buildGroupedAppSelectOptions(normalized, selectedId);
+  }
+
+  /* ── Render Customer/Project selectors ── */
+  function renderCustomerSelect() {
+    var sel = document.getElementById('navCustomerSelect');
+    if (!allCustomers.length) { sel.disabled = true; sel.innerHTML = '<option value="">Keine Kunden</option>'; state.customer = ''; return; }
+    sel.disabled = false;
+    if (!state.customer || !customersById[state.customer]) state.customer = String(allCustomers[0].id);
+    sel.innerHTML = allCustomers.map(function (c) {
+      return '<option value="' + c.id + '"' + (String(c.id) === state.customer ? ' selected' : '') + '>' + escHtml(c.name || 'Kunde ' + c.id) + '</option>';
+    }).join('');
+  }
+
+  function renderProjectSelect() {
+    var sel = document.getElementById('navProjectSelect');
+    var filtered = allProjects.filter(function (p) { return String(projectCustomerId(p)) === state.customer; });
+    if (!filtered.length) { sel.disabled = true; sel.innerHTML = '<option value="">Keine Projekte</option>'; state.project = ''; persistState(); updateNav(); setUrl(); return; }
+    sel.disabled = false;
+    if (!state.project || !filtered.find(function (p) { return String(p.id) === state.project; })) state.project = String(filtered[0].id);
+    sel.innerHTML = filtered.map(function (p) {
+      return '<option value="' + p.id + '"' + (String(p.id) === state.project ? ' selected' : '') + '>' + escHtml(p.name || 'Projekt ' + p.id) + '</option>';
+    }).join('');
+    persistState(); updateNav(); setUrl();
+  }
+
+  /* ── Data loaders ── */
+  async function loadFocusSelectors() {
+    var res = await Promise.all([apiFetch('/api/projects'), apiFetch('/api/customers/names')]);
+    allProjects = res[0].ok ? await res[0].json() : [];
+    allCustomers = res[1].ok ? await res[1].json() : [];
+    allProjects = Array.isArray(allProjects) ? allProjects : [];
+    allCustomers = Array.isArray(allCustomers) ? allCustomers : [];
+    projectsById = {}; allProjects.forEach(function (p) { projectsById[String(p.id)] = p; });
+    customersById = {}; allCustomers.forEach(function (c) { customersById[String(c.id)] = c; });
+    syncCustomer();
+    renderCustomerSelect();
+    renderProjectSelect();
+  }
+
+  async function loadMetrics() {
+    if (!isGeneral() && !state.project) return;
+    try {
+      var url = isGeneral() ? '/api/dashboard/metrics' : '/api/dashboard/metrics?project_id=' + encodeURIComponent(state.project);
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var d = await res.json();
+      document.getElementById('mOpenTasks').textContent = d.open_tasks || 0;
+      document.getElementById('mOpenDue').textContent = 'Offene Tasks' + (d.due_this_week ? ' · ' + d.due_this_week + ' fällig diese Woche' : '');
+      document.getElementById('mInProgress').textContent = d.in_progress || 0;
+      document.getElementById('mInProgressSub').textContent = 'In Bearbeitung' + (d.in_progress_assignees ? ' · von ' + d.in_progress_assignees + ' Personen' : '');
+      document.getElementById('mDocEntries').textContent = d.log_entries || 0;
+      document.getElementById('mDocEntriesSub').textContent = 'Log-Einträge' + (d.log_entries_this_week ? ' · +' + d.log_entries_this_week + ' diese Woche' : '');
+      document.getElementById('mNoReadme').textContent = d.apps_without_readme || 0;
+      var mEl = document.getElementById('mNoReadme');
+      mEl.style.color = (d.apps_without_readme > 0) ? 'var(--error)' : '';
+      document.getElementById('mNoReadmeSub').textContent = 'Apps ohne README' + (d.total_apps ? ' · von ' + d.total_apps + ' Apps' : '');
+    } catch (e) {
+      // fallback — leave dashes
     }
-    return res;
   }
 
-  function statusBadge(status) {
-    if (status === 'completed') return '<span class="badge badge-green"><span class="dot"></span>Completed</span>';
-    if (status === 'running')   return '<span class="badge badge-yellow"><span class="dot"></span>Running</span>';
-    if (status === 'failed')    return '<span class="badge badge-red"><span class="dot"></span>Failed</span>';
-    if (status === 'queued')    return '<span class="badge badge-yellow"><span class="dot"></span>Queued</span>';
-    return '<span class="badge badge-gray">' + status + '</span>';
-  }
-
-  function fmtDate(iso) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-  }
-
-  // ── Load health ──
-  async function loadHealth() {
+  async function loadMyTasks() {
+    var el = document.getElementById('myTasksList');
+    if (!isGeneral() && !state.project) { el.innerHTML = '<div class="empty-state">Bitte Projekt wählen</div>'; return; }
     try {
-      var res = await apiFetch('/api/health');
-      var d = await res.json();
-      document.getElementById('statNodes').textContent = d.nodesCount.toLocaleString();
-      document.getElementById('statEdges').textContent = d.edgesCount.toLocaleString();
-      document.getElementById('statFiles').textContent = d.filesLoaded.toLocaleString();
-      document.getElementById('statStatus').textContent = d.status === 'ok' ? 'OK' : d.status;
-      document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
-    } catch(e) {
-      document.getElementById('lastUpdated').textContent = 'Failed to load stats';
-    }
-  }
-
-  // ── Load fetch status ──
-  async function loadFetchStatus() {
-    try {
-      var res = await apiFetch('/api/fetch/status');
-      var d = await res.json();
-      var badge = document.getElementById('qlikConnBadge');
-      if (d.canRun) {
-        badge.className = 'badge badge-green';
-        badge.innerHTML = '<span class="dot"></span>Ready';
-      } else {
-        badge.className = 'badge badge-yellow';
-        badge.innerHTML = '<span class="dot"></span>Not configured';
-      }
-      var missing = d.missingEnv && d.missingEnv.length ? d.missingEnv.join(', ') : 'None';
-      document.getElementById('qlikMissingEnv').textContent = missing;
-      document.getElementById('qlikActiveJob').textContent = d.runningJobId || 'None';
-
-      var fetchBtn = document.getElementById('fetchBtn');
-      fetchBtn.disabled = !d.canRun || !!d.runningJobId;
-    } catch(e) {}
-  }
-
-  // ── Load jobs ──
-  async function loadJobs() {
-    try {
-      var res = await apiFetch('/api/fetch/jobs');
-      var d = await res.json();
-      var jobs = d.jobs || [];
-      var el = document.getElementById('jobsList');
-      if (!jobs.length) {
-        el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>No jobs yet</div>';
-        return;
-      }
-      el.innerHTML = jobs.slice(0, 6).map(function(j) {
-        var steps = (j.completedSteps || []).length + '/' + (j.plannedSteps || []).length + ' steps';
-        return '<div class="job-row">'
-          + statusBadge(j.status)
-          + '<span class="job-steps">' + steps + '</span>'
-          + '<span class="job-time">' + fmtDate(j.createdAt) + '</span>'
-          + '<span class="job-id">' + (j.jobId || '').slice(0,8) + '</span>'
+      var url = '/api/tasks?assignee=me&status=open' + (isGeneral() ? '' : '&project_id=' + encodeURIComponent(state.project));
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var tasks = await res.json();
+      tasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
+      if (!tasks.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x2705;</div>Keine offenen Tasks für dich.<br><span class="empty-action" onclick="openTaskModal()">+ Task erstellen</span></div>'; return; }
+      el.innerHTML = tasks.map(function (t) {
+        var tags = (t.tags || []).map(tagPillHtml).join(' ');
+        var overdue = isOverdue(t.due_date) && t.status !== 'done';
+        return '<div class="task-row" data-task-id="' + t.id + '">'
+          + '<div class="task-pri ' + priClass(t.priority) + '"></div>'
+          + statusBadgeHtml(t.status)
+          + '<div class="task-body">'
+          + '<div class="task-title">' + escHtml(t.title) + '</div>'
+          + '<div class="task-meta">'
+          + ctxBadgeHtml(t)
+          + (tags ? tags + ' ' : '')
+          + (t.qlik_app_id ? '<span>' + escHtml(appNameById(t.qlik_app_id)) + '</span>' : '')
+          + (t.due_date ? '<span class="' + (overdue ? 'task-overdue' : '') + '">' + fmtDate(t.due_date) + '</span>' : '')
+          + '</div></div>'
+          + (t.assignee ? avatarHtml(t.assignee) : '')
           + '</div>';
       }).join('');
-    } catch(e) {}
+    } catch (e) {
+      el.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+    }
   }
 
-  // ── Start fetch ──
-  document.getElementById('fetchBtn').addEventListener('click', async function() {
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = '⏳ Starting…';
-    try {
-      var res = await fetch('/api/fetch/jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({ steps: null, clearOutputs: false })
-      });
-      if (res.ok) {
-        showToast('✓ Fetch job started');
-        setTimeout(function() { loadJobs(); loadFetchStatus(); }, 1000);
-      } else {
-        var err = await res.json().catch(function(){ return {}; });
-        showToast('Error: ' + (err.detail || 'Could not start job'));
-      }
-    } catch(e) {
-      showToast('Network error');
+  var _noReadmeExpanded = false;
+  var _noReadmeApps = [];
+
+  function _renderNoReadmeRows() {
+    var el = document.getElementById('noReadmeList');
+    var btn = document.getElementById('noReadmeToggle');
+    var visible = _noReadmeExpanded ? _noReadmeApps : _noReadmeApps.slice(0, 5);
+    el.innerHTML = visible.map(function (a) {
+      var pid = a.project_id || state.project;
+      var href = '/app-detail.html?project=' + encodeURIComponent(pid) + '&app_id=' + encodeURIComponent(a.app_id || a.id) + '&tab=readme';
+      var ctx = (isGeneral() && a.customer_name) ? '<span style="font-size:0.68rem;color:var(--text-dim);margin-left:0.3rem">' + escHtml(a.customer_name + ' / ' + (a.project_name || '')) + '</span>' : '';
+      return '<a class="noreadme-row" href="' + href + '" style="text-decoration:none;color:inherit;display:flex">'
+        + '<span class="noreadme-name">' + escHtml(a.name || a.app_id) + ctx + '</span>'
+        + '<span class="noreadme-since">' + (a.created_at ? 'seit ' + timeAgo(a.created_at) : '') + '</span>'
+        + '</a>';
+    }).join('');
+    if (_noReadmeApps.length > 5) {
+      btn.style.display = '';
+      btn.textContent = _noReadmeExpanded
+        ? 'Weniger anzeigen'
+        : 'Alle ' + _noReadmeApps.length + ' anzeigen';
+    } else {
+      btn.style.display = 'none';
     }
-    btn.textContent = '▶ Start data fetch';
-    setTimeout(function() { loadFetchStatus(); }, 2000);
+  }
+
+  function toggleNoReadme() {
+    _noReadmeExpanded = !_noReadmeExpanded;
+    _renderNoReadmeRows();
+  }
+  window.toggleNoReadme = toggleNoReadme;
+
+  async function loadNoReadme() {
+    var el = document.getElementById('noReadmeList');
+    var btn = document.getElementById('noReadmeToggle');
+    if (!isGeneral() && !state.project) { el.innerHTML = ''; btn.style.display = 'none'; return; }
+    _noReadmeExpanded = false;
+    try {
+      var url = isGeneral() ? '/api/apps/without-readme' : '/api/apps/without-readme?project_id=' + encodeURIComponent(state.project);
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var apps = await res.json();
+      _noReadmeApps = Array.isArray(apps) ? apps : [];
+      if (!_noReadmeApps.length) { el.innerHTML = '<div class="empty-state" style="padding:1rem">Alle Apps haben ein README</div>'; btn.style.display = 'none'; return; }
+      _renderNoReadmeRows();
+    } catch (e) {
+      el.innerHTML = '<div class="empty-state">Fehler</div>';
+      btn.style.display = 'none';
+    }
+  }
+
+  async function loadProjectTasks() {
+    var el = document.getElementById('projectTasksList');
+    if (!isGeneral() && !state.project) { el.innerHTML = ''; return; }
+    var params = [];
+    if (!isGeneral()) params.push('project_id=' + encodeURIComponent(state.project));
+    var statusFilter = document.getElementById('filterStatus').value;
+    var tagFilter = document.getElementById('filterTag').value;
+    if (statusFilter) params.push('status=' + encodeURIComponent(statusFilter));
+    if (tagFilter) params.push('tag=' + encodeURIComponent(tagFilter));
+    var url = '/api/tasks' + (params.length ? '?' + params.join('&') : '');
+    try {
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var tasks = await res.json();
+      tasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
+      if (!tasks.length) { el.innerHTML = '<div class="empty-state">Keine Tasks gefunden</div>'; return; }
+      el.innerHTML = tasks.map(function (t) {
+        var tags = (t.tags || []).map(tagPillHtml).join(' ');
+        var overdue = isOverdue(t.due_date) && t.status !== 'done';
+        return '<div class="task-row" data-task-id="' + t.id + '">'
+          + (t.assignee ? avatarHtml(t.assignee) : '<span class="avatar" style="opacity:0.2">?</span>')
+          + '<div class="task-pri ' + priClass(t.priority) + '"></div>'
+          + statusBadgeHtml(t.status)
+          + '<div class="task-body">'
+          + '<div class="task-title">' + escHtml(t.title) + '</div>'
+          + '<div class="task-meta">'
+          + ctxBadgeHtml(t)
+          + (tags ? tags + ' ' : '')
+          + (t.qlik_app_id ? '<span>' + escHtml(appNameById(t.qlik_app_id)) + '</span>' : '')
+          + (t.due_date ? '<span class="' + (overdue ? 'task-overdue' : '') + '">' + fmtDate(t.due_date) + '</span>' : '')
+          + '</div></div></div>';
+      }).join('');
+    } catch (e) {
+      el.innerHTML = '<div class="empty-state">Fehler</div>';
+    }
+  }
+
+  async function loadRecentDocs() {
+    var el = document.getElementById('recentDocsList');
+    if (!isGeneral() && !state.project) { el.innerHTML = ''; return; }
+    try {
+      var url = isGeneral() ? '/api/log-entries?limit=10' : '/api/log-entries?project_id=' + encodeURIComponent(state.project) + '&limit=10';
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var docs = await res.json();
+      docs = Array.isArray(docs) ? docs : (docs.items || []);
+      if (!docs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4DD;</div>Noch keine Log-Einträge.<br><span class="empty-action" onclick="openDocModal()">+ Eintrag erstellen</span></div>'; return; }
+      el.innerHTML = docs.map(function (d) {
+        var typeBadge = '<span class="badge badge-' + typeColor(d.entry_type) + '">' + escHtml(d.entry_type) + '</span>';
+        return '<div class="doc-row" data-doc-id="' + d.id + '">'
+          + '<div class="doc-dot ' + escHtml(d.entry_type || 'note') + '"></div>'
+          + '<div class="doc-body">'
+          + '<div class="doc-title">' + typeBadge + ' ' + escHtml(d.title || truncate(d.content, 60)) + '</div>'
+          + '<div class="doc-meta">' + (isGeneral() && d.customer_name ? escHtml(d.customer_name + ' / ' + (d.project_name || '')) + ' · ' : '') + (d.qlik_app_id ? escHtml(appNameById(d.qlik_app_id)) + ' · ' : '') + (d.author ? escHtml(d.author.display_name || d.author.email || '') + ' · ' : '') + timeAgo(d.created_at) + '</div>'
+          + '</div></div>';
+      }).join('');
+    } catch (e) {
+      el.innerHTML = '<div class="empty-state">Fehler</div>';
+    }
+  }
+
+  function typeColor(t) {
+    if (t === 'change') return 'open';
+    if (t === 'decision') return 'green';
+    if (t === 'incident') return 'red';
+    return 'gray';
+  }
+
+  function truncate(str, len) {
+    if (!str) return '';
+    return str.length > len ? str.substring(0, len) + '…' : str;
+  }
+
+  /* ── Load supporting data (tags, apps, users) ── */
+  async function loadSupportingData() {
+    if (!state.project || !state.customer) return;
+    var [tagsRes, appsRes] = await Promise.all([
+      apiFetch('/api/tags?customer_id=' + encodeURIComponent(state.customer)),
+      apiFetch('/api/qlik-apps?project_id=' + encodeURIComponent(state.project))
+    ]);
+    allTags = tagsRes.ok ? await tagsRes.json() : [];
+    allTags = Array.isArray(allTags) ? allTags : [];
+    allApps = appsRes.ok ? await appsRes.json() : [];
+    allApps = Array.isArray(allApps) ? allApps : (allApps.items || []);
+
+    // Populate tag filter
+    var tf = document.getElementById('filterTag');
+    tf.innerHTML = '<option value="">Alle Tags</option>' + allTags.map(function (t) {
+      return '<option value="' + escHtml(String(t.id)) + '">' + escHtml(t.name) + '</option>';
+    }).join('');
+  }
+
+  /* ── Update dashboard header ── */
+  function updateHeader() {
+    if (isGeneral()) {
+      document.getElementById('dashTitle').textContent = 'General Dashboard';
+      document.getElementById('dashSubtitle').textContent = 'Alle Kunden und Projekte · ' + new Date().toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    } else {
+      var proj = projectsById[state.project];
+      var cust = customersById[state.customer];
+      var custNameHtml = cust
+        ? (cust.customer_link
+            ? '<a href="' + escHtml(cust.customer_link) + '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer" title="' + escHtml(cust.customer_link) + '">' + escHtml(cust.name) + '</a>'
+            : escHtml(cust.name))
+        : '';
+      document.getElementById('dashTitle').innerHTML = (custNameHtml ? custNameHtml + ' \u2014 ' : '') + escHtml(proj ? proj.name : 'Dashboard');
+      document.getElementById('dashSubtitle').textContent = new Date().toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+  }
+
+  /* ── Refresh all dashboard data ── */
+  async function refreshDashboard() {
+    updateHeader();
+    await Promise.all([loadMetrics(), loadMyTasks(), loadNoReadme(), loadProjectTasks(), loadRecentDocs(), loadAppHealth(), loadLogFeed(false), loadGantt()]);
+  }
+
+  /* ── Gantt ── */
+  var _ganttClickBound = false;
+  var _ganttRawTasks = [];
+
+  async function loadGantt() {
+    var body = document.getElementById('ganttBody');
+    if (!state.project && !state.customer) {
+      body.innerHTML = '<div class="empty-state">Bitte Projekt oder Kunden auswählen.</div>';
+      return;
+    }
+    body.innerHTML = '<div class="empty-state">Lade…</div>';
+    var url = state.customer
+      ? '/api/tasks?customer_id=' + encodeURIComponent(state.customer)
+      : '/api/tasks?project_id=' + encodeURIComponent(state.project);
+    try {
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error('Fehler');
+      var tasks = await res.json();
+      _ganttRawTasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
+      applyGanttView();
+    } catch (e) {
+      body.innerHTML = '<div class="empty-state">' + escHtml(e.message) + '</div>';
+    }
+    if (!_ganttClickBound) {
+      _ganttClickBound = true;
+      document.getElementById('ganttBody').addEventListener('click', function (e) {
+        var bar = e.target.closest('.gantt-bar[data-task-id]');
+        if (bar) showTaskDetail(bar.getAttribute('data-task-id'));
+      });
+    }
+  }
+
+  function applyGanttView() {
+    var metaEl = document.getElementById('ganttMeta');
+    if (metaEl) metaEl.textContent = _ganttRawTasks.length + ' Tasks';
+    renderGantt(_ganttRawTasks, document.getElementById('ganttBody'));
+  }
+
+  function renderGantt(tasks, container) {
+    if (!tasks.length) {
+      container.innerHTML = '<div class="empty-state">Keine Tasks vorhanden.</div>';
+      return;
+    }
+
+    var groupBy = (document.getElementById('ganttGroupBy') || {}).value || 'assignee';
+
+    // Tasks without dates fall back to created_at (milestone dot)
+    var plottable = tasks.map(function (t) {
+      if (!t.start_date && !t.due_date)
+        return Object.assign({}, t, { _noDate: true, due_date: t.created_at ? t.created_at.slice(0, 10) : null });
+      return t;
+    }).filter(function (t) { return t.due_date || t.start_date; });
+
+    if (!plottable.length) {
+      container.innerHTML = '<div class="empty-state">Keine Tasks mit Datum. Bitte Startdatum oder Fälligkeit an Tasks hinterlegen.</div>';
+      return;
+    }
+
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var allDates = [];
+    plottable.forEach(function (t) {
+      if (t.start_date) allDates.push(new Date(t.start_date + 'T00:00:00'));
+      if (t.due_date)   allDates.push(new Date(t.due_date   + 'T00:00:00'));
+    });
+    var rangeStart = new Date(Math.min.apply(null, allDates));
+    var rangeEnd   = new Date(Math.max.apply(null, allDates));
+    rangeStart.setDate(rangeStart.getDate() - 3);
+    rangeEnd.setDate(rangeEnd.getDate() + 4);
+    var totalMs  = rangeEnd.getTime() - rangeStart.getTime();
+    var totalDays = Math.round(totalMs / 86400000);
+    var ganttMinWidth = Math.max(820, totalDays * 28);
+    var labelStep = totalDays <= 14 ? 1 : totalDays <= 60 ? 7 : totalDays <= 180 ? 14 : 30;
+
+    function pct(d)       { return ((d.getTime() - rangeStart.getTime()) / totalMs * 100).toFixed(3) + '%'; }
+    function widthPct(ms) { return (ms / totalMs * 100).toFixed(3) + '%'; }
+
+    // Colors by STATUS
+    var statusColors = { open: '#667eea', in_progress: '#f59e0b', review: '#8b5cf6', done: '#10b981' };
+    var statusLabels  = { open: 'Open', in_progress: 'In Bearbeitung', review: 'Review', done: 'Done' };
+    var priorityLabels = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+    var priorityColors = { critical: '#ef4444', high: '#f97316', medium: '#667eea', low: '#6b7280' };
+
+    var todayX = (today >= rangeStart && today <= rangeEnd) ? pct(today) : null;
+
+    // ── Month header ──────────────────────────────────────────────────
+    var axisMonthHtml = '';
+    var mCur = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+    while (mCur.getTime() < rangeEnd.getTime()) {
+      var mNext = new Date(mCur.getFullYear(), mCur.getMonth() + 1, 1);
+      var blkS  = mCur.getTime() < rangeStart.getTime() ? new Date(rangeStart) : new Date(mCur);
+      var blkE  = mNext.getTime() > rangeEnd.getTime()  ? new Date(rangeEnd)   : new Date(mNext);
+      axisMonthHtml += '<div class="gantt-axis-month-block" style="left:' + pct(blkS) + ';width:' + widthPct(blkE.getTime() - blkS.getTime()) + '">'
+        + mCur.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }) + '</div>';
+      mCur = new Date(mNext);
+    }
+
+    // ── Day ticks + row grid (every single day) ───────────────────────
+    var axisDayHtml = '', rowGridHtml = '';
+    var dCur = new Date(rangeStart), dayIndex = 0;
+    while (dCur.getTime() <= rangeEnd.getTime()) {
+      var isMonthStart = dCur.getDate() === 1;
+      var cls = isMonthStart ? 'major' : 'minor';
+      var dx  = pct(dCur);
+      axisDayHtml += '<div class="gantt-axis-tick ' + cls + '" style="left:' + dx + '"></div>';
+      if (isMonthStart || dayIndex % labelStep === 0)
+        axisDayHtml += '<div class="gantt-axis-day-lbl" style="left:' + dx + '">' + dCur.getDate() + '</div>';
+      rowGridHtml += '<div class="gantt-grid-line ' + cls + '" style="left:' + dx + '"></div>';
+      dCur.setDate(dCur.getDate() + 1);
+      dayIndex++;
+    }
+
+    // ── Grouping ──────────────────────────────────────────────────────
+    var groupOrder = [], groups = {};
+    plottable.forEach(function (t) {
+      var key, label;
+      if (groupBy === 'assignee') {
+        key   = t.assignee_id ? String(t.assignee_id) : '__none__';
+        label = key === '__none__' ? 'Nicht zugewiesen'
+              : (t.assignee ? (t.assignee.display_name || t.assignee.email) : key);
+      } else if (groupBy === 'project') {
+        key   = String(t.project_id);
+        label = t.project_name || ('Projekt ' + t.project_id);
+      } else if (groupBy === 'status') {
+        key   = t.status;
+        label = statusLabels[key] || key;
+      } else { // priority
+        key   = t.priority;
+        label = priorityLabels[key] || key;
+      }
+      if (!groups[key]) { groups[key] = { label: label, tasks: [] }; groupOrder.push(key); }
+      groups[key].tasks.push(t);
+    });
+
+    // Sort group order
+    var statusOrder   = { open: 0, in_progress: 1, review: 2, done: 3 };
+    var priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    if (groupBy === 'status')
+      groupOrder.sort(function (a, b) { return (statusOrder[a] || 9) - (statusOrder[b] || 9); });
+    else if (groupBy === 'priority')
+      groupOrder.sort(function (a, b) { return (priorityOrder[a] || 9) - (priorityOrder[b] || 9); });
+    else
+      groupOrder.sort(function (a, b) { return groups[a].label.localeCompare(groups[b].label); });
+
+    // ── Rows ──────────────────────────────────────────────────────────
+    var axisLabel = { assignee: 'Bearbeiter', project: 'Projekt', status: 'Status', priority: 'Priorität' }[groupBy] || groupBy;
+    var rowsHtml = '';
+    groupOrder.forEach(function (key) {
+      var g = groups[key];
+      rowsHtml += '<div class="gantt-group-header">'
+        + '<div class="gantt-group-header-label">' + escHtml(g.label) + '</div>'
+        + '<div class="gantt-group-header-track"></div>'
+        + '</div>';
+
+      g.tasks.forEach(function (t) {
+        var s = t.start_date ? new Date(t.start_date + 'T00:00:00') : new Date(t.due_date + 'T00:00:00');
+        var e = t.due_date   ? new Date(t.due_date   + 'T00:00:00') : s;
+        var barStart = s < rangeStart ? new Date(rangeStart) : s;
+        var barEnd   = e < barStart   ? new Date(barStart)   : e;
+        barEnd = new Date(barEnd.getTime() + 86400000);
+        var left  = pct(barStart);
+        var width = widthPct(barEnd.getTime() - barStart.getTime());
+
+        var color  = statusColors[t.status]  || '#667eea';
+        var dotClr = priorityColors[t.priority] || '#888';
+        var isDone = t.status === 'done';
+        var isLate = !isDone && t.due_date && new Date(t.due_date + 'T00:00:00') < today;
+        var noDate = !!t._noDate;
+        var barStyle = 'left:' + left + ';width:' + width + ';background:' + color + ';'
+          + (isDone ? 'opacity:0.45;' : isLate ? 'box-shadow:inset 0 0 0 2px #ef4444;' : '')
+          + (noDate ? 'opacity:0.35;background:transparent;border:2px dashed ' + color + ';' : '');
+
+        rowsHtml += '<div class="gantt-row">'
+          + '<div class="gantt-label">'
+          + '<span class="task-pri-dot" style="background:' + dotClr + '" title="' + escHtml(priorityLabels[t.priority] || '') + '"></span>'
+          + '<span class="gantt-label-text' + (isDone ? ' gantt-done' : '') + '" title="' + escHtml(t.title) + '">' + escHtml(t.title) + '</span>'
+          + '</div>'
+          + '<div class="gantt-track">'
+          + rowGridHtml
+          + (todayX ? '<div class="gantt-today" style="left:' + todayX + '"></div>' : '')
+          + '<div class="gantt-bar" data-task-id="' + t.id + '" style="' + barStyle + '" title="' + escHtml(t.title) + '">'
+          + '<span class="gantt-bar-label">' + escHtml(t.title) + '</span>'
+          + '</div>'
+          + '</div>'
+          + '</div>';
+      });
+    });
+
+    container.innerHTML = '<div class="gantt-outer"><div class="gantt-inner" style="min-width:' + ganttMinWidth + 'px">'
+      + '<div class="gantt-axis">'
+      + '<div class="gantt-axis-label-col">' + escHtml(axisLabel) + '</div>'
+      + '<div class="gantt-axis-timeline">'
+      + '<div class="gantt-axis-months">' + axisMonthHtml + '</div>'
+      + '<div class="gantt-axis-days">' + axisDayHtml + '</div>'
+      + '</div></div>'
+      + rowsHtml
+      + '</div></div>';
+  }
+
+  /* ── Task Modal ── */
+  var _editTaskId = null; // null = create, number = edit
+
+  function openTaskModal(defaults) {
+    var d = defaults || {};
+    _editTaskId = d._editId || null;
+    document.getElementById('taskModalTitle').textContent = _editTaskId ? 'Task bearbeiten' : 'Neuer Task';
+    document.getElementById('taskSaveBtn').textContent   = _editTaskId ? 'Speichern' : 'Task erstellen';
+    document.getElementById('taskForm').reset();
+    document.getElementById('taskError').style.display = 'none';
+    selectedTaskTags = d._tags ? d._tags.slice() : [];
+    renderTaskTags();
+
+    // Project picker (general mode only)
+    var taskProjGroup = document.getElementById('taskProjectGroup');
+    var taskProjSel   = document.getElementById('taskProjectId');
+    var _general = isGeneral();
+    taskProjGroup.style.display = _general ? '' : 'none';
+    taskProjSel.required = _general;
+    if (_general) {
+      taskProjSel.innerHTML = '<option value="">— Projekt wählen —</option>' + allProjects.map(function (p) {
+        return '<option value="' + p.id + '">' + escHtml((p.customer_name ? p.customer_name + ' / ' : '') + (p.name || p.id)) + '</option>';
+      }).join('');
+      if (state.project) taskProjSel.value = String(state.project);
+    }
+
+    function _resolvedTaskProject() { return _general ? taskProjSel.value : state.project; }
+
+    function _loadTaskProjectDropdowns(pid) {
+      var assigneeSel = document.getElementById('taskAssignee');
+      var parentSel   = document.getElementById('taskParent');
+      if (!pid) {
+        assigneeSel.innerHTML = '<option value="">— Niemand —</option>';
+        parentSel.innerHTML   = '<option value="">— Kein Parent —</option>';
+        return;
+      }
+      apiFetch('/api/projects/' + encodeURIComponent(pid) + '/members').then(function (r) { return r.ok ? r.json() : []; }).then(function (users) {
+        allUsers = Array.isArray(users) ? users : [];
+        assigneeSel.innerHTML = '<option value="">— Niemand —</option>' + allUsers.map(function (u) {
+          return '<option value="' + u.id + '">' + escHtml(u.display_name || u.email) + '</option>';
+        }).join('');
+        if (d.assignee_id) assigneeSel.value = String(d.assignee_id);
+      }).catch(function () {});
+      apiFetch('/api/tasks?project_id=' + encodeURIComponent(pid) + '&status=open').then(function (r) { return r.ok ? r.json() : []; }).then(function (tasks) {
+        tasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
+        parentSel.innerHTML = '<option value="">— Kein Parent —</option>' + tasks.filter(function (t) { return t.id !== _editTaskId; }).map(function (t) {
+          return '<option value="' + t.id + '">' + escHtml(t.title) + '</option>';
+        }).join('');
+        if (d.parent_task_id) parentSel.value = String(d.parent_task_id);
+      }).catch(function () {});
+    }
+
+    _loadTaskProjectDropdowns(_resolvedTaskProject());
+    if (_general) {
+      taskProjSel.onchange = function () { _loadTaskProjectDropdowns(taskProjSel.value); };
+    }
+
+    // Populate dropdowns
+    var appSel = document.getElementById('taskApp');
+    appSel.innerHTML = '<option value="">— Keine App —</option>' + allApps.map(function (a) {
+      return '<option value="' + escHtml(a.app_id || a.id) + '">' + escHtml(a.name || a.app_id) + '</option>';
+    }).join('');
+    if (d.qlik_app_id) appSel.value = d.qlik_app_id;
+
+    // Pre-fill fields
+    if (d.title)              document.getElementById('taskTitle').value      = d.title;
+    if (d.description)        document.getElementById('taskDesc').value       = d.description;
+    if (d.status)             document.getElementById('taskStatus').value     = d.status;
+    if (d.priority)           document.getElementById('taskPriority').value   = d.priority;
+    if (d.start_date)         document.getElementById('taskStartDate').value  = d.start_date;
+    if (d.start_time)         document.getElementById('taskStartTime').value  = d.start_time;
+    if (d.due_date)           document.getElementById('taskDueDate').value    = d.due_date;
+    if (d.end_time)           document.getElementById('taskEndTime').value    = d.end_time;
+    if (d.estimated_minutes)  document.getElementById('taskMinutes').value    = d.estimated_minutes;
+    if (d.app_link)           document.getElementById('taskAppLink').value    = d.app_link;
+
+    document.getElementById('taskModal').classList.add('open');
+  }
+  window.openTaskModal = openTaskModal;
+
+  function closeTaskModal() { document.getElementById('taskModal').classList.remove('open'); _editTaskId = null; }
+
+  /* ── Task Detail Popup ── */
+  function openTaskDetail() { document.getElementById('taskDetailBackdrop').classList.add('open'); }
+  function closeTaskDetail() { document.getElementById('taskDetailBackdrop').classList.remove('open'); }
+
+  document.getElementById('taskDetailClose').addEventListener('click', closeTaskDetail);
+  document.getElementById('taskDetailBackdrop').addEventListener('click', function (e) {
+    if (e.target === this) closeTaskDetail();
+  });
+  document.getElementById('taskDetailPopup').addEventListener('click', function (e) {
+    if (e.target.id === 'tdEditBtn' && _currentTaskData) {
+      closeTaskDetail();
+      openTaskModal({
+        _editId:          _currentTaskData.id,
+        _tags:            _currentTaskData.tags || [],
+        title:            _currentTaskData.title,
+        description:      _currentTaskData.description,
+        status:           _currentTaskData.status,
+        priority:          _currentTaskData.priority,
+        assignee_id:       _currentTaskData.assignee_id,
+        start_date:        _currentTaskData.start_date,
+        start_time:        _currentTaskData.start_time,
+        due_date:          _currentTaskData.due_date,
+        end_time:          _currentTaskData.end_time,
+        estimated_minutes: _currentTaskData.estimated_minutes,
+        qlik_app_id:       _currentTaskData.qlik_app_id,
+        app_link:          _currentTaskData.app_link,
+        parent_task_id:    _currentTaskData.parent_task_id,
+      });
+    }
   });
 
-  // ── Logout ──
-  document.getElementById('logoutBtn').addEventListener('click', function() {
-    localStorage.removeItem('auth_access_token');
-    window.location.href = '/login.html';
+  var _currentTaskData = null;
+
+  async function showTaskDetail(taskId) {
+    var el = document.getElementById('taskDetailContent');
+    el.innerHTML = '<div class="empty-state">Lade…</div>';
+    _currentTaskData = null;
+    openTaskDetail();
+    try {
+      var res = await apiFetch('/api/tasks/' + encodeURIComponent(taskId));
+      if (!res.ok) throw new Error('Task nicht gefunden');
+      var t = await res.json();
+      _currentTaskData = t;
+
+      var priLabels = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+      var statusLabels = { open: 'Open', in_progress: 'In Bearbeitung', review: 'Review', done: 'Done' };
+
+      var tags = (t.tags || []).map(tagPillHtml).join(' ');
+      var subtasksHtml = '';
+      if (t.subtasks && t.subtasks.length) {
+        subtasksHtml = '<div class="td-subtasks">'
+          + '<div class="td-field-label">Subtasks</div>'
+          + t.subtasks.map(function (s) {
+            return '<div class="td-subtask">'
+              + '<div class="task-pri ' + priClass(s.priority) + '" style="width:3px;height:20px;border-radius:2px;flex-shrink:0"></div>'
+              + statusBadgeHtml(s.status)
+              + '<span>' + escHtml(s.title) + '</span>'
+              + (s.due_date ? '<span style="color:var(--text-muted);margin-left:auto;font-size:0.72rem">' + fmtDate(s.due_date) + '</span>' : '')
+              + '</div>';
+          }).join('')
+          + '</div>';
+      }
+
+      var descHtml = '';
+      if (t.description) {
+        descHtml = '<div class="td-desc">'
+          + '<div class="td-desc-label">Beschreibung</div>'
+          + '<div class="td-desc-body">' + escHtml(t.description) + '</div>'
+          + '</div>';
+      }
+
+      var appLinkHtml = '';
+      if (t.app_link) {
+        appLinkHtml = '<a href="' + escHtml(t.app_link) + '" target="_blank" rel="noopener" style="color:var(--accent);font-size:0.82rem;text-decoration:none">' + escHtml(t.app_link) + '</a>';
+      }
+
+      el.innerHTML = '<div class="td-header">'
+        + '<div class="task-pri ' + priClass(t.priority) + '" style="width:4px;height:32px;border-radius:2px;flex-shrink:0"></div>'
+        + statusBadgeHtml(t.status)
+        + '<div class="td-title">' + escHtml(t.title) + '</div>'
+        + '</div>'
+        + (tags ? '<div class="td-tags">' + tags + '</div>' : '')
+        + '<div class="td-grid">'
+        + '<div><div class="td-field-label">Priorität</div><div class="td-field-value">' + escHtml(priLabels[t.priority] || t.priority) + '</div></div>'
+        + '<div><div class="td-field-label">Status</div><div class="td-field-value">' + escHtml(statusLabels[t.status] || t.status) + '</div></div>'
+        + '<div><div class="td-field-label">Zugewiesen an</div><div class="td-field-value">' + (t.assignee ? avatarHtml(t.assignee) + ' ' + escHtml(t.assignee.display_name || t.assignee.email) : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
+        + '<div><div class="td-field-label">Start</div><div class="td-field-value">' + (t.start_date ? fmtDate(t.start_date) + (t.start_time ? ' ' + t.start_time : '') : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
+        + '<div><div class="td-field-label">Ende / Fälligkeit</div><div class="td-field-value' + (isOverdue(t.due_date) && t.status !== 'done' ? ' task-overdue' : '') + '">' + (t.due_date ? fmtDate(t.due_date) + (t.end_time ? ' ' + t.end_time : '') : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
+        + '<div><div class="td-field-label">Geschätzte Minuten</div><div class="td-field-value">' + (t.estimated_minutes || '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
+        + '<div><div class="td-field-label">App</div><div class="td-field-value">' + (t.qlik_app_id ? escHtml(appNameById(t.qlik_app_id)) : '<span style="color:var(--text-dim)">—</span>') + '</div></div>'
+        + '</div>'
+        + descHtml
+        + (appLinkHtml ? '<div style="margin-bottom:1rem"><div class="td-field-label">App-Link</div>' + appLinkHtml + '</div>' : '')
+        + subtasksHtml
+        + '<div class="td-meta">'
+        + '<span>Erstellt: ' + timeAgo(t.created_at) + '</span>'
+        + '<span>Aktualisiert: ' + timeAgo(t.updated_at) + '</span>'
+        + '</div>'
+        + '<div style="margin-top:1rem;display:flex;gap:0.6rem;justify-content:flex-end">'
+        + '<button class="btn-primary" id="tdEditBtn" style="font-size:0.82rem;padding:0.4rem 1rem">Bearbeiten</button>'
+        + '</div>';
+    } catch (err) {
+      el.innerHTML = '<div class="empty-state">' + escHtml(err.message) + '</div>';
+    }
+  }
+
+  // Click delegation for task rows
+  document.addEventListener('click', function (e) {
+    var row = e.target.closest('.task-row[data-task-id]');
+    if (row) {
+      e.preventDefault();
+      showTaskDetail(row.getAttribute('data-task-id'));
+    }
   });
 
-  // ── Refresh jobs ──
-  document.getElementById('refreshJobsBtn').addEventListener('click', function() {
-    loadJobs(); loadFetchStatus();
-    showToast('Refreshed', 1500);
+  /* ── Tag selection ── */
+  function renderTaskTags() {
+    var wrap = document.getElementById('taskTagsWrap');
+    var pills = selectedTaskTags.map(function (t) {
+      return '<span class="tag-pill" style="background:' + escHtml(t.color) + '22;color:' + escHtml(t.color) + '">' + escHtml(t.name) + ' <span class="tag-rm" data-tag-id="' + t.id + '">×</span></span>';
+    }).join('');
+    wrap.innerHTML = pills + '<button type="button" class="tag-add-btn" id="taskTagAddBtn">+ Tag</button>';
+    wrap.querySelector('#taskTagAddBtn').addEventListener('click', openTagDropdown);
+    wrap.querySelectorAll('.tag-rm').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var id = parseInt(this.getAttribute('data-tag-id'), 10);
+        selectedTaskTags = selectedTaskTags.filter(function (t) { return t.id !== id; });
+        renderTaskTags();
+      });
+    });
+  }
+
+  function openTagDropdown() {
+    var dd = document.getElementById('taskTagDropdown');
+    var selectedIds = selectedTaskTags.map(function (t) { return t.id; });
+    dd.innerHTML = allTags.map(function (t) {
+      var sel = selectedIds.indexOf(t.id) >= 0 ? ' selected' : '';
+      return '<div class="tag-dropdown-item' + sel + '" data-tag-id="' + t.id + '">'
+        + '<span style="width:10px;height:10px;border-radius:50%;background:' + escHtml(t.color) + ';flex-shrink:0"></span>'
+        + escHtml(t.name) + '</div>';
+    }).join('') + '<div class="tag-dropdown-item" id="ddNewTag" style="color:var(--accent);font-weight:600">+ Neuen Tag erstellen</div>';
+    dd.style.display = 'block';
+    dd.querySelectorAll('[data-tag-id]').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var id = parseInt(this.getAttribute('data-tag-id'), 10);
+        var tag = allTags.find(function (t) { return t.id === id; });
+        if (tag && selectedIds.indexOf(id) < 0) {
+          selectedTaskTags.push(tag);
+          renderTaskTags();
+        }
+        dd.style.display = 'none';
+      });
+    });
+    dd.querySelector('#ddNewTag').addEventListener('click', function () {
+      dd.style.display = 'none';
+      document.getElementById('taskTagCreate').style.display = 'flex';
+    });
+    setTimeout(function () {
+      document.addEventListener('click', function handler(e) {
+        if (!dd.contains(e.target)) { dd.style.display = 'none'; document.removeEventListener('click', handler); }
+      });
+    }, 10);
+  }
+
+  document.getElementById('newTagSave').addEventListener('click', async function () {
+    var name = document.getElementById('newTagName').value.trim();
+    var color = document.getElementById('newTagColor').value;
+    if (!name) return;
+    try {
+      var res = await apiFetch('/api/tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_id: parseInt(state.customer, 10), name: name, color: color }) });
+      if (!res.ok) throw new Error();
+      var newTag = await res.json();
+      allTags.push(newTag);
+      selectedTaskTags.push(newTag);
+      renderTaskTags();
+      document.getElementById('taskTagCreate').style.display = 'none';
+      document.getElementById('newTagName').value = '';
+    } catch (e) { showToast('Tag konnte nicht erstellt werden'); }
+  });
+  document.getElementById('newTagCancel').addEventListener('click', function () {
+    document.getElementById('taskTagCreate').style.display = 'none';
   });
 
-  // ── User email from token ──
-  try {
-    var payload = JSON.parse(atob(token.split('.')[1]));
-    // JWT sub is user id; just show a placeholder
-    document.getElementById('userEmail').textContent = 'User #' + (payload.sub || '—');
-  } catch(e) {}
+  /* ── Save Task ── */
+  document.getElementById('taskForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var errEl = document.getElementById('taskError');
+    errEl.style.display = 'none';
+    var _taskPid = isGeneral() ? document.getElementById('taskProjectId').value : state.project;
+    if (!_taskPid) { errEl.textContent = 'Bitte Projekt wählen.'; errEl.style.display = 'block'; return; }
+    var body = {
+      project_id: parseInt(_taskPid, 10),
+      title: document.getElementById('taskTitle').value.trim(),
+      description: document.getElementById('taskDesc').value.trim() || null,
+      status: document.getElementById('taskStatus').value,
+      priority: document.getElementById('taskPriority').value,
+      assignee_id: document.getElementById('taskAssignee').value ? parseInt(document.getElementById('taskAssignee').value, 10) : null,
+      start_date: document.getElementById('taskStartDate').value || null,
+      start_time: document.getElementById('taskStartTime').value || null,
+      due_date: document.getElementById('taskDueDate').value || null,
+      end_time: document.getElementById('taskEndTime').value || null,
+      estimated_minutes: document.getElementById('taskMinutes').value ? parseInt(document.getElementById('taskMinutes').value, 10) : null,
+      qlik_app_id: document.getElementById('taskApp').value || null,
+      app_link: document.getElementById('taskAppLink').value.trim() || null,
+      parent_task_id: document.getElementById('taskParent').value ? parseInt(document.getElementById('taskParent').value, 10) : null
+    };
+    try {
+      var isEdit = !!_editTaskId;
+      var url    = isEdit ? '/api/tasks/' + _editTaskId : '/api/tasks';
+      var method = isEdit ? 'PUT' : 'POST';
+      var res = await apiFetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) { var err = await res.json().catch(function () { return {}; }); throw new Error(err.detail || 'Fehler'); }
+      var task = await res.json();
+      if (!isEdit) {
+        // Link tags only on create (PUT endpoint handles existing tags separately)
+        for (var i = 0; i < selectedTaskTags.length; i++) {
+          await apiFetch('/api/task-tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: task.id, tag_id: selectedTaskTags[i].id }) });
+        }
+      }
+      closeTaskModal();
+      showToast(isEdit ? 'Task aktualisiert' : 'Task erstellt');
+      refreshDashboard();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  });
 
-  // ── Init ──
-  loadHealth();
-  loadFetchStatus();
-  loadJobs();
-  setInterval(loadHealth, 30000);
-  setInterval(function() { loadFetchStatus(); loadJobs(); }, 15000);
+  document.getElementById('taskModalClose').addEventListener('click', closeTaskModal);
+  document.getElementById('taskCancel').addEventListener('click', closeTaskModal);
+  document.getElementById('btnNewTask').addEventListener('click', function () { openTaskModal(); });
+
+  /* ── Doc Modal ── */
+  var docEditor = null;
+  function openDocModal(defaults) {
+    var d = defaults || {};
+    document.getElementById('docForm').reset();
+    document.getElementById('docError').style.display = 'none';
+    document.getElementById('docDate').value = new Date().toISOString().slice(0, 10);
+
+    var docProjGroup = document.getElementById('docProjectGroup');
+    var docProjSel   = document.getElementById('docProjectId');
+    var _general = isGeneral();
+    docProjGroup.style.display = _general ? '' : 'none';
+    docProjSel.required = _general;
+    if (_general) {
+      docProjSel.innerHTML = '<option value="">— Projekt wählen —</option>' + allProjects.map(function (p) {
+        return '<option value="' + p.id + '">' + escHtml((p.customer_name ? p.customer_name + ' / ' : '') + (p.name || p.id)) + '</option>';
+      }).join('');
+      if (state.project) docProjSel.value = String(state.project);
+    }
+
+    var appSel = document.getElementById('docApp');
+    appSel.innerHTML = buildDocAppSelectOptions(d.qlik_app_id || '');
+
+    initDocEditor();
+    document.getElementById('docModal').classList.add('open');
+  }
+  window.openDocModal = openDocModal;
+
+  function initDocEditor() {
+    if (docEditor) docEditor.destroy();
+    docEditor = AtlasSmartCompose.log('docEditorContainer', {});
+  }
+
+  function closeDocModal() { document.getElementById('docModal').classList.remove('open'); }
+  document.getElementById('docModalClose').addEventListener('click', closeDocModal);
+  document.getElementById('docCancel').addEventListener('click', closeDocModal);
+  document.getElementById('btnNewDoc').addEventListener('click', function () { openDocModal(); });
+
+  document.getElementById('docType').addEventListener('change', function () {
+    if (docEditor) docEditor.clear();
+  });
+
+  document.getElementById('docForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var errEl = document.getElementById('docError');
+    errEl.style.display = 'none';
+    var _docPid = isGeneral() ? document.getElementById('docProjectId').value : state.project;
+    if (!_docPid) { errEl.textContent = 'Bitte Projekt wählen.'; errEl.style.display = 'block'; return; }
+    var vals = docEditor ? docEditor.getValues() : { was: '', warum: null };
+    var selectedAppId = document.getElementById('docApp').value || null;
+    var body = {
+      project_id: parseInt(_docPid, 10),
+      entry_type: document.getElementById('docType').value,
+      qlik_app_id: selectedAppId,
+      betrifft:    selectedAppId ? appNameById(selectedAppId) : null,
+      entry_date: document.getElementById('docDate').value || null,
+      content: vals.was,
+      warum:   vals.warum,
+    };
+    try {
+      var res = await apiFetch('/api/log-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) { var err = await res.json().catch(function () { return {}; }); throw new Error(err.detail || 'Fehler'); }
+      closeDocModal();
+      showToast('Log-Eintrag erstellt');
+      refreshDashboard();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  /* ── Doc Sidebar ── */
+  function openDocSidebar(doc) {
+    document.getElementById('sidebarType').textContent = (doc.entry_type || 'note').toUpperCase();
+    document.getElementById('sidebarType').style.color = { change: '#60a5fa', decision: '#4ade80', incident: '#f87171', note: 'var(--text-muted)' }[doc.entry_type] || 'var(--text-muted)';
+    document.getElementById('sidebarTitle').textContent = doc.entry_date || '';
+    document.getElementById('sidebarMeta').textContent = (doc.author ? (doc.author.display_name || doc.author.email) + ' · ' : '') + (doc.qlik_app_id ? appNameById(doc.qlik_app_id) + ' · ' : '') + timeAgo(doc.created_at);
+    var sideHtml = '';
+    if (doc.content) {
+      sideHtml += '<div class="sc-field" style="margin-bottom:0.8rem"><div class="sc-label">Was</div>'
+        + '<div style="color:rgba(255,255,255,0.88);font-size:0.88rem;line-height:1.55;white-space:pre-wrap">' + escHtml(doc.content) + '</div></div>';
+    }
+    if (doc.warum) {
+      sideHtml += '<div class="sc-field" style="margin-bottom:0.8rem"><div class="sc-label">Warum / Begründung</div>'
+        + '<div style="color:rgba(255,255,255,0.7);font-size:0.85rem;line-height:1.55;white-space:pre-wrap">' + escHtml(doc.warum) + '</div></div>';
+    }
+    document.getElementById('sidebarContent').innerHTML = sideHtml || '<span style="opacity:0.4">Kein Inhalt</span>';
+    document.getElementById('docSidebar').classList.add('open');
+  }
+  document.getElementById('docSidebarClose').addEventListener('click', function () {
+    document.getElementById('docSidebar').classList.remove('open');
+  });
+  document.addEventListener('click', function (e) {
+    var sb = document.getElementById('docSidebar');
+    if (sb.classList.contains('open') && !sb.contains(e.target) && !e.target.closest('.doc-row')) {
+      sb.classList.remove('open');
+    }
+  });
+
+  /* ── App Health Table (collapsible) ── */
+  var _healthExpanded = false;
+  function toggleHealthCard() {
+    _healthExpanded = !_healthExpanded;
+    var body = document.getElementById('appHealthBody');
+    var toggle = document.getElementById('healthToggle');
+    body.style.display = _healthExpanded ? '' : 'none';
+    toggle.textContent = _healthExpanded ? '▼ Ausblenden' : '▶ Einblenden';
+  }
+  window.toggleHealthCard = toggleHealthCard;
+
+  async function loadAppHealth() {
+    var body = document.getElementById('appHealthBody');
+    var countEl = document.getElementById('healthCount');
+    if (!isGeneral() && !state.project) { body.innerHTML = '<div class="empty-state">Bitte Projekt wählen</div>'; return; }
+    try {
+      var url = isGeneral() ? '/api/apps/health' : '/api/apps/health?project_id=' + encodeURIComponent(state.project);
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var apps = await res.json();
+      if (!apps.length) { body.innerHTML = '<div class="empty-state">Keine Apps gefunden</div>'; countEl.textContent = ''; return; }
+      countEl.textContent = apps.length + ' Apps';
+      var ctxHeader = isGeneral() ? '<th>Kunde / Projekt</th>' : '';
+      var html = '<table class="health-table"><thead><tr>'
+        + '<th>App</th>' + ctxHeader + '<th>README</th><th>Tasks</th><th>Letzter Log</th>'
+        + '</tr></thead><tbody>';
+      html += apps.map(function (a) {
+        var pid = a.project_id || state.project;
+        var href = '/app-detail.html?project=' + encodeURIComponent(pid) + '&app_id=' + encodeURIComponent(a.app_id);
+        var readmeIcon = a.has_readme
+          ? '<span class="health-check yes" title="README vorhanden">&#x2713;</span>'
+          : '<a href="' + href + '&tab=readme" title="README erstellen" style="text-decoration:none"><span class="health-check no">&#x2717;</span></a>';
+        var tasksHtml;
+        if (a.open_tasks === 0 && a.done_tasks === 0) {
+          tasksHtml = '<span class="health-tasks"><span class="none">—</span></span>';
+        } else {
+          tasksHtml = '<span class="health-tasks">'
+            + (a.open_tasks ? '<span class="open">' + a.open_tasks + ' offen</span>' : '')
+            + (a.done_tasks ? '<span class="done">' + a.done_tasks + ' erledigt</span>' : '')
+            + '</span>';
+        }
+        var logHtml;
+        if (a.last_log) {
+          var dot = '<span class="doc-dot ' + escHtml(a.last_log_type || 'note') + '" style="width:6px;height:6px;display:inline-block;border-radius:50%;margin-right:0.25rem"></span>';
+          logHtml = dot + '<span class="health-log-type">' + escHtml(a.last_log_type || '') + '</span> ' + timeAgo(a.last_log);
+        } else {
+          logHtml = '<span style="color:var(--text-dim)">—</span>';
+        }
+        var ctxCell = isGeneral() ? '<td><span class="ctx-badge">' + escHtml((a.customer_name || '') + ' / ' + (a.project_name || '')) + '</span></td>' : '';
+        return '<tr>'
+          + '<td class="app-name"><a href="' + href + '">' + escHtml(a.name) + '</a></td>'
+          + ctxCell
+          + '<td>' + readmeIcon + '</td>'
+          + '<td>' + tasksHtml + '</td>'
+          + '<td>' + logHtml + '</td>'
+          + '</tr>';
+      }).join('');
+      html += '</tbody></table>';
+      body.innerHTML = html;
+    } catch (e) {
+      body.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+    }
+  }
+
+  /* ── Log Feed (timeline) ── */
+  var _feedOffset = 0;
+  var _feedPageSize = 15;
+  var _feedAllLoaded = false;
+
+  function renderFeedItem(d) {
+    var typeClass = escHtml(d.entry_type || 'note');
+    var snippet = (d.content || '').replace(/^#+\s*/gm, '').replace(/[_*`~|>]/g, '').trim();
+    if (snippet.length > 200) snippet = snippet.substring(0, 200) + '…';
+    var ctxLine = (isGeneral() && d.customer_name) ? '<span class="feed-app" style="font-weight:600">' + escHtml(d.customer_name + ' / ' + (d.project_name || '')) + '</span>' : '';
+    return '<div class="feed-item" data-doc-id="' + d.id + '">'
+      + '<div class="feed-dot ' + typeClass + '"></div>'
+      + '<div class="feed-head">'
+      + '<span class="feed-type ' + typeClass + '">' + escHtml(d.entry_type || 'note') + '</span>'
+      + ctxLine
+      + (d.qlik_app_id ? '<span class="feed-app">' + escHtml(appNameById(d.qlik_app_id)) + '</span>' : '')
+      + (d.entry_date ? '<span class="feed-app">' + fmtDate(d.entry_date) + '</span>' : '')
+      + '<span class="feed-time">' + timeAgo(d.created_at) + '</span>'
+      + '</div>'
+      + '<div class="feed-snippet">' + escHtml(snippet) + '</div>'
+      + (d.author ? '<div class="feed-author">' + avatarHtml(d.author) + ' ' + escHtml(d.author.display_name || d.author.email) + '</div>' : '')
+      + '</div>';
+  }
+
+  async function loadLogFeed(append) {
+    var listEl = document.getElementById('feedList');
+    var moreEl = document.getElementById('feedMore');
+    var countEl = document.getElementById('feedCount');
+    if (!isGeneral() && !state.project) { listEl.innerHTML = '<div class="empty-state">Bitte Projekt wählen</div>'; moreEl.style.display = 'none'; return; }
+    if (!append) { _feedOffset = 0; _feedAllLoaded = false; listEl.innerHTML = ''; }
+    try {
+      var feedUrl = '/api/log-entries?limit=' + _feedPageSize + '&offset=' + _feedOffset + (isGeneral() ? '' : '&project_id=' + encodeURIComponent(state.project));
+      var res = await apiFetch(feedUrl);
+      if (!res.ok) throw new Error();
+      var docs = await res.json();
+      docs = Array.isArray(docs) ? docs : (docs.items || []);
+      if (!append && !docs.length) {
+        listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4DD;</div>Noch keine Log-Einträge.<br><span class="empty-action" onclick="openDocModal()">+ Eintrag erstellen</span></div>';
+        moreEl.style.display = 'none';
+        countEl.textContent = '';
+        return;
+      }
+      var html = docs.map(renderFeedItem).join('');
+      if (append) { listEl.insertAdjacentHTML('beforeend', html); } else { listEl.innerHTML = html; }
+      _feedOffset += docs.length;
+      if (docs.length < _feedPageSize) { _feedAllLoaded = true; moreEl.style.display = 'none'; } else { moreEl.style.display = ''; }
+      countEl.textContent = _feedOffset + ' Einträge geladen';
+    } catch (e) {
+      if (!append) listEl.innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+      moreEl.style.display = 'none';
+    }
+  }
+
+  document.getElementById('feedMoreBtn').addEventListener('click', function () { loadLogFeed(true); });
+
+  // Scroll-link from compact card to feed
+  document.getElementById('linkLogFeed').addEventListener('click', function (e) {
+    e.preventDefault();
+    document.getElementById('logFeed').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // Click handler for feed items → open sidebar
+  document.getElementById('feedList').addEventListener('click', async function (e) {
+    var item = e.target.closest('.feed-item');
+    if (!item) return;
+    var docId = item.getAttribute('data-doc-id');
+    try {
+      var res = await apiFetch('/api/log-entries/' + docId);
+      if (!res.ok) throw new Error();
+      var doc = await res.json();
+      openDocSidebar(doc);
+    } catch (err) { showToast('Eintrag konnte nicht geladen werden'); }
+  });
+
+  /* ── Click handlers for doc rows ── */
+  document.getElementById('recentDocsList').addEventListener('click', async function (e) {
+    var row = e.target.closest('.doc-row');
+    if (!row) return;
+    var docId = row.getAttribute('data-doc-id');
+    try {
+      var res = await apiFetch('/api/log-entries/' + docId);
+      if (!res.ok) throw new Error();
+      var doc = await res.json();
+      openDocSidebar(doc);
+    } catch (err) { showToast('Eintrag konnte nicht geladen werden'); }
+  });
+
+  /* ── Filter handlers ── */
+  document.getElementById('filterStatus').addEventListener('change', loadProjectTasks);
+  document.getElementById('filterTag').addEventListener('change', loadProjectTasks);
+
+  /* ── Gantt group-by listener ── */
+  document.getElementById('ganttGroupBy').addEventListener('change', applyGanttView);
+
+  /* ── Nav change handlers ── */
+  document.getElementById('navCustomerSelect').addEventListener('change', function () {
+    state.customer = String(this.value || '').trim();
+    renderProjectSelect();
+    loadSupportingData().then(refreshDashboard);
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function () {
+    state.project = String(this.value || '').trim();
+    syncCustomer(); renderCustomerSelect(); persistState(); updateNav(); setUrl();
+    loadSupportingData().then(refreshDashboard);
+  });
+
+  /* ── View Toggle ── */
+  document.getElementById('viewToggle').addEventListener('click', function (e) {
+    var btn = e.target.closest('.view-toggle-btn');
+    if (!btn || btn.classList.contains('active')) return;
+    viewMode = btn.getAttribute('data-view');
+    this.querySelectorAll('.view-toggle-btn').forEach(function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    var dimNav = isGeneral();
+    document.getElementById('navCustomerSelect').disabled = dimNav;
+    document.getElementById('navProjectSelect').disabled = dimNav;
+    updateHeader();
+    refreshDashboard();
+  });
+
+  /* ── All-tasks link ── */
+  document.getElementById('linkAllTasks').addEventListener('click', function (e) {
+    e.preventDefault();
+    document.getElementById('filterStatus').value = '';
+    loadProjectTasks();
+    document.querySelector('.grid-1-1').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  /* ── Init ── */
+  async function init() {
+    try {
+      await loadFocusSelectors();
+      await loadSupportingData();
+      await refreshDashboard();
+    } catch (e) {
+      document.getElementById('dashSubtitle').textContent = 'Initialisierung fehlgeschlagen';
+    }
+  }
+  init();
+})();
 </script>
 </body>
 </html>

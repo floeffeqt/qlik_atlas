@@ -52,7 +52,9 @@
       justify-content: center;
       margin-bottom: 1rem;
       font-size: 1.5rem;
+      overflow: hidden;
     }
+    .logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
     h1 {
       color: #fff;
@@ -173,7 +175,7 @@
     <!-- Left: form -->
     <div class="card">
       <div class="logo">
-        <div class="logo-icon">⬡</div>
+        <div class="logo-icon"><img src="/assets/logo.png" alt="Lineage Explorer Logo" /></div>
         <h1>Lineage Explorer</h1>
         <p class="subtitle">Sign in to your account</p>
       </div>
@@ -192,8 +194,8 @@
         <button class="btn" type="submit" id="submitBtn">Sign in</button>
       </form>
 
-      <div class="footer-link">
-        No account? <a href="/register.html">Create one</a>
+      <div class="footer-link" style="color:rgba(255,255,255,0.3);font-size:0.8rem;">
+        Konto wird vom Administrator erstellt.
       </div>
     </div>
 
@@ -231,7 +233,12 @@
         }
 
         const payload = await res.json();
-        localStorage.setItem('auth_access_token', payload.access_token);
+        if (payload && payload.user) {
+          localStorage.setItem('atlas_auth_user_v1', JSON.stringify(payload.user));
+        } else {
+          localStorage.removeItem('atlas_auth_user_v1');
+        }
+        localStorage.removeItem('auth_access_token');
         window.location.href = '/';
       } catch (err) {
         errorMsg.textContent = err.message;

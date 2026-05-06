@@ -1,222 +1,285 @@
-# Qlik Atlas — Containerized Stack
+# Qlik Atlas
 
-## Overview
-A containerized FastAPI backend + nginx frontend + PostgreSQL database stack for Qlik lineage exploration with authentication.
+Containerized Qlik lineage application with FastAPI backend, PostgreSQL, nginx frontend, authentication, customer/project management, and DB-backed lineage runtime reads.
 
-## Quick Start
+## Current Status
 
-### 1. Setup Environment
+- Docker-based stack is runnable end-to-end (`db`, `backend`, `frontend`, optional `pgadmin`)
+- Authentication and admin flows are available
+- Customer credentials are stored encrypted in the database (AES-256-GCM)
+- Runtime reads for dashboard/graph/inventory/spaces/data-connections/usage/scripts are DB-backed
+- Fetch pipeline is DB-first (`Qlik API -> in-memory transform -> PostgreSQL`)
+- Local fetch artifacts are removed from the runtime path (DB-first only)
+- Theme Generator MVP is available at `/theme-builder.html` (ZIP download + upload stub)
+
+## Quick Start (Docker)
+
+(Ich möchte an meinem qlik atlas projekt weiterarbeiten. Bitte zuerst AGENTS.md lesen, dann die zentrale private Bridge nutzen, Gateway anwenden und danach docs/INDEX.md + relevante Specs/Dokumente scannen und immer anwenden, bevor du loslegst.
+)
+
+### 1. Configure environment
+
 ```bash
 cp .env.example .env
-# Edit .env if needed (defaults are safe for local dev)
 ```
 
-### 2. Start Services
+Edit `.env` and set at least:
+
+- `JWT_SECRET`
+- `CREDENTIALS_AES256_GCM_KEY_B64`
+- `CREDENTIALS_AES256_GCM_KEY_ID`
+
+Optional (for real fetch jobs):
+
+- `QLIK_TENANT_URL`
+- `QLIK_API_KEY`
+
+Generate a local AES-256-GCM key (PowerShell, correct format):
+
+```powershell
+python -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+```
+
+Important:
+
+- `CREDENTIALS_AES256_GCM_KEY_B64` must decode to exactly 32 bytes
+- Keep the AES key stable after customer credentials have been stored
+- Do not use production secrets in local `.env`
+
+### 2. Start the stack
+
 ```bash
 docker compose up --build
 ```
 
-This will:
-- Build & start PostgreSQL container (connected on Docker network)
-- Build & start FastAPI backend (port 8000)
-- Build & start nginx frontend (port **4001**)
-- Run migrations automatically
-- Seed test user: `admin@admin.de` / `admin123`
+This starts:
 
-### 3. Access Application
-Open browser: **http://localhost:4001**
+- `db` (PostgreSQL)
+- `backend` (FastAPI, auto-migrations on startup)
+- `frontend` (nginx SPA on port `4001`)
+- `pgadmin` (optional, port `5050`)
 
-Login with:
+### 3. Open the app
+
+- App: `http://localhost:4001`
+- pgAdmin (optional): `http://localhost:5050`
+
+Default seeded admin user:
+
 - Email: `admin@admin.de`
 - Password: `admin123`
 
-## Architecture
+## Services and Ports
 
-### Services
-| Service | Port | Description |
-|---------|------|-------------|
-| **Frontend** | 4001 | nginx serving SPA, proxies /api to backend |
-| **Backend** | 8000 | FastAPI + Uvicorn (async) |
-| **Database** | 5432 | PostgreSQL 15 (internal only) |
+| Service | Port | Purpose |
+|---|---:|---|
+| `frontend` | `4001` | UI (nginx) |
+| `backend` | `8000` | FastAPI API |
+| `db` | `5432` | PostgreSQL (internal/docker network) |
+| `pgadmin` | `5050` | Optional DB inspection UI |
 
-### Key Technologies
-- **Backend**: FastAPI, SQLAlchemy (async), asyncpg
-- **Auth**: JWT (HS256) + bcrypt password hashing
-- **Frontend**: Vanilla JS with localStorage for tokens
-- **DB**: PostgreSQL with Alembic migrations
-- **Docker**: Multi-stage builds, non-root users, health checks
+## Architecture (Current)
 
-## Authentication
+### Data flow
 
-### Endpoints
-- `POST /auth/register` — Create new user
-  - Body: `{ "email": "user@example.com", "password": "..." }`
-  - Returns: `{ "access_token": "...", "token_type": "bearer" }`
+1. Admin starts fetch job for a project
+2. Backend loads encrypted Qlik credentials from the project's customer
+3. Backend fetches Qlik data (spaces/apps/connections/lineage/usage)
+4. Payloads are normalized in memory
+5. Data is persisted to PostgreSQL
+6. Frontend runtime endpoints read from PostgreSQL (RLS-scoped)
 
-- `POST /auth/login` — Login existing user
-  - Body: `{ "email": "user@example.com", "password": "..." }`
-  - Returns: `{ "access_token": "...", "token_type": "bearer" }`
+### Runtime source of truth
 
-### Frontend Integration
-- Token stored in `localStorage` under key `auth_access_token`
-- Automatic redirect to `/login.html` on 401
-- All API requests include `Authorization: Bearer {token}` header
+- UI-facing runtime data is PostgreSQL (not local JSON files)
+- Runtime processing uses in-memory payloads and persists directly to PostgreSQL
 
-## Database Schema
+## Authentication and Authorization
 
-### Users Table
-```sql
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(320) UNIQUE NOT NULL,
-    password_hash VARCHAR(256) NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
+### Auth endpoints
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+
+Frontend behavior:
+
+- Access token is stored in an `HttpOnly` auth cookie set by the backend
+- Refresh token is stored in a separate `HttpOnly` refresh cookie
+- Frontend API calls rely on browser cookie transport (`credentials: include` / same-origin)
+- Frontend retries one refresh cycle on `401` before redirecting to login
+- `POST /api/auth/login` is protected against brute-force retries with IP- and email-based lockouts and returns `429` + `Retry-After` when blocked
+- New password hashes use `Argon2id`; legacy `PBKDF2-SHA256` hashes are upgraded automatically on successful login
+
+### Admin-only areas (high level)
+
+- Customer create/update/delete
+- Fetch job start/list/logs
+- Admin user assignment/management routes
+
+## Row-Level Security (RLS)
+
+PostgreSQL RLS is used for customer/project scoped access.
+
+Implementation summary:
+
+- App sets per-session DB context (`app.user_id`, `app.role`)
+- PostgreSQL policies evaluate access using helper SQL functions
+- Project-scoped runtime tables inherit visibility via `project_id`
+
+This applies to core runtime tables including:
+
+- `qlik_apps`
+- `lineage_nodes`
+- `lineage_edges`
+- `qlik_spaces`
+- `qlik_data_connections`
+- `qlik_app_usage`
+- `qlik_app_scripts`
+
+## Key API Areas (Current)
+
+### Runtime/UI reads (DB-backed)
+
+- `GET /api/dashboard/stats`
+- `GET /api/inventory`
+- `GET /api/apps`
+- `GET /api/spaces`
+- `GET /api/data-connections`
+- `GET /api/graph/all`
+- `GET /api/graph/app/{app_id}`
+- `GET /api/graph/node/{node_id}`
+- `GET /api/app/{app_id}/usage`
+- `GET /api/app/{app_id}/script`
+
+### Theme generator
+
+- `POST /api/themes/build` (authenticated production ZIP download with `theme.json` + `.qext`)
+- `POST /api/themes/upload` (authenticated stub, returns `501`)
+
+### Fetch jobs
+
+- `GET /api/fetch/status`
+- `GET /api/fetch/jobs`
+- `GET /api/fetch/jobs/{job_id}`
+- `GET /api/fetch/jobs/{job_id}/logs`
+- `POST /api/fetch/jobs`
+
+## Branding
+
+- Default logo asset: `frontend/assets/logo.png`
+- Runtime URL path in frontend: `/assets/logo.png`
+- CI can replace this file before image build to apply tenant/project branding.
 
 ## Development
 
-### Run Migrations Manually
+### Useful Docker commands
+
+Start / rebuild:
+
 ```bash
-cd backend
-alembic upgrade head
+docker compose up --build
 ```
 
-### Seed Database
+Restart backend after `.env` changes:
+
 ```bash
-cd backend
-python -m scripts.seed_db
+docker compose up -d --force-recreate backend
 ```
 
-### View Logs
+Logs:
+
 ```bash
 docker compose logs -f backend
 docker compose logs -f frontend
 docker compose logs -f db
 ```
 
-### Stop Everything
+Stop:
+
 ```bash
 docker compose down
 ```
 
+### Manual migrations (if needed)
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+### Upgrade Notes (after pulling changes)
+
+Use this sequence after code/config changes to avoid testing stale containers:
+
+1. Check local changes (`git status`) and keep/commit what you want to preserve.
+2. Rebuild and restart the stack:
+```bash
+docker compose down
+docker compose up --build
+```
+3. If you changed only `.env`, recreating the backend is usually enough:
+```bash
+docker compose up -d --force-recreate backend
+```
+4. Verify backend migrations completed in logs:
+```bash
+docker compose logs -f backend
+```
+5. Start a new fetch job from the UI if runtime data is empty (DB-backed runtime reads do not depend on old local artifacts).
+
 ## Security Notes
 
-- `.env` is in `.gitignore` — never commit secrets
-- JWT_SECRET should be a strong random value in production
-- Passwords hashed with bcrypt (cost factor 12 by default)
-- Non-root users in all containers
-- CORS configured for frontend origin
-- Environment variables for all configuration
-
-## Next Steps / Roadmap
-
-- [ ] Admin UI for Qlik credential management (stored encrypted in DB)
-- [ ] Refresh token support + token revocation
-- [ ] Rate limiting on auth endpoints
-- [ ] PostgreSQL schema for lineage data (apps, spaces, connections)
-- [ ] Convert fetchers to write to DB instead of JSON
-- [ ] Complete API documentation (Swagger/OpenAPI)
-- [ ] Frontend pages for lineage visualization
-- [ ] Tests & CI/CD
-
+- `.env` is ignored by git; do not commit secrets
+- `JWT_SECRET` should be a strong random value
+- `CREDENTIALS_AES256_GCM_KEY_B64` is required before creating customers
+- Changing the AES key later breaks decryption of existing stored credentials
+- Use non-production/sanitized data in local development and agent sessions
 
 ## Troubleshooting
 
-**"Docker connection refused"**: Ensure Docker Desktop is running (Windows) or docker daemon is started
+**"missing encryption key env var: CREDENTIALS_AES256_GCM_KEY_B64"**
 
-**"Port 4001 already in use"**: Change port in `docker-compose.yml` frontend service
+- Add `CREDENTIALS_AES256_GCM_KEY_B64` and `CREDENTIALS_AES256_GCM_KEY_ID` to `.env`
+- Recreate backend container:
 
-**"Database connection failed"**: Check `DATABASE_URL` in `.env` matches postgres service credentials
-
-**"Login fails"**: Ensure migrations ran (check logs: `docker compose logs backend`)
-
----
-
-For detailed architecture discussions and implementation questions, see requirements section below.
-# Lineage Explorer (Local-First)
-
-This repository is intentionally reduced to:
-- `backend/`
-- `frontend/`
-- `output/`
-
-`./output` is the single source of truth for generated lineage artifacts.
-
-## Run (Dev)
-
-1. Backend (port `8000`)
-
-```powershell
-cd backend
-python -m venv .venv
-# activate .venv
-python -m pip install -r requirements.txt
-
-# backend-only Qlik credentials (required for fetch jobs)
-$env:QLIK_TENANT_URL = "https://<tenant>.<region>.qlikcloud.com"
-$env:QLIK_API_KEY = "<qlik_api_key>"
-
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```bash
+docker compose up -d --force-recreate backend
 ```
 
-2. Frontend (port `5173`)
+**Customer creation still fails after setting `.env`**
 
-```powershell
-cd frontend
-npm install
-# optional override (default is http://127.0.0.1:8000)
-$env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
-npm run dev
+- Check backend container env values:
+
+```bash
+docker compose exec backend sh -lc "env | grep CREDENTIALS_AES256_GCM"
 ```
 
-## Run (Dev - CMD)
+**No data visible in dashboard/graph after startup**
 
-Use two separate CMD terminals.
+- Start a new fetch job from the UI (data is DB-backed and may be empty initially)
+- Check fetch job logs in UI or `docker compose logs -f backend`
 
-1. Backend (CMD Terminal 1, port `8000`)
+**Ports already in use**
 
-```cmd
-cd C:\Users\MauriceOkoye\Desktop\Entwicklung\backend
-python -m venv .venv
-.venv\Scripts\activate.bat
-python -m pip install -r requirements.txt
+- Change port mappings in `docker-compose.yml` (`frontend`, `backend`, `pgadmin`)
 
-set QLIK_TENANT_URL=https://<tenant>.<region>.qlikcloud.com
-set QLIK_API_KEY=<qlik_api_key>
+## Documentation
 
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
+Project docs are split between root status docs and `docs/`:
 
-2. Frontend (CMD Terminal 2, port `5173`)
+- `docs/INDEX.md`
+- `docs/CONTEXT.md`
+- `docs/RELEASE_NOTES/README.md`
+- `REQUIREMENTS.md`
+- `PROJECT_STATUS.md`
+- `FIXES_APPLIED.md`
 
-```cmd
-cd C:\Users\MauriceOkoye\Desktop\Entwicklung\frontend
-npm install
-set VITE_API_BASE_URL=http://127.0.0.1:8000
-npm run dev
-```
+## Roadmap (remaining work)
 
-## API Expectations
-
-Frontend uses backend HTTP endpoints only:
-- `GET /api/apps`
-- `GET /api/spaces`
-- `GET /api/data-connections`
-- `GET /api/graph/app/{appId}?depth=...`
-- `GET /api/graph/node/{nodeId}?direction=...&depth=...`
-- `GET /api/graph/all`
-- `GET /api/app/{appId}/usage`
-- `GET /api/app/{appId}/script`
-- `GET /api/fetch/status`
-- `GET /api/fetch/jobs`
-- `GET /api/fetch/jobs/{jobId}`
-- `POST /api/fetch/jobs`
-
-No frontend token handling. No direct calls to Qlik Cloud from the frontend.
-
-## Frontend Tabs
-
-- `Datenfluss`: existing lineage explorer graph view.
-- `Datenabzug`: starts backend fetch jobs in the correct order (spaces -> apps -> data-connections -> lineage -> app-edges -> usage), supports optional cleanup of old artifacts, and shows job status.
+- Improve fetch-job progress visibility/details in the UI
+- Add/expand automated tests for DB-only runtime + fetch flows
+- Harden auth/session features (refresh token lifecycle, rate limiting)
+- Keep DB-first runtime behavior stable across modules

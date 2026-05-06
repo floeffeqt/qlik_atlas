@@ -1,0 +1,2168 @@
+<!doctype html>
+<html lang="en" style="background:#1a1a2e;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Hub – Lineage Explorer</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --accent: #667eea;
+      --accent2: #764ba2;
+      --text: #fff;
+      --text-muted: rgba(255,255,255,0.5);
+      --text-dim: rgba(255,255,255,0.3);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); }
+
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
+    .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
+    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; overflow: hidden; }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; min-width: 0; }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-select { height: 28px; min-width: 160px; max-width: 260px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
+    .nav-spacer { flex: 1; }
+    .nav-user { display: flex; align-items: center; gap: 0.75rem; }
+    .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
+    .btn-sm { padding: 0.4rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
+    .btn-sm:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(255,255,255,0.2); }
+    .app-picker-bar { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.75rem; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 1rem; }
+    .app-picker-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+    .app-picker-select { flex: 1; min-width: 240px; max-width: 480px; padding: 0.55rem 0.8rem; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-sm); color: #fff; font-size: 0.9rem; outline: none; font-family: inherit; }
+    .app-picker-select:focus { border-color: var(--accent); }
+    .app-picker-select option { background: #1a1a2e; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-action { background: rgba(102,126,234,0.15); border: 1px solid rgba(102,126,234,0.3); color: #a5b4fc; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-action:hover { background: rgba(102,126,234,0.3); }
+    .btn-danger { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-danger:hover { background: rgba(239,68,68,0.3); }
+    .btn-refresh { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-refresh:hover { background: rgba(34,197,94,0.3); }
+
+    .badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem; border-radius: 100px; font-size: 0.72rem; font-weight: 600; }
+    .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .badge-new { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-existing { background: rgba(148,163,184,0.12); color: #94a3b8; }
+    .badge-conflict { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .badge-in_sync { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-unmapped { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+    .badge-error { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-running { background: rgba(102,126,234,0.15); color: #a5b4fc; }
+
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
+    .section-title { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+
+    .sync-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .sync-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    .sync-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+    .sync-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .sync-table .actions { display: flex; gap: 0.3rem; }
+
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-dim); }
+    .empty-icon { font-size: 2rem; opacity: 0.3; margin-bottom: 0.75rem; }
+
+    .alert { border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; }
+    .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
+
+    /* Modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 520px; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.5rem; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .modal-close:hover { color: var(--text); }
+    .form-group { margin-bottom: 1.1rem; }
+    label { display: block; color: rgba(255,255,255,0.7); font-size: 0.82rem; font-weight: 500; margin-bottom: 0.45rem; }
+    input[type="text"], select { width: 100%; padding: 0.7rem 0.9rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; font-size: 0.9rem; outline: none; transition: border-color 0.2s; font-family: inherit; }
+    input::placeholder { color: rgba(255,255,255,0.3); }
+    input:focus, select:focus { border-color: var(--accent); }
+    select option { background: #1a1a2e; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+    .btn-modal-cancel { padding: 0.6rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.875rem; cursor: pointer; }
+    .btn-modal-cancel:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-modal-save { padding: 0.6rem 1.3rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-modal-save:hover { opacity: 0.9; }
+    .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* App header */
+    .hub-header { display: flex; align-items: flex-start; gap: 1.25rem; margin-bottom: 2rem; }
+    .hub-icon { width: 52px; height: 52px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+    .hub-title { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+    .hub-subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.3rem; font-family: 'Courier New', monospace; }
+    .hub-back { color: var(--accent); font-size: 0.82rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; margin-bottom: 0.75rem; }
+    .hub-back:hover { text-decoration: underline; }
+
+    /* Overview stat cards */
+    .overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .ov-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem 1.25rem; }
+    .ov-card .ov-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.4rem; }
+    .ov-card .ov-val { font-size: 1rem; font-weight: 600; word-break: break-all; }
+    .ov-card .ov-val.mono { font-family: 'Courier New', monospace; font-size: 0.85rem; }
+
+    /* Quick actions */
+    .quickactions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .qa-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem 1.1rem; cursor: pointer; transition: border-color 0.15s, background 0.15s; text-align: center; min-width: 120px; }
+    .qa-card:hover { border-color: var(--accent); background: rgba(102,126,234,0.08); }
+    .qa-card .qa-icon { font-size: 1.4rem; margin-bottom: 0.35rem; }
+    .qa-card .qa-label { font-size: 0.78rem; color: var(--text-muted); }
+
+    /* Script viewer */
+    .script-card { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.5rem; overflow: hidden; background: rgba(255,255,255,0.02); }
+    .script-card-header { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; cursor: pointer; user-select: none; transition: background 0.15s; }
+    .script-card-header:hover { background: rgba(255,255,255,0.04); }
+    .script-card-header.open { background: rgba(102,126,234,0.08); border-bottom: 1px solid var(--border); }
+    .sc-chevron { font-size: 0.65rem; color: var(--text-muted); transition: transform 0.2s; flex-shrink: 0; }
+    .sc-chevron.open { transform: rotate(90deg); }
+    .sc-name { font-weight: 600; font-size: 0.87rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sc-meta { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; padding-right: 0.5rem; }
+    .sc-toolbar { display: flex; gap: 0.4rem; flex-shrink: 0; }
+    .sc-body { display: none; }
+    .sc-body.open { display: block; }
+    .sc-pre { margin: 0; padding: 0.75rem 0; overflow-x: auto; font-family: 'Cascadia Code','Fira Code','Courier New',monospace; font-size: 0.78rem; line-height: 1.6; max-height: 520px; overflow-y: auto; background: rgba(10,13,30,0.5); }
+    .sv-line { display: flex; }
+    .sv-line:hover { background: rgba(255,255,255,0.03); }
+    .sv-ln { display: inline-block; min-width: 3rem; padding: 0 0.75rem; text-align: right; color: rgba(255,255,255,0.2); user-select: none; border-right: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+    .sv-lc { display: inline-block; padding: 0 1rem; white-space: pre; }
+    .ql-kw  { color: #7c9fef; font-weight: 600; }
+    .ql-str { color: #98c379; }
+    .ql-cmt { color: #5c6785; font-style: italic; }
+    .ql-var { color: #e5c07b; }
+    .ql-fn  { color: #c678dd; }
+    .ql-fld { color: #56b6c2; }
+    .ql-num { color: #d19a66; }
+    .sv-tab-section { display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem 0 0; padding: 0.25rem 0.75rem; background: rgba(124,159,239,0.10); border-left: 3px solid #7c9fef; color: #7c9fef; font-weight: 600; font-size: 0.82rem; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; user-select: none; }
+    .sv-tab-section::before { content: '\25BE'; display: inline-block; margin-right: 0.35rem; transition: transform 0.15s ease; }
+    .sv-tab-section.sv-closed::before { transform: rotate(-90deg); }
+    .sv-section-body.sv-collapsed { display: none; }
+
+    /* Master Items */
+    .mi-app-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .mi-app-row select { flex: 1; min-width: 200px; max-width: 380px; padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; font-size: 0.875rem; outline: none; }
+    .mi-app-row select:focus { border-color: var(--accent); }
+    .mi-app-row select option { background: #1a1a2e; }
+    .mi-result-box { margin-top: 1rem; padding: 0.9rem 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--radius-sm); }
+    .mi-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.75rem; }
+    .mi-type-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 0.6rem; text-align: center; }
+    .mi-type-card .val { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+    .mi-type-card .lbl { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .mi-diff-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.75rem; }
+    .mi-diff-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .mi-diff-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .mi-diff-table tr:last-child td { border-bottom: none; }
+    .mi-opts { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: 0.75rem; align-items: flex-start; }
+    .mi-sel-group { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.4rem; overflow: hidden; }
+    .mi-sel-group-hdr { display: flex; align-items: center; gap: 0.45rem; padding: 0.55rem 0.75rem; cursor: pointer; background: rgba(255,255,255,0.02); user-select: none; flex-wrap: wrap; }
+    .mi-sel-group-hdr:hover { background: rgba(255,255,255,0.04); }
+    .mi-sel-group-hdr .msg-title { font-weight: 600; font-size: 0.83rem; flex: 1; min-width: 80px; }
+    .mi-sel-group-body { display: none; padding: 0.55rem 0.85rem; border-top: 1px solid var(--border); max-height: 260px; overflow-y: auto; }
+    .mi-sel-group-body.open { display: block; }
+    .mi-sel-status-hdr { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; margin: 0.5rem 0 0.3rem; }
+    .mi-sel-status-hdr:first-child { margin-top: 0; }
+    .mi-sel-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.18rem 0; font-size: 0.81rem; }
+    .mi-sel-item label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+    .mi-sel-conflict-sub { font-size: 0.71rem; color: var(--text-dim); margin-left: 1.35rem; margin-top: -0.1rem; }
+    .mi-opts label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: rgba(255,255,255,0.75); cursor: pointer; font-weight: normal; }
+    .mi-opts input[type=checkbox], .mi-opts input[type=radio] { width: auto; padding: 0; cursor: pointer; accent-color: var(--accent); }
+    .mi-import-result table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .mi-import-result th { text-align: left; color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+    .mi-import-result td { padding: 0.4rem 0.5rem; }
+    .mi-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(102,126,234,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
+    .mi-extra-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 0.2rem 0.65rem; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .mi-extra-chip:hover { border-color: var(--accent); background: rgba(102,126,234,0.1); }
+    .mi-extra-chip input { cursor: pointer; accent-color: var(--accent); width: auto; padding: 0; }
+    .mi-multi-app-block { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.4rem; overflow: hidden; }
+    .mi-multi-app-hdr { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.7rem; background: rgba(255,255,255,0.04); cursor: pointer; font-size: 0.82rem; font-weight: 600; gap: 0.75rem; }
+    .mi-multi-app-hdr:hover { background: rgba(255,255,255,0.07); }
+    .mi-multi-badges { display: flex; gap: 0.5rem; font-size: 0.75rem; font-weight: 400; }
+    .mi-multi-app-body { display: none; padding: 0.5rem 0.5rem 0.3rem; }
+    .mi-multi-app-body.open { display: block; }
+    .source-app-tag { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.9rem; background: rgba(102,126,234,0.12); border: 1px solid rgba(102,126,234,0.3); border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; color: #a5b4fc; }
+
+    /* Fetch */
+    .fetch-steps { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+    .step-chip { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 0.2rem 0.65rem; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .step-chip:hover { border-color: var(--accent); background: rgba(102,126,234,0.1); }
+    .step-chip input { cursor: pointer; accent-color: var(--accent); width: auto; padding: 0; }
+    .fetch-progress-bar-wrap { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; margin-top: 0.5rem; }
+    .fetch-progress-bar { height: 100%; background: linear-gradient(90deg,#667eea,#764ba2); border-radius: 3px; width: 0%; transition: width 0.4s ease; }
+    .job-status-queued   { color: #94a3b8; }
+    .job-status-running  { color: #a5b4fc; }
+    .job-status-completed { color: #4ade80; }
+    .job-status-failed   { color: #f87171; }
+
+    /* Lineage tab */
+    .lineage-card { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 2rem; text-align: center; gap: 1rem; }
+    .lineage-card .lc-icon { font-size: 3rem; opacity: 0.6; }
+    .lineage-card a { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: linear-gradient(135deg,var(--accent),var(--accent2)); color: #fff; text-decoration: none; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; transition: opacity 0.2s; }
+    .lineage-card a:hover { opacity: 0.9; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Tasks / Logs / README tabs ── */
+    --pri-critical:#E24B4A; --pri-high:#EF9F27; --pri-medium:#378ADD; --pri-low:#B4B2A9;
+    .badge { display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:100px;font-size:0.68rem;font-weight:600;flex-shrink:0; }
+    .badge-open { background:rgba(55,138,221,0.15);color:#60a5fa; }
+    .badge-in_progress { background:rgba(245,158,11,0.15);color:#fbbf24; }
+    .badge-review { background:rgba(168,85,247,0.15);color:#c084fc; }
+    .badge-done { background:rgba(34,197,94,0.15);color:#4ade80; }
+    .badge-green { background:rgba(34,197,94,0.15);color:#4ade80; }
+    .badge-red { background:rgba(239,68,68,0.15);color:#f87171; }
+    .badge-gray { background:rgba(255,255,255,0.08);color:var(--text-muted); }
+    .tag-pill { display:inline-flex;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.65rem;font-weight:600; }
+    .avatar { width:24px;height:24px;border-radius:50%;background:rgba(102,126,234,0.25);color:#a5b4fc;display:inline-flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:700;flex-shrink:0; }
+    .task-row { display:flex;align-items:center;gap:0.6rem;padding:0.6rem 0;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background 0.1s; }
+    .task-row:hover { background:rgba(255,255,255,0.03); }
+    .task-row:last-child { border-bottom:none; }
+    .task-pri { width:3px;height:28px;border-radius:2px;flex-shrink:0; }
+    .task-pri.critical { background:var(--pri-critical,#E24B4A); }
+    .task-pri.high { background:var(--pri-high,#EF9F27); }
+    .task-pri.medium { background:var(--pri-medium,#378ADD); }
+    .task-pri.low { background:var(--pri-low,#B4B2A9); }
+    .task-body { flex:1;min-width:0; }
+    .task-title { font-size:0.84rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .task-meta { font-size:0.72rem;color:var(--text-muted);display:flex;gap:0.5rem;margin-top:0.15rem;flex-wrap:wrap;align-items:center; }
+    .task-overdue { color:#ef4444; }
+    .filter-bar { display:flex;gap:0.4rem;margin-bottom:0.6rem;flex-wrap:wrap; }
+    .filter-bar select { height:28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:6px;padding:0 0.5rem;font-size:0.72rem;outline:none; }
+    .filter-bar select option { background:#1a1a2e; }
+    .doc-row { display:flex;align-items:flex-start;gap:0.55rem;padding:0.55rem 0;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background 0.1s; }
+    .doc-row:hover { background:rgba(255,255,255,0.03); }
+    .doc-row:last-child { border-bottom:none; }
+    .doc-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:0.35rem; }
+    .doc-dot.change { background:#60a5fa; }
+    .doc-dot.decision { background:#4ade80; }
+    .doc-dot.incident { background:#f87171; }
+    .doc-dot.note { background:rgba(255,255,255,0.35); }
+    .doc-body { flex:1;min-width:0; }
+    .doc-title { font-size:0.84rem;font-weight:500; }
+    .doc-meta { font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem; }
+    .doc-group-header { font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-dim);padding:0.6rem 0 0.3rem;border-bottom:1px solid rgba(255,255,255,0.05); }
+    .readme-banner { background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-sm);padding:0.75rem 1rem;font-size:0.82rem;color:#fbbf24;margin-bottom:1rem; }
+    .readme-status { font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem; }
+    .ds-section { margin-bottom:1rem; }
+    .ds-header { display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem; }
+    .ds-title { font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted); }
+    .ds-hint { font-size:0.7rem;color:var(--text-dim); }
+    .ds-chips { display:flex;flex-wrap:wrap;gap:0.35rem; }
+    .ds-chip { display:inline-flex;align-items:center;gap:0.3rem;padding:0.28rem 0.6rem;border-radius:100px;font-size:0.72rem;font-weight:500;cursor:pointer;transition:all 0.15s;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:var(--text-muted);user-select:none; }
+    .ds-chip:hover { border-color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.08); }
+    .ds-chip.selected { border-color:rgba(102,126,234,0.5);background:rgba(102,126,234,0.12);color:#a5b4fc; }
+    .ds-chip .ds-icon { font-size:0.65rem;opacity:0.6; }
+    .ds-chip.selected .ds-icon { opacity:1; }
+    .ds-chip .ds-check { font-size:0.6rem;display:none; }
+    .ds-chip.selected .ds-check { display:inline; }
+    .ds-insert-btn { display:inline-flex;align-items:center;gap:0.3rem;padding:0.35rem 0.85rem;margin-top:0.5rem;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:var(--radius-sm);font-size:0.72rem;font-weight:600;cursor:pointer;transition:opacity 0.15s; }
+    .ds-insert-btn:hover { opacity:0.9; }
+    .ds-insert-btn:disabled { opacity:0.4;cursor:not-allowed; }
+    .task-panel { position:fixed;top:0;right:0;width:420px;max-width:90vw;height:100vh;background:rgba(12,18,45,0.97);border-left:1px solid var(--border);backdrop-filter:blur(20px);z-index:150;transform:translateX(100%);transition:transform 0.25s ease;padding:1.5rem;overflow-y:auto; }
+    .task-panel.open { transform:translateX(0); }
+    .task-panel-close { position:absolute;top:0.75rem;right:0.75rem;background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer; }
+    .task-panel-close:hover { color:var(--text); }
+    .panel-field { margin-bottom:0.75rem; }
+    .panel-label { font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:0.2rem; }
+    .panel-value { font-size:0.85rem; }
+    .panel-subtasks { margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border); }
+    .panel-subtask { font-size:0.8rem;padding:0.3rem 0;display:flex;align-items:center;gap:0.4rem; }
+    .doc-sidebar { position:fixed;top:0;right:0;width:420px;max-width:90vw;height:100vh;background:rgba(12,18,45,0.97);border-left:1px solid var(--border);backdrop-filter:blur(20px);z-index:150;transform:translateX(100%);transition:transform 0.25s ease;padding:1.5rem;overflow-y:auto; }
+    .doc-sidebar.open { transform:translateX(0); }
+    .doc-sidebar-close { position:absolute;top:0.75rem;right:0.75rem;background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer; }
+    .doc-sidebar-type { font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:0.3rem; }
+    .doc-sidebar-title { font-size:1.1rem;font-weight:700;margin-bottom:0.4rem; }
+    .doc-sidebar-meta { font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem; }
+    .doc-sidebar-content { font-size:0.85rem;line-height:1.65;color:rgba(255,255,255,0.85); }
+    .tag-select-wrap { display:flex;flex-wrap:wrap;gap:0.3rem;padding:0.5rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;min-height:38px;align-items:center; }
+    .tag-add-btn { font-size:0.72rem;color:var(--accent);cursor:pointer;padding:0.15rem 0.4rem;border:1px dashed rgba(102,126,234,0.4);border-radius:4px;background:none; }
+    .tag-add-btn:hover { border-color:var(--accent); }
+    .tag-dropdown { position:absolute;background:rgba(15,20,50,0.97);border:1px solid var(--border);border-radius:8px;padding:0.4rem;max-height:180px;overflow-y:auto;z-index:10;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+    .tag-dropdown-item { display:flex;align-items:center;gap:0.4rem;padding:0.35rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.78rem; }
+    .tag-dropdown-item:hover { background:rgba(255,255,255,0.08); }
+    .tag-create-inline { display:flex;gap:0.35rem;align-items:center;margin-top:0.4rem; }
+    .tag-create-inline input[type="text"] { width:120px;padding:0.3rem 0.5rem;font-size:0.75rem; }
+    .tag-create-inline input[type="color"] { width:30px;height:28px;padding:0;border:none;background:none;cursor:pointer; }
+
+    #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(10px); background: rgba(30,40,70,0.95); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-size: 0.875rem; color: var(--text); backdrop-filter: blur(10px); opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; max-width: 320px; z-index: 500; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>Atlas</a>
+  <div class="nav-links">
+    <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/">Dashboard</a>
+    <a class="nav-link" href="/analytics.html">Analytics</a>
+    <a class="nav-link" href="/lineage.html">Lineage</a>
+    <a class="nav-link" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link active" href="/app-hub.html">App Hub</a>
+    <a class="nav-link" href="/theme-builder.html">Theme</a>
+  </div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Wird geladen …</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Wird geladen …</option></select>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-user">
+    <span class="nav-user-email" id="userEmail"></span>
+    <button class="btn-sm" id="logoutBtn">Sign out</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- App picker -->
+  <div class="app-picker-bar">
+    <span class="app-picker-label">&#x1F4E6; App</span>
+    <select id="hubAppSelect" class="app-picker-select">
+      <option value="">— Projekt ausw&auml;hlen —</option>
+    </select>
+    <div class="hub-header" id="hubHeader" style="display:none;flex:1;min-width:0;align-items:center;gap:0.75rem;margin:0;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:1.1rem;font-weight:700;line-height:1.2;" id="hubAppName"></div>
+        <div style="font-size:0.78rem;color:var(--text-muted);font-family:monospace;" id="hubAppIdDisplay"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No-app placeholder -->
+  <div id="hubNoApp" class="empty-state" style="padding:4rem 2rem;">
+    <div class="empty-icon">&#x1F4E6;</div>
+    <div>Bitte erst ein Projekt und eine App ausw&auml;hlen.</div>
+  </div>
+
+  <!-- Hub content (hidden until app selected) -->
+  <div id="hubContent" style="display:none;">
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-hub-tab="overview">&#x1F4CA; &Uuml;bersicht</button>
+    <button class="tab-btn" data-hub-tab="script">&#x1F4C4; Script</button>
+    <button class="tab-btn" data-hub-tab="masteritems">&#x1F3AF; Master Items</button>
+    <button class="tab-btn" data-hub-tab="fetch">&#x23F0; Fetch &amp; Zeitpl&auml;ne</button>
+    <button class="tab-btn" data-hub-tab="lineage">&#x1F578;&#xFE0F; Lineage</button>
+    <button class="tab-btn" data-hub-tab="tasks">&#x2705; Tasks</button>
+    <button class="tab-btn" data-hub-tab="logs">&#x1F4DD; Logs</button>
+    <button class="tab-btn" data-hub-tab="readme">&#x1F4D6; README</button>
+  </div>
+
+  <!-- ══ TAB: Overview ══ -->
+  <div class="tab-content active" id="hub-tab-overview">
+    <div class="overview-grid" id="ovGrid">
+      <div class="ov-card"><div class="ov-label">App Name</div><div class="ov-val" id="ovName">&mdash;</div></div>
+      <div class="ov-card"><div class="ov-label">App ID</div><div class="ov-val mono" id="ovId">&mdash;</div></div>
+      <div class="ov-card"><div class="ov-label">Projekt-ID</div><div class="ov-val mono" id="ovProject">&mdash;</div></div>
+      <div class="ov-card"><div class="ov-label">Script zuletzt abgezogen</div><div class="ov-val" id="ovScriptFetched">&mdash;</div></div>
+    </div>
+    <div style="margin-bottom:1rem;font-size:0.85rem;font-weight:600;color:var(--text-muted);">Schnellzugriff</div>
+    <div class="quickactions">
+      <div class="qa-card" onclick="switchHubTab('script')"><div class="qa-icon">&#x1F4C4;</div><div class="qa-label">Script anzeigen</div></div>
+      <div class="qa-card" onclick="switchHubTab('masteritems')"><div class="qa-icon">&#x1F3AF;</div><div class="qa-label">Master Items</div></div>
+      <div class="qa-card" onclick="switchHubTab('fetch')"><div class="qa-icon">&#x23F0;</div><div class="qa-label">Fetch starten</div></div>
+      <div class="qa-card" onclick="switchHubTab('lineage')"><div class="qa-icon">&#x1F578;&#xFE0F;</div><div class="qa-label">Lineage &ouml;ffnen</div></div>
+      <div class="qa-card" onclick="switchHubTab('tasks')"><div class="qa-icon">&#x2705;</div><div class="qa-label">Tasks</div></div>
+      <div class="qa-card" onclick="switchHubTab('logs')"><div class="qa-icon">&#x1F4DD;</div><div class="qa-label">Logs</div></div>
+      <div class="qa-card" onclick="switchHubTab('readme')"><div class="qa-icon">&#x1F4D6;</div><div class="qa-label">README</div></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: Script ══ -->
+  <div class="tab-content" id="hub-tab-script">
+    <div class="section">
+      <div class="section-title" style="justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+        <span>&#x1F4C4; Load Script</span>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <input id="scriptSearchInput" type="text" placeholder="Suchen&hellip;" style="width:180px;padding:0.35rem 0.7rem;background:rgba(255,255,255,0.07);border:1px solid var(--border);border-radius:var(--radius-sm);color:#fff;font-size:0.82rem;outline:none;" />
+          <button class="btn-action" id="btnExpandAll">Alle &ouml;ffnen</button>
+          <button class="btn-action" id="btnCollapseAll">Alle schlie&szlig;en</button>
+          <button class="btn-refresh" id="btnReloadScript">&#x21BB; Reload</button>
+        </div>
+      </div>
+      <div id="scriptWrap">
+        <div class="empty-state"><div class="empty-icon">&#x1F4C4;</div><div>Script wird geladen&hellip;</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: Master Items ══ -->
+  <div class="tab-content" id="hub-tab-masteritems">
+
+    <!-- Schritt 1: Export -->
+    <div class="section">
+      <div class="section-title">1 &mdash; Master Items exportieren</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">Liest alle Master Dimensions, Measures und Visualizations aus dieser App aus.</p>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <div class="source-app-tag">&#x1F4E6; <span id="miSourceLabel">Diese App</span></div>
+        <button class="btn-primary" id="miExportBtn">Exportieren</button>
+      </div>
+      <div id="miExportResult" style="display:none;" class="mi-result-box">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;" id="miExportMeta"></div>
+        <div class="mi-type-grid">
+          <div class="mi-type-card"><div class="val" id="miExportDimCount">&ndash;</div><div class="lbl">Dimensions</div></div>
+          <div class="mi-type-card"><div class="val" id="miExportMeasCount">&ndash;</div><div class="lbl">Measures</div></div>
+          <div class="mi-type-card"><div class="val" id="miExportVizCount">&ndash;</div><div class="lbl">Visualizations</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Properties detail -->
+    <div class="section" id="miDetailSection" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div class="section-title" style="margin:0;">Master Item Properties</div>
+        <input id="miDetailSearch" type="text" placeholder="Filtern&hellip;" style="width:200px;padding:0.35rem 0.7rem;background:rgba(255,255,255,0.07);border:1px solid var(--border);border-radius:var(--radius-sm);color:#fff;font-size:0.82rem;outline:none;" />
+      </div>
+      <div class="tab-bar" style="margin-bottom:1rem;">
+        <button class="tab-btn active" data-mi-tab="dimensions">Dimensionen <span class="badge badge-existing" id="miTabCountDim" style="margin-left:0.3rem">0</span></button>
+        <button class="tab-btn" data-mi-tab="measures">Kennzahlen <span class="badge badge-existing" id="miTabCountMeas" style="margin-left:0.3rem">0</span></button>
+        <button class="tab-btn" data-mi-tab="visualizations">Visualisierungen <span class="badge badge-existing" id="miTabCountViz" style="margin-left:0.3rem">0</span></button>
+      </div>
+      <div id="miDetailBody"></div>
+    </div>
+
+    <!-- Schritt 2: Diff -->
+    <div class="section" id="miDiffSection" style="opacity:0.4;pointer-events:none;">
+      <div class="section-title">2 &mdash; Ziel-App vergleichen</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">W&auml;hle eine App als prima&auml;res Ziel. Der Diff zeigt neue, &auml;quivalente und konfliktbehaftete Items.</p>
+      <div class="mi-app-row">
+        <select id="miTargetApp"><option value="">Ziel-App w&auml;hlen&hellip;</option></select>
+        <button class="btn-primary" id="miDiffBtn" disabled>Vergleichen</button>
+      </div>
+      <div id="miDiffResult" style="display:none;" class="mi-result-box">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;" id="miDiffMeta"></div>
+        <table class="mi-diff-table">
+          <thead><tr><th>Typ</th><th>Neu</th><th>Gleich</th><th>Konflikt</th></tr></thead>
+          <tbody id="miDiffBody"></tbody>
+        </table>
+      </div>
+      <!-- Item selection -->
+      <div id="miItemSelection" style="display:none;margin-top:1rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+          <span style="font-size:0.82rem;font-weight:600;">Items f&uuml;r Import ausw&auml;hlen</span>
+          <button class="btn-action" id="miSelAllBtn">Alle</button>
+          <button class="btn-action" id="miSelNoneBtn">Keine</button>
+        </div>
+        <div id="miSelectionBody"></div>
+      </div>
+    </div>
+
+    <!-- Schritt 3: Import -->
+    <div class="section" id="miImportSection" style="opacity:0.4;pointer-events:none;">
+      <div class="section-title">3 &mdash; Master Items importieren</div>
+      <!-- Options -->
+      <div class="mi-opts">
+        <label><input type="checkbox" id="miOptDim" checked> Dimensionen</label>
+        <label><input type="checkbox" id="miOptMeas" checked> Measures</label>
+        <label><input type="checkbox" id="miOptViz" checked> Visualizations</label>
+        <span style="width:1px;background:var(--border);align-self:stretch;"></span>
+        <label><input type="radio" name="miDup" value="skip" checked> Bei Duplikat: &Uuml;berspringen</label>
+        <label><input type="radio" name="miDup" value="overwrite"> &Uuml;berschreiben</label>
+        <span style="width:1px;background:var(--border);align-self:stretch;"></span>
+        <label><input type="checkbox" id="miOptDryRun"> Dry Run (keine &Auml;nderungen)</label>
+      </div>
+      <!-- Extra targets -->
+      <div style="margin-top:1rem;">
+        <div style="font-size:0.82rem;font-weight:600;margin-bottom:0.5rem;display:flex;align-items:center;gap:0.5rem;">
+          Weitere Ziel-Apps <span id="miExtraSelCount" style="font-size:0.75rem;color:var(--text-muted);font-weight:400;"></span>
+        </div>
+        <div id="miExtraTargets" style="display:flex;flex-wrap:wrap;gap:0.4rem;"></div>
+      </div>
+      <!-- Import button -->
+      <div style="margin-top:1.25rem;display:flex;align-items:center;gap:0.75rem;">
+        <button class="btn-primary" id="miImportBtn" disabled>&#x2191; Importieren</button>
+        <span class="mi-spinner" id="miImportSpinner" style="display:none;"></span>
+      </div>
+      <!-- Result -->
+      <div id="miImportResult" style="display:none;margin-top:1rem;" class="mi-import-result">
+        <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.5rem;" id="miImportResultHead"></div>
+        <div id="miImportBody"></div>
+        <div id="miImportErrors" style="margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+  </div><!-- end masteritems tab -->
+
+  <!-- ══ TAB: Fetch & Zeitpläne ══ -->
+  <div class="tab-content" id="hub-tab-fetch">
+
+    <!-- Trigger section -->
+    <div class="section">
+      <div class="section-title">&#x25B6; Fetch-Job starten</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;">Startet einen manuellen Fetch-Job f&uuml;r das aktuelle Projekt.</p>
+      <div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.4rem;font-weight:600;">Schritte ausw&auml;hlen:</div>
+        <div class="fetch-steps">
+          <label class="step-chip"><input type="checkbox" class="fStepCb" value="apps" checked> apps</label>
+          <label class="step-chip"><input type="checkbox" class="fStepCb" value="scripts" checked> scripts</label>
+          <label class="step-chip"><input type="checkbox" class="fStepCb" value="data-connections"> data-connections</label>
+          <label class="step-chip"><input type="checkbox" class="fStepCb" value="lineage"> lineage</label>
+          <label class="step-chip"><input type="checkbox" class="fStepCb" value="app-edges"> app-edges</label>
+          <label class="step-chip"><input type="checkbox" class="fStepCb" value="reloads"> reloads</label>
+          <label class="step-chip"><input type="checkbox" class="fStepCb" value="audits"> audits</label>
+          <label class="step-chip"><input type="checkbox" class="fStepCb" value="usage"> usage</label>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.75rem;">
+        <button class="btn-primary" id="btnStartFetch">&#x25B6; Fetch starten</button>
+        <span id="fetchJobStatus" style="font-size:0.82rem;color:var(--text-muted);"></span>
+      </div>
+      <div id="fetchProgressWrap" style="display:none;margin-top:0.75rem;">
+        <div style="font-size:0.8rem;color:#a5b4fc;margin-bottom:0.35rem;" id="fetchProgressLabel">Fetch-Job l&auml;uft&hellip;</div>
+        <div class="fetch-progress-bar-wrap"><div class="fetch-progress-bar" id="fetchProgressBar"></div></div>
+      </div>
+    </div>
+
+    <!-- Recent jobs -->
+    <div class="section">
+      <div class="section-title" style="justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+        <span>&#x1F4CB; Aktuelle Jobs</span>
+        <button class="btn-action" id="btnRefreshJobs">Aktualisieren</button>
+      </div>
+      <div id="fetchJobsWrap">
+        <div class="empty-state"><div class="empty-icon">&#x1F4CB;</div><div>Keine Jobs gefunden.</div></div>
+      </div>
+    </div>
+
+    <!-- Schedules -->
+    <div class="section">
+      <div class="section-title" style="justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+        <span>&#x23F0; Geplante Fetch-Jobs</span>
+        <button class="btn-primary" id="btnNewSchedule">+ Neuer Zeitplan</button>
+      </div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">Automatische Fetch-Jobs nach Cron-Zeitplan (UTC). Beispiele: <code style="font-size:0.78rem;color:#a5b4fc;">0 3 * * *</code> = t&auml;glich 03:00 Uhr &nbsp;|&nbsp; <code style="font-size:0.78rem;color:#a5b4fc;">0 */6 * * *</code> = alle 6 Stunden</p>
+      <div id="schedulesWrap">
+        <div class="empty-state"><div class="empty-icon">&#x23F0;</div><div>Noch keine Zeitpl&auml;ne konfiguriert.</div></div>
+      </div>
+    </div>
+
+  </div><!-- end fetch tab -->
+
+  <!-- ══ TAB: Lineage ══ -->
+  <div class="tab-content" id="hub-tab-lineage">
+    <div class="section">
+      <div class="lineage-card">
+        <div class="lc-icon">&#x1F578;&#xFE0F;</div>
+        <div style="font-size:1rem;font-weight:600;">Lineage Graph</div>
+        <div style="font-size:0.85rem;color:var(--text-muted);max-width:400px;">Zeigt den vollst&auml;ndigen Datenherkunftsgraph f&uuml;r diese App, inklusive aller Felder, Tabellen und abh&auml;ngigen Ressourcen.</div>
+        <a id="lineageLink" href="#" target="_blank">Lineage &ouml;ffnen &#x2197;</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: Tasks ══ -->
+  <div class="tab-content" id="hub-tab-tasks">
+    <div class="section">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <span class="section-title" style="font-size:0.82rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);">Tasks f&uuml;r diese App</span>
+        <button class="btn-action" id="btnNewHubTask">+ Task</button>
+      </div>
+      <div class="filter-bar">
+        <select id="hubTFilterStatus"><option value="">Alle Status</option><option value="open">Open</option><option value="in_progress">In Bearb.</option><option value="review">Review</option><option value="done">Done</option></select>
+        <select id="hubTFilterPriority"><option value="">Alle Prios</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+        <select id="hubTFilterTag"><option value="">Alle Tags</option></select>
+      </div>
+      <div id="hubAppTasksList"></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: Logs ══ -->
+  <div class="tab-content" id="hub-tab-logs">
+    <div class="section">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <span class="section-title" style="font-size:0.82rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);">Logs</span>
+        <button class="btn-action" id="btnNewHubDoc" style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;border:none;">+ Eintrag</button>
+      </div>
+      <div id="hubAppDocsList"></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: README ══ -->
+  <div class="tab-content" id="hub-tab-readme">
+    <div class="section">
+      <div class="readme-banner" id="hubReadmeBanner" style="display:none">Noch kein README vorhanden. Beginne jetzt mit der Dokumentation dieser App.</div>
+      <div class="readme-status" id="hubReadmeStatus"></div>
+      <div class="ds-section" id="hubDsSection" style="display:none">
+        <div class="ds-header">
+          <span class="ds-title">Datenquellen (Lineage)</span>
+          <span class="ds-hint">— Quellen an-/abw&auml;hlen, dann in README einf&uuml;gen</span>
+        </div>
+        <div class="ds-chips" id="hubDsChips"></div>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem">
+          <button class="ds-insert-btn" id="hubDsSelectAll">Alle ausw&auml;hlen</button>
+          <button class="ds-insert-btn" id="hubDsInsertBtn" disabled>In README einf&uuml;gen</button>
+        </div>
+      </div>
+      <div id="hubReadmeEditorContainer"></div>
+    </div>
+  </div>
+
+  </div><!-- end hubContent -->
+
+</main>
+
+<!-- Schedule Modal -->
+<div class="modal-backdrop" id="scheduleModal">
+  <div class="modal">
+    <button class="modal-close" id="scheduleModalClose">&times;</button>
+    <div class="modal-title" id="scheduleModalTitle">Neuer Zeitplan</div>
+    <div class="alert alert-error" id="scheduleError" style="display:none;"></div>
+    <form id="scheduleForm">
+      <input type="hidden" id="editingScheduleId" />
+      <div class="form-group">
+        <label>Bezeichnung (optional)</label>
+        <input type="text" id="sLabel" placeholder="z.B. N&auml;chtlicher Sync" />
+      </div>
+      <div class="form-group">
+        <label>Cron-Ausdruck (UTC)</label>
+        <input type="text" id="sCronExpr" placeholder="0 3 * * *" required />
+      </div>
+      <div class="form-group">
+        <label>Schritte</label>
+        <div class="fetch-steps">
+          <label class="step-chip"><input type="checkbox" class="sStepCb" value="apps" checked> apps</label>
+          <label class="step-chip"><input type="checkbox" class="sStepCb" value="scripts" checked> scripts</label>
+          <label class="step-chip"><input type="checkbox" class="sStepCb" value="data-connections"> data-connections</label>
+          <label class="step-chip"><input type="checkbox" class="sStepCb" value="lineage"> lineage</label>
+          <label class="step-chip"><input type="checkbox" class="sStepCb" value="app-edges"> app-edges</label>
+          <label class="step-chip"><input type="checkbox" class="sStepCb" value="reloads"> reloads</label>
+          <label class="step-chip"><input type="checkbox" class="sStepCb" value="audits"> audits</label>
+          <label class="step-chip"><input type="checkbox" class="sStepCb" value="usage"> usage</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:normal;">
+          <input type="checkbox" id="sIsActive" checked style="width:auto;padding:0;"> Aktiv
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="scheduleCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="scheduleSave">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Task Panel -->
+<div class="task-panel" id="hubTaskPanel">
+  <button class="task-panel-close" id="hubTaskPanelClose">&#x2715;</button>
+  <div id="hubTaskPanelContent"></div>
+</div>
+
+<!-- Doc Sidebar -->
+<div class="doc-sidebar" id="hubDocSidebar">
+  <button class="doc-sidebar-close" id="hubDocSidebarClose">&#x2715;</button>
+  <div class="doc-sidebar-type" id="hubSidebarType"></div>
+  <div class="doc-sidebar-title" id="hubSidebarTitle"></div>
+  <div class="doc-sidebar-meta" id="hubSidebarMeta"></div>
+  <div class="doc-sidebar-content" id="hubSidebarContent"></div>
+</div>
+
+<!-- Task Modal -->
+<div class="modal-backdrop" id="hubTaskModal">
+  <div class="modal">
+    <button class="modal-close" id="hubTaskModalClose">&#x2715;</button>
+    <div class="modal-title">Neuer Task</div>
+    <div class="alert alert-error" id="hubTaskError" style="display:none"></div>
+    <form id="hubTaskForm">
+      <div class="form-group"><label>Titel *</label><input type="text" id="hubTaskTitle" required placeholder="Task-Titel" /></div>
+      <div class="form-group"><label>Beschreibung</label><textarea id="hubTaskDesc" rows="3" placeholder="Was soll gemacht werden?"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Status</label><select id="hubTaskStatus"><option value="open">Open</option><option value="in_progress">In Bearb.</option><option value="review">Review</option><option value="done">Done</option></select></div>
+        <div class="form-group"><label>Priorit&auml;t</label><select id="hubTaskPriority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
+      </div>
+      <div class="form-group" style="position:relative">
+        <label>Tags</label>
+        <div class="tag-select-wrap" id="hubTaskTagsWrap"><button type="button" class="tag-add-btn" id="hubTaskTagAddBtn">+ Tag</button></div>
+        <div class="tag-dropdown" id="hubTaskTagDropdown" style="display:none"></div>
+        <div class="tag-create-inline" id="hubTaskTagCreate" style="display:none">
+          <input type="text" id="hubNewTagName" placeholder="Tag-Name" />
+          <input type="color" id="hubNewTagColor" value="#667eea" />
+          <button type="button" class="btn-sm" id="hubNewTagSave">OK</button>
+          <button type="button" class="btn-sm" id="hubNewTagCancel" style="color:var(--text-dim)">×</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Zuweisen an</label><select id="hubTaskAssignee"><option value="">—</option></select></div>
+        <div class="form-group"><label>F&auml;lligkeit</label><input type="date" id="hubTaskDueDate" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Gesch&auml;tzte Min.</label><input type="number" id="hubTaskMinutes" min="0" /></div>
+        <div class="form-group"><label>App-Link</label><input type="url" id="hubTaskAppLink" placeholder="https://..." /></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="hubTaskCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save">Task erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Doc Modal -->
+<div class="modal-backdrop" id="hubDocModal">
+  <div class="modal" style="max-width:720px">
+    <button class="modal-close" id="hubDocModalClose">&#x2715;</button>
+    <div class="modal-title">Neuer Log-Eintrag</div>
+    <div class="alert alert-error" id="hubDocError" style="display:none"></div>
+    <form id="hubDocForm">
+      <div class="form-row">
+        <div class="form-group"><label>Typ</label><select id="hubDocType"><option value="change">Change</option><option value="decision">Decision</option><option value="note" selected>Note</option><option value="incident">Incident</option></select></div>
+        <div class="form-group"><label>Datum</label><input type="date" id="hubDocDate" /></div>
+      </div>
+      <div class="form-group"><label>Inhalt</label><div id="hubDocEditorContainer"></div></div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="hubDocCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save">Erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/assets/atlas-shared.js"></script>
+<script src="/assets/markdownEditor.js"></script>
+<script src="/assets/smartCompose.js"></script>
+<script>
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail' });
+  window.AtlasShared.bindLogout('logoutBtn');
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function showToast(msg, dur) { window.AtlasShared.showToast(msg, dur, 'toast'); }
+  function apiFetch(path, opts) { return window.AtlasShared.apiFetch(path, opts); }
+
+  // ── Focus state ───────────────────────────────────────────────────────────
+  var _params = new URLSearchParams(window.location.search);
+  var _initialFocus = window.AtlasShared.readFocusState(window.location.search);
+  var focusState = { project: _initialFocus.project || _params.get('project_id') || '', customer: _initialFocus.customer || '' };
+  var projects = [];
+  var customers = [];
+
+  function projectCustomerId(p) { return window.AtlasShared.projectCustomerId(p); }
+  function applyFocusPersistence() { window.AtlasShared.persistFocusState(focusState); }
+
+  function syncCustomerFromProject() {
+    var m = {};
+    projects.forEach(function(p) { if (p && p.id !== undefined) m[String(p.id)] = p; });
+    window.AtlasShared.syncCustomerFromProject(focusState, m);
+  }
+
+  function syncFocusInUrl() {
+    var q = new URLSearchParams(window.location.search);
+    if (focusState.project) q.set('project_id', String(focusState.project)); else q.delete('project_id');
+    if (_hubAppId) q.set('app_id', _hubAppId); else q.delete('app_id');
+    history.replaceState(null, '', '/app-hub.html' + (q.toString() ? ('?' + q.toString()) : ''));
+  }
+
+  function renderFocusCustomerSelect() {
+    var sel = document.getElementById('navCustomerSelect');
+    if (!customers.length) { sel.innerHTML = '<option value="">Keine Kunden</option>'; sel.disabled = true; return; }
+    sel.disabled = false;
+    if (!focusState.customer || !customers.find(function(c) { return String(c.id) === String(focusState.customer); })) {
+      focusState.customer = String(customers[0].id);
+    }
+    sel.innerHTML = customers.map(function(c) {
+      return '<option value="' + escHtml(String(c.id)) + '"' + (String(c.id) === String(focusState.customer) ? ' selected' : '') + '>' + escHtml(c.name || ('Kunde ' + c.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.customer);
+  }
+
+  function renderFocusProjectSelect() {
+    var sel = document.getElementById('navProjectSelect');
+    var list = projects.filter(function(p) { return String(projectCustomerId(p)) === String(focusState.customer || ''); });
+    if (!list.length) {
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Projekte</option>';
+      focusState.project = '';
+      applyFocusPersistence();
+      onProjectChanged();
+      return;
+    }
+    sel.disabled = false;
+    if (!focusState.project || !list.find(function(p) { return String(p.id) === String(focusState.project); })) {
+      focusState.project = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(p) {
+      return '<option value="' + escHtml(String(p.id)) + '"' + (String(p.id) === String(focusState.project) ? ' selected' : '') + '>' + escHtml(p.name || ('Projekt ' + p.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.project);
+    applyFocusPersistence();
+    window.AtlasShared.updateNavProjectContext(focusState.project, focusState.customer, 'a.nav-link');
+    onProjectChanged();
+  }
+
+  document.getElementById('navCustomerSelect').addEventListener('change', function() {
+    focusState.customer = this.value;
+    focusState.project = '';
+    renderFocusProjectSelect();
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function() {
+    focusState.project = this.value;
+    applyFocusPersistence();
+    window.AtlasShared.updateNavProjectContext(focusState.project, focusState.customer, 'a.nav-link');
+    onProjectChanged();
+  });
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  var _hubApps = [];
+  var _hubAppId = _params.get('app_id') || '';
+  var _hubProjectId = focusState.project || '';
+  var _hubAppName = '';
+  var _miExportData = null;
+  var _miDiffData = null;
+  var _miDetailType = 'dimensions';
+  var _miDetailOpenSet = new Set();
+  var _fetchEvtSrc = null;
+  var _editingScheduleId = null;
+  var _sectionCounter = 0;
+
+  // Tasks / Logs / README state
+  var _hubAllTags = [], _hubAllUsers = [], _hubSelectedTaskTags = [];
+  var _hubAllProjectApps = [], _hubDocCache = {};
+  var _hubReadmeEditor = null, _hubReadmeId = null, _hubReadmeAutoSaveTimer = null;
+  var _hubDsNodes = [], _hubDsSelected = {};
+  var _hubTasksLoaded = false, _hubLogsLoaded = false, _hubReadmeLoaded = false;
+  var _hubDocEditor = null;
+
+  function _timeAgo(d) { if (!d) return ''; var diff = Date.now() - new Date(d).getTime(); var m = Math.floor(diff / 60000); if (m < 1) return 'gerade eben'; if (m < 60) return 'vor ' + m + ' Min.'; var h = Math.floor(m / 60); if (h < 24) return 'vor ' + h + ' Std.'; var days = Math.floor(h / 24); if (days === 1) return 'gestern'; return 'vor ' + Math.floor(days < 7 ? days : days < 30 ? days / 7 : days / 30) + (days < 7 ? ' Tagen' : days < 30 ? ' Wochen' : ' Monaten'); }
+  function _fmtDate(d) { return d ? new Date(d).toLocaleDateString('de-DE') : '—'; }
+  function _isOverdue(d) { if (!d) return false; var t = new Date(); t.setHours(0,0,0,0); return new Date(d) < t; }
+  function _avatarHtml(u) { if (!u) return ''; var n = u.display_name || u.email || ''; var i = n.split(/[\s@]/).filter(Boolean).slice(0,2).map(function(s){return s[0].toUpperCase();}).join(''); return '<span class="avatar" title="'+escHtml(n)+'">'+escHtml(i||'?')+'</span>'; }
+  function _statusBadge(s) { var l = {open:'Open',in_progress:'In Bearb.',review:'Review',done:'Done'}; return '<span class="badge badge-'+(s||'open')+'">'+escHtml(l[s]||s||'open')+'</span>'; }
+  function _tagPill(t) { return '<span class="tag-pill" style="background:'+escHtml(t.color)+'22;color:'+escHtml(t.color)+'">'+escHtml(t.name)+'</span>'; }
+  function _typeColor(t) { return {change:'open',decision:'green',incident:'red'}[t] || 'gray'; }
+  function _appNameById(id) { if (!id) return ''; var a = _hubAllProjectApps.find(function(a){return a.app_id===id;}); return a ? a.name : id; }
+
+  var _DS_TYPE_ICONS = { db:'&#x1F5C4;', table:'&#x1F4CB;', qvd:'&#x1F4E6;', dataset:'&#x1F4CA;', file:'&#x1F4C4;', other:'&#x2699;' };
+
+  // ── Tags + Project Apps ───────────────────────────────────────────────────
+  async function loadHubTags() {
+    if (!focusState.customer) return;
+    var res = await apiFetch('/api/tags?customer_id=' + encodeURIComponent(focusState.customer));
+    _hubAllTags = res.ok ? await res.json() : [];
+    _hubAllTags = Array.isArray(_hubAllTags) ? _hubAllTags : [];
+    document.getElementById('hubTFilterTag').innerHTML = '<option value="">Alle Tags</option>' + _hubAllTags.map(function(t){return '<option value="'+t.id+'">'+escHtml(t.name)+'</option>';}).join('');
+  }
+
+  async function loadHubProjectApps() {
+    if (!_hubProjectId) return;
+    try {
+      var res = await apiFetch('/api/qlik-apps?project_id=' + encodeURIComponent(_hubProjectId) + '&limit=500');
+      if (!res.ok) return;
+      var data = await res.json();
+      var list = Array.isArray(data) ? data : (data.items || []);
+      _hubAllProjectApps = list.map(window.AtlasShared.normalizeAppItem).sort(function(a,b){ var sc=a.space_name.localeCompare(b.space_name); return sc!==0?sc:a.name.localeCompare(b.name); });
+    } catch(e) {}
+  }
+
+  // ── Tasks Tab ─────────────────────────────────────────────────────────────
+  async function loadHubTasks() {
+    var el = document.getElementById('hubAppTasksList');
+    if (!_hubAppId) { el.innerHTML = '<div class="empty-state">Keine App ausgew&auml;hlt.</div>'; return; }
+    var url = '/api/tasks?qlik_app_id=' + encodeURIComponent(_hubAppId) + '&project_id=' + encodeURIComponent(_hubProjectId);
+    var sf = document.getElementById('hubTFilterStatus').value;
+    var pf = document.getElementById('hubTFilterPriority').value;
+    var tf = document.getElementById('hubTFilterTag').value;
+    if (sf) url += '&status=' + sf;
+    if (pf) url += '&priority=' + pf;
+    if (tf) url += '&tag=' + tf;
+    try {
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var tasks = await res.json();
+      tasks = Array.isArray(tasks) ? tasks : (tasks.items || []);
+      if (!tasks.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x2705;</div>Keine Tasks f&uuml;r diese App.<br><span class="empty-action" id="hubEmptyTaskAction">+ Task erstellen</span></div>'; var ea = document.getElementById('hubEmptyTaskAction'); if (ea) ea.addEventListener('click', openHubTaskModal); return; }
+      el.innerHTML = tasks.map(function(t) {
+        var tags = (t.tags||[]).map(_tagPill).join(' ');
+        var od = _isOverdue(t.due_date) && t.status !== 'done';
+        return '<div class="task-row" data-task-id="'+t.id+'">'
+          +'<div class="task-pri '+(t.priority||'medium')+'"></div>'
+          +_statusBadge(t.status)
+          +'<div class="task-body"><div class="task-title">'+escHtml(t.title)+'</div>'
+          +'<div class="task-meta">'+tags+(t.due_date?'<span class="'+(od?'task-overdue':'')+'">'+_fmtDate(t.due_date)+'</span>':'')+(t.estimated_minutes?'<span>~'+t.estimated_minutes+' Min.</span>':'')+'</div></div>'
+          +(t.assignee?_avatarHtml(t.assignee):'')+'</div>';
+      }).join('');
+    } catch(e) { el.innerHTML = '<div class="empty-state">Fehler beim Laden</div>'; }
+  }
+
+  document.getElementById('hubTFilterStatus').addEventListener('change', loadHubTasks);
+  document.getElementById('hubTFilterPriority').addEventListener('change', loadHubTasks);
+  document.getElementById('hubTFilterTag').addEventListener('change', loadHubTasks);
+
+  document.getElementById('hubAppTasksList').addEventListener('click', async function(e) {
+    var row = e.target.closest('.task-row'); if (!row) return;
+    try {
+      var res = await apiFetch('/api/tasks/' + row.getAttribute('data-task-id'));
+      if (!res.ok) throw new Error();
+      var t = await res.json();
+      var html = '<h3 style="font-size:1.1rem;margin-bottom:1rem">'+escHtml(t.title)+'</h3>'
+        +'<div class="panel-field"><div class="panel-label">STATUS</div><div class="panel-value">'+_statusBadge(t.status)+'</div></div>'
+        +'<div class="panel-field"><div class="panel-label">PRIORIT&Auml;T</div><div class="panel-value"><div class="task-pri '+(t.priority||'medium')+'" style="display:inline-block;width:3px;height:16px;border-radius:2px;vertical-align:middle;margin-right:6px"></div>'+escHtml(t.priority||'medium')+'</div></div>'
+        +(t.assignee?'<div class="panel-field"><div class="panel-label">ZUGEWIESEN</div><div class="panel-value">'+_avatarHtml(t.assignee)+' '+escHtml(t.assignee.display_name||t.assignee.email)+'</div></div>':'')
+        +(t.due_date?'<div class="panel-field"><div class="panel-label">F&Auml;LLIGKEIT</div><div class="panel-value'+((_isOverdue(t.due_date))?' task-overdue':'')+'">'+_fmtDate(t.due_date)+'</div></div>':'')
+        +(t.description?'<div class="panel-field"><div class="panel-label">BESCHREIBUNG</div><div class="panel-value" style="font-size:0.82rem;line-height:1.5;color:var(--text-muted)">'+escHtml(t.description)+'</div></div>':'')
+        +((t.tags&&t.tags.length)?'<div class="panel-field"><div class="panel-label">TAGS</div><div class="panel-value">'+t.tags.map(_tagPill).join(' ')+'</div></div>':'');
+      if (t.subtasks && t.subtasks.length) { html += '<div class="panel-subtasks"><div class="panel-label" style="margin-bottom:0.4rem">SUBTASKS</div>'; t.subtasks.forEach(function(s){ html += '<div class="panel-subtask">'+_statusBadge(s.status)+' '+escHtml(s.title)+'</div>'; }); html += '</div>'; }
+      document.getElementById('hubTaskPanelContent').innerHTML = html;
+      document.getElementById('hubTaskPanel').classList.add('open');
+    } catch(e) { showToast('Task konnte nicht geladen werden'); }
+  });
+  document.getElementById('hubTaskPanelClose').addEventListener('click', function(){ document.getElementById('hubTaskPanel').classList.remove('open'); });
+  document.addEventListener('click', function(e){ var p=document.getElementById('hubTaskPanel'); if(p.classList.contains('open')&&!p.contains(e.target)&&!e.target.closest('.task-row')) p.classList.remove('open'); });
+
+  // ── Logs Tab ──────────────────────────────────────────────────────────────
+  async function loadHubDocs() {
+    var el = document.getElementById('hubAppDocsList');
+    if (!_hubProjectId) { el.innerHTML = '<div class="empty-state">Kein Projekt ausgew&auml;hlt.</div>'; return; }
+    try {
+      var url = '/api/log-entries?project_id=' + encodeURIComponent(_hubProjectId);
+      if (_hubAppId) url += '&qlik_app_id=' + encodeURIComponent(_hubAppId);
+      var res = await apiFetch(url);
+      if (!res.ok) throw new Error();
+      var docs = await res.json();
+      docs = Array.isArray(docs) ? docs : (docs.items || []);
+      _hubDocCache = {};
+      docs.forEach(function(d){ _hubDocCache[d.id] = d; });
+      if (!docs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4DD;</div>Keine Eintr&auml;ge.<br><span class="empty-action" id="hubEmptyDocAction">+ Eintrag erstellen</span></div>'; var ea=document.getElementById('hubEmptyDocAction'); if(ea) ea.addEventListener('click', openHubDocModal); return; }
+      var now = new Date(), todayStart = new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(), weekStart = todayStart-(now.getDay()*86400000);
+      var groups = {today:[],thisWeek:[],older:[]};
+      docs.forEach(function(d){ var ts=new Date(d.created_at||d.entry_date).getTime(); if(ts>=todayStart) groups.today.push(d); else if(ts>=weekStart) groups.thisWeek.push(d); else groups.older.push(d); });
+      var html = '';
+      function renderDocGroup(label,items){ if(!items.length) return ''; var h='<div class="doc-group-header">'+label+'</div>'; items.forEach(function(d){ var preview=d.content?escHtml(d.content.substring(0,60))+(d.content.length>60?'…':''):''; h+='<div class="doc-row" data-doc-id="'+d.id+'"><div class="doc-dot '+(d.entry_type||'note')+'"></div><div class="doc-body"><div class="doc-title"><span class="badge badge-'+_typeColor(d.entry_type)+'">'+escHtml(d.entry_type)+'</span> '+preview+'</div><div class="doc-meta">'+(d.entry_date?escHtml(_fmtDate(d.entry_date))+' · ':'')+(d.author?escHtml(d.author.display_name||d.author.email)+' · ':'')+(d.qlik_app_id?'<span style="opacity:0.65;font-style:italic">'+escHtml(_appNameById(d.qlik_app_id))+'</span>':'Kein App-Bezug')+'</div></div></div>'; }); return h; }
+      html += renderDocGroup('Heute',groups.today) + renderDocGroup('Diese Woche',groups.thisWeek) + renderDocGroup('&Auml;lter',groups.older);
+      el.innerHTML = html;
+    } catch(e) { el.innerHTML = '<div class="empty-state">Fehler beim Laden</div>'; }
+  }
+
+  document.getElementById('hubAppDocsList').addEventListener('click', async function(e) {
+    var row = e.target.closest('.doc-row'); if (!row) return;
+    try {
+      var docId = row.getAttribute('data-doc-id');
+      var doc = _hubDocCache[docId];
+      if (!doc) { var res=await apiFetch('/api/log-entries/'+docId); if(!res.ok) throw new Error(); doc=await res.json(); _hubDocCache[docId]=doc; }
+      var typeColors = {change:'#60a5fa',decision:'#4ade80',incident:'#f87171'};
+      document.getElementById('hubSidebarType').textContent = (doc.entry_type||'note').toUpperCase();
+      document.getElementById('hubSidebarType').style.color = typeColors[doc.entry_type]||'var(--text-muted)';
+      document.getElementById('hubSidebarTitle').textContent = doc.entry_date || '';
+      document.getElementById('hubSidebarMeta').textContent = (doc.author?(doc.author.display_name||doc.author.email)+' · ':'')+_timeAgo(doc.created_at);
+      var sideHtml = '';
+      if (doc.content) sideHtml += '<div style="margin-bottom:0.8rem"><div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:0.3rem">Was</div><div style="color:rgba(255,255,255,0.88);font-size:0.88rem;line-height:1.55;white-space:pre-wrap">'+escHtml(doc.content)+'</div></div>';
+      if (doc.warum) sideHtml += '<div><div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:0.3rem">Warum / Begr&uuml;ndung</div><div style="color:rgba(255,255,255,0.7);font-size:0.85rem;line-height:1.55;white-space:pre-wrap">'+escHtml(doc.warum)+'</div></div>';
+      document.getElementById('hubSidebarContent').innerHTML = sideHtml || '<span style="opacity:0.4">Kein Inhalt</span>';
+      document.getElementById('hubDocSidebar').classList.add('open');
+    } catch(e) { showToast('Eintrag konnte nicht geladen werden'); }
+  });
+  document.getElementById('hubDocSidebarClose').addEventListener('click', function(){ document.getElementById('hubDocSidebar').classList.remove('open'); });
+
+  // ── README Tab ────────────────────────────────────────────────────────────
+  async function loadHubReadme() {
+    var statusEl = document.getElementById('hubReadmeStatus');
+    var bannerEl = document.getElementById('hubReadmeBanner');
+    if (!_hubAppId) return;
+    try {
+      var res = await apiFetch('/api/readmes?qlik_app_id=' + encodeURIComponent(_hubAppId) + '&project_id=' + encodeURIComponent(_hubProjectId));
+      if (!res.ok) throw new Error();
+      var data = await res.json();
+      var readme = Array.isArray(data) ? data[0] : data;
+      if (readme && readme.id) {
+        _hubReadmeId = readme.id; bannerEl.style.display = 'none';
+        initHubReadmeEditor(readme.content || '');
+        statusEl.textContent = 'Zuletzt gespeichert: ' + _timeAgo(readme.updated_at);
+      } else { throw new Error('empty'); }
+    } catch(e) {
+      _hubReadmeId = null; bannerEl.style.display = 'block';
+      var tpl = '';
+      try { var tRes=await apiFetch('/api/templates?type=app_readme'); if(tRes.ok){var td=await tRes.json(); tpl=td.body||td.content||td.template||'';} } catch(_) {}
+      initHubReadmeEditor(tpl);
+      statusEl.textContent = 'Nicht gespeichert — &Auml;nderungen gehen verloren';
+    }
+  }
+
+  function initHubReadmeEditor(content) {
+    if (_hubReadmeEditor) _hubReadmeEditor.destroy();
+    _hubReadmeEditor = AtlasSmartCompose.readme('hubReadmeEditorContainer', {
+      readmeType: 'app_readme', initialValue: content,
+      onChange: function(){ debounceHubReadmeSave(); }
+    });
+  }
+
+  function debounceHubReadmeSave() {
+    document.getElementById('hubReadmeStatus').textContent = 'Nicht gespeichert — &Auml;nderungen gehen verloren';
+    clearTimeout(_hubReadmeAutoSaveTimer);
+    _hubReadmeAutoSaveTimer = setTimeout(saveHubReadme, 2000);
+  }
+
+  async function saveHubReadme() {
+    var statusEl = document.getElementById('hubReadmeStatus');
+    if (!_hubReadmeEditor) return;
+    var content = _hubReadmeEditor.getValue();
+    statusEl.textContent = 'Wird gespeichert...';
+    try {
+      if (_hubReadmeId) {
+        var res = await apiFetch('/api/readmes/' + _hubReadmeId, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:content})});
+        if (!res.ok) throw new Error();
+      } else {
+        var res = await apiFetch('/api/readmes', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:parseInt(_hubProjectId,10),qlik_app_id:_hubAppId,readme_type:'app_readme',content:content})});
+        if (!res.ok) throw new Error();
+        var saved = await res.json(); _hubReadmeId = saved.id;
+        document.getElementById('hubReadmeBanner').style.display = 'none';
+      }
+      statusEl.textContent = 'Gespeichert vor wenigen Sekunden';
+    } catch(e) { statusEl.textContent = 'Fehler beim Speichern'; }
+  }
+
+  // ── Datasource Chips ──────────────────────────────────────────────────────
+  async function loadHubDsChips() {
+    var section = document.getElementById('hubDsSection');
+    if (!_hubAppId) { section.style.display = 'none'; return; }
+    try {
+      var res = await apiFetch('/api/graph/app/' + encodeURIComponent(_hubAppId) + '?depth=1');
+      if (!res.ok) throw new Error();
+      var graph = await res.json();
+      var appNodeIds = {};
+      (graph.nodes||[]).forEach(function(n){ if(n.type==='app') appNodeIds[n.id]=true; });
+      var sourceNodeIds = {};
+      (graph.edges||[]).forEach(function(e){ if(appNodeIds[e.target]) sourceNodeIds[e.source]=true; });
+      _hubDsNodes = (graph.nodes||[]).filter(function(n){ return !appNodeIds[n.id] && ['db','table','qvd','dataset','file','other'].indexOf(n.type)>=0; }).sort(function(a,b){ var aD=sourceNodeIds[a.id]?0:1,bD=sourceNodeIds[b.id]?0:1; if(aD!==bD) return aD-bD; return (a.label||'').localeCompare(b.label||''); });
+      if (!_hubDsNodes.length) { section.style.display = 'none'; return; }
+      _hubDsSelected = {};
+      _hubDsNodes.forEach(function(n){ _hubDsSelected[n.id]=!!sourceNodeIds[n.id]; });
+      renderHubDsChips(); section.style.display = '';
+    } catch(e) { section.style.display = 'none'; }
+  }
+
+  function renderHubDsChips() {
+    var chipsEl = document.getElementById('hubDsChips');
+    var btn = document.getElementById('hubDsInsertBtn');
+    chipsEl.innerHTML = _hubDsNodes.map(function(n){ var sel=_hubDsSelected[n.id]?' selected':''; var icon=_DS_TYPE_ICONS[n.type]||_DS_TYPE_ICONS.other; return '<span class="ds-chip'+sel+'" data-node-id="'+escHtml(n.id)+'" title="'+escHtml(n.type+': '+(n.label||'')+'('+ n.id+')')+'">'+'<span class="ds-check">&#x2713;</span><span class="ds-icon">'+icon+'</span>'+escHtml(n.label||n.id)+'</span>'; }).join('');
+    btn.disabled = !Object.keys(_hubDsSelected).some(function(k){ return _hubDsSelected[k]; });
+    var allSel = _hubDsNodes.length > 0 && _hubDsNodes.every(function(n){ return _hubDsSelected[n.id]; });
+    document.getElementById('hubDsSelectAll').textContent = allSel ? 'Alle abw&auml;hlen' : 'Alle ausw&auml;hlen';
+  }
+
+  document.getElementById('hubDsChips').addEventListener('click', function(e){ var chip=e.target.closest('.ds-chip'); if(!chip) return; _hubDsSelected[chip.getAttribute('data-node-id')]=!_hubDsSelected[chip.getAttribute('data-node-id')]; renderHubDsChips(); });
+  document.getElementById('hubDsSelectAll').addEventListener('click', function(){ var allSel=_hubDsNodes.every(function(n){ return _hubDsSelected[n.id]; }); _hubDsNodes.forEach(function(n){ _hubDsSelected[n.id]=!allSel; }); renderHubDsChips(); });
+  document.getElementById('hubDsInsertBtn').addEventListener('click', function(){
+    if (!_hubReadmeEditor) return;
+    var selected = _hubDsNodes.filter(function(n){ return _hubDsSelected[n.id]; });
+    if (!selected.length) return;
+    var tableText = '| Typ | Name | Node-ID |\n|-----|------|---------|\n' + selected.map(function(n){ return '| '+escHtml(n.type)+' | '+escHtml(n.label||n.id)+' | `'+escHtml(n.id)+'` |'; }).join('\n');
+    _hubReadmeEditor.insertSection('datenquellen', tableText);
+    showToast(selected.length + ' Datenquelle(n) eingef&uuml;gt');
+  });
+
+  // ── Task Modal ────────────────────────────────────────────────────────────
+  function openHubTaskModal() {
+    document.getElementById('hubTaskForm').reset();
+    document.getElementById('hubTaskError').style.display = 'none';
+    _hubSelectedTaskTags = []; renderHubTaskTags();
+    apiFetch('/api/projects/' + encodeURIComponent(_hubProjectId) + '/members').then(function(r){return r.ok?r.json():[];}).then(function(u){ _hubAllUsers=Array.isArray(u)?u:[]; document.getElementById('hubTaskAssignee').innerHTML='<option value="">—</option>'+_hubAllUsers.map(function(u){return '<option value="'+u.id+'">'+escHtml(u.display_name||u.email)+'</option>';}).join(''); }).catch(function(){});
+    document.getElementById('hubTaskModal').classList.add('open');
+  }
+  function closeHubTaskModal() { document.getElementById('hubTaskModal').classList.remove('open'); }
+  document.getElementById('hubTaskModalClose').addEventListener('click', closeHubTaskModal);
+  document.getElementById('hubTaskCancel').addEventListener('click', closeHubTaskModal);
+  document.getElementById('btnNewHubTask').addEventListener('click', openHubTaskModal);
+
+  function renderHubTaskTags() {
+    var wrap = document.getElementById('hubTaskTagsWrap');
+    wrap.innerHTML = _hubSelectedTaskTags.map(function(t){ return '<span class="tag-pill" style="background:'+escHtml(t.color)+'22;color:'+escHtml(t.color)+'">'+escHtml(t.name)+' <span class="tag-rm" data-tid="'+t.id+'" style="cursor:pointer;opacity:0.6">×</span></span>'; }).join('')+'<button type="button" class="tag-add-btn" id="hubTaskTagAddBtn">+ Tag</button>';
+    wrap.querySelector('#hubTaskTagAddBtn').addEventListener('click', openHubTagDD);
+    wrap.querySelectorAll('.tag-rm').forEach(function(b){ b.addEventListener('click', function(e){ e.stopPropagation(); _hubSelectedTaskTags=_hubSelectedTaskTags.filter(function(t){return t.id!==parseInt(b.getAttribute('data-tid'),10);}); renderHubTaskTags(); }); });
+  }
+
+  function openHubTagDD() {
+    var dd = document.getElementById('hubTaskTagDropdown');
+    var ids = _hubSelectedTaskTags.map(function(t){return t.id;});
+    dd.innerHTML = _hubAllTags.map(function(t){ return '<div class="tag-dropdown-item" data-tid="'+t.id+'"><span style="width:10px;height:10px;border-radius:50%;background:'+escHtml(t.color)+';flex-shrink:0"></span>'+escHtml(t.name)+'</div>'; }).join('') + '<div class="tag-dropdown-item" id="hubDdCreate" style="color:var(--accent);font-weight:600">+ Neuen Tag</div>';
+    dd.style.display = 'block';
+    dd.querySelectorAll('[data-tid]').forEach(function(i){ i.addEventListener('click', function(){ var id=parseInt(this.getAttribute('data-tid'),10); var tag=_hubAllTags.find(function(t){return t.id===id;}); if(tag&&ids.indexOf(id)<0){_hubSelectedTaskTags.push(tag);renderHubTaskTags();} dd.style.display='none'; }); });
+    dd.querySelector('#hubDdCreate').addEventListener('click', function(){ dd.style.display='none'; document.getElementById('hubTaskTagCreate').style.display='flex'; });
+    setTimeout(function(){ document.addEventListener('click', function h(e){ if(!dd.contains(e.target)){dd.style.display='none';document.removeEventListener('click',h);} }); },10);
+  }
+
+  document.getElementById('hubNewTagSave').addEventListener('click', async function(){ var n=document.getElementById('hubNewTagName').value.trim(), c=document.getElementById('hubNewTagColor').value; if(!n) return; try{ var r=await apiFetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_id:parseInt(focusState.customer,10),name:n,color:c})}); if(!r.ok) throw new Error(); var t=await r.json(); _hubAllTags.push(t); _hubSelectedTaskTags.push(t); renderHubTaskTags(); document.getElementById('hubTaskTagCreate').style.display='none'; document.getElementById('hubNewTagName').value=''; }catch(e){showToast('Fehler beim Tag erstellen');} });
+  document.getElementById('hubNewTagCancel').addEventListener('click', function(){ document.getElementById('hubTaskTagCreate').style.display='none'; });
+
+  document.getElementById('hubTaskForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var errEl = document.getElementById('hubTaskError'); errEl.style.display='none';
+    var body = { project_id:parseInt(_hubProjectId,10), title:document.getElementById('hubTaskTitle').value.trim(), description:document.getElementById('hubTaskDesc').value.trim()||null, status:document.getElementById('hubTaskStatus').value, priority:document.getElementById('hubTaskPriority').value, assignee_id:document.getElementById('hubTaskAssignee').value?parseInt(document.getElementById('hubTaskAssignee').value,10):null, due_date:document.getElementById('hubTaskDueDate').value||null, estimated_minutes:document.getElementById('hubTaskMinutes').value?parseInt(document.getElementById('hubTaskMinutes').value,10):null, qlik_app_id:_hubAppId||null, app_link:document.getElementById('hubTaskAppLink').value.trim()||null };
+    try {
+      var res=await apiFetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(!res.ok){var err=await res.json().catch(function(){return{};}); throw new Error(err.detail||'Fehler');}
+      var task=await res.json();
+      for(var i=0;i<_hubSelectedTaskTags.length;i++){ await apiFetch('/api/task-tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task_id:task.id,tag_id:_hubSelectedTaskTags[i].id})}); }
+      closeHubTaskModal(); showToast('Task erstellt'); loadHubTasks();
+    } catch(err){ errEl.textContent=err.message; errEl.style.display='block'; }
+  });
+
+  // ── Doc Modal ─────────────────────────────────────────────────────────────
+  function openHubDocModal() {
+    document.getElementById('hubDocForm').reset();
+    document.getElementById('hubDocError').style.display = 'none';
+    document.getElementById('hubDocDate').value = new Date().toISOString().slice(0,10);
+    initHubDocEditor();
+    document.getElementById('hubDocModal').classList.add('open');
+  }
+  function closeHubDocModal() { document.getElementById('hubDocModal').classList.remove('open'); }
+  document.getElementById('hubDocModalClose').addEventListener('click', closeHubDocModal);
+  document.getElementById('hubDocCancel').addEventListener('click', closeHubDocModal);
+  document.getElementById('btnNewHubDoc').addEventListener('click', openHubDocModal);
+
+  function initHubDocEditor() { if(_hubDocEditor) _hubDocEditor.destroy(); _hubDocEditor=AtlasSmartCompose.log('hubDocEditorContainer', {}); }
+  document.getElementById('hubDocType').addEventListener('change', function(){ if(_hubDocEditor) _hubDocEditor.clear(); });
+
+  document.getElementById('hubDocForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var errEl=document.getElementById('hubDocError'); errEl.style.display='none';
+    try {
+      var vals = _hubDocEditor ? _hubDocEditor.getValues() : {was:'',warum:null};
+      var payload = { project_id:parseInt(_hubProjectId,10), entry_type:document.getElementById('hubDocType').value, qlik_app_id:_hubAppId||null, betrifft:_hubAppId?_appNameById(_hubAppId):null, entry_date:document.getElementById('hubDocDate').value||null, content:vals.was, warum:vals.warum };
+      var r=await apiFetch('/api/log-entries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!r.ok) throw new Error((await r.json().catch(function(){return{};})).detail||'Fehler');
+      closeHubDocModal(); showToast('Log-Eintrag erstellt'); loadHubDocs();
+    } catch(err){ errEl.textContent=err.message; errEl.style.display='block'; }
+  });
+
+  // ── Project changed → reload app list ────────────────────────────────────
+  async function onProjectChanged() {
+    _hubProjectId = focusState.project || '';
+    var sel = document.getElementById('hubAppSelect');
+    if (!_hubProjectId) {
+      sel.innerHTML = '<option value="">— Zuerst Projekt auswählen —</option>';
+      showHubNoApp();
+      return;
+    }
+    sel.innerHTML = '<option value="">Lade Apps…</option>';
+    sel.disabled = true;
+    try {
+      var r = await apiFetch('/api/qlik-apps?project_id=' + encodeURIComponent(_hubProjectId));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      _hubApps = await r.json();
+      _hubApps = Array.isArray(_hubApps) ? _hubApps : [];
+      var opts = _hubApps.map(function(a) {
+        return '<option value="' + escHtml(a.app_id) + '">' + escHtml(a.name || a.app_id) + '</option>';
+      }).join('');
+      sel.innerHTML = '<option value="">— App auswählen —</option>' + opts;
+      sel.disabled = false;
+      // Pre-select from URL param if available
+      if (_hubAppId && _hubApps.find(function(a) { return a.app_id === _hubAppId; })) {
+        sel.value = _hubAppId;
+        onAppChanged(_hubAppId);
+      } else {
+        _hubAppId = '';
+        showHubNoApp();
+      }
+    } catch (e) {
+      sel.innerHTML = '<option value="">Fehler beim Laden</option>';
+      sel.disabled = false;
+      showHubNoApp();
+    }
+  }
+
+  document.getElementById('hubAppSelect').addEventListener('change', function() {
+    onAppChanged(this.value);
+  });
+
+  function showHubNoApp() {
+    document.getElementById('hubNoApp').style.display = '';
+    document.getElementById('hubContent').style.display = 'none';
+    document.getElementById('hubHeader').style.display = 'none';
+  }
+
+  async function onAppChanged(appId) {
+    if (!appId) { showHubNoApp(); return; }
+    _hubAppId = appId;
+    var found = _hubApps.find(function(a) { return a.app_id === appId; });
+    _hubAppName = found ? (found.name || appId) : appId;
+
+    // Update header
+    document.getElementById('hubAppName').textContent = _hubAppName;
+    document.getElementById('hubAppIdDisplay').textContent = appId;
+    document.getElementById('hubHeader').style.display = '';
+    document.getElementById('hubNoApp').style.display = 'none';
+    document.getElementById('hubContent').style.display = '';
+
+    // Reset per-app state
+    _miExportData = null;
+    _miDiffData = null;
+    _miDetailOpenSet.clear();
+    _cachedScriptData = null;
+    _scriptLoaded = false;
+    document.getElementById('miExportResult').style.display = 'none';
+    document.getElementById('miDetailSection').style.display = 'none';
+    document.getElementById('miDiffResult').style.display = 'none';
+    document.getElementById('miItemSelection').style.display = 'none';
+    document.getElementById('miImportResult').style.display = 'none';
+    setMiSectionEnabled('miDiffSection', false);
+    setMiSectionEnabled('miImportSection', false);
+    document.getElementById('miSourceLabel').textContent = _hubAppName;
+    document.getElementById('ovName').textContent = _hubAppName;
+    document.getElementById('ovId').textContent = appId;
+    document.getElementById('ovProject').textContent = _hubProjectId;
+    document.getElementById('ovScriptFetched').textContent = '—';
+    populateMiTargetSelect();
+    updateLineageLink();
+    syncFocusInUrl();
+
+    // Load script metadata for overview (non-blocking)
+    apiFetch('/api/app/' + encodeURIComponent(appId) + '/script').then(function(r) {
+      if (!r.ok) return;
+      return r.json();
+    }).then(function(sd) {
+      if (sd && sd.fetched_at) {
+        _cachedScriptData = sd;
+        document.getElementById('ovScriptFetched').textContent = new Date(sd.fetched_at).toLocaleString('de-DE');
+      }
+    }).catch(function() {});
+
+    // Reset tasks/logs/readme state for new app
+    _hubTasksLoaded = false; _hubLogsLoaded = false; _hubReadmeLoaded = false;
+    _hubDocCache = {}; _hubDsNodes = []; _hubDsSelected = {};
+    if (_hubReadmeEditor) { _hubReadmeEditor.destroy(); _hubReadmeEditor = null; }
+    document.getElementById('hubReadmeEditorContainer').innerHTML = '';
+    document.getElementById('hubReadmeBanner').style.display = 'none';
+    document.getElementById('hubReadmeStatus').textContent = '';
+    document.getElementById('hubDsSection').style.display = 'none';
+    document.getElementById('hubAppTasksList').innerHTML = '';
+    document.getElementById('hubAppDocsList').innerHTML = '';
+
+    // Reload fetch tab if active
+    var activeTab = document.querySelector('[data-hub-tab].active');
+    if (activeTab && activeTab.getAttribute('data-hub-tab') === 'fetch') {
+      loadFetchJobs(); loadSchedules();
+    }
+    if (activeTab && activeTab.getAttribute('data-hub-tab') === 'tasks') loadHubTasks();
+    if (activeTab && activeTab.getAttribute('data-hub-tab') === 'logs') loadHubDocs();
+    if (activeTab && activeTab.getAttribute('data-hub-tab') === 'readme') { _hubReadmeLoaded = true; loadHubReadme(); loadHubDsChips(); }
+    loadHubProjectApps();
+  }
+
+  // ── Tab switching ─────────────────────────────────────────────────────────
+  function switchHubTab(name) {
+    document.querySelectorAll('[data-hub-tab]').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-content[id^="hub-tab-"]').forEach(function(c) { c.classList.remove('active'); });
+    var btn = document.querySelector('[data-hub-tab="' + name + '"]');
+    var pane = document.getElementById('hub-tab-' + name);
+    if (btn) btn.classList.add('active');
+    if (pane) pane.classList.add('active');
+    if (name === 'script' && !_scriptLoaded) loadScript();
+    if (name === 'masteritems') populateMiTargetSelect();
+    if (name === 'fetch') { loadFetchJobs(); loadSchedules(); }
+    if (name === 'lineage') updateLineageLink();
+    if (name === 'tasks') loadHubTasks();
+    if (name === 'logs') loadHubDocs();
+    if (name === 'readme') { if (!_hubReadmeLoaded) { _hubReadmeLoaded = true; loadHubReadme(); loadHubDsChips(); } }
+  }
+
+  document.querySelectorAll('[data-hub-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() { switchHubTab(this.getAttribute('data-hub-tab')); });
+  });
+
+  // ── Bootstrap ─────────────────────────────────────────────────────────────
+  async function init() {
+    var results = await Promise.all([
+      apiFetch('/api/projects'),
+      apiFetch('/api/customers/names'),
+    ]);
+    projects = await results[0].json();
+    customers = await results[1].json();
+    syncCustomerFromProject();
+    renderFocusCustomerSelect();
+    renderFocusProjectSelect();
+    loadHubTags();
+  }
+
+  init();
+
+  // ── Overview ──────────────────────────────────────────────────────────────
+  function updateLineageLink() {
+    var url = '/lineage.html?app_id=' + encodeURIComponent(_hubAppId) + (_hubProjectId ? '&project_id=' + encodeURIComponent(_hubProjectId) : '');
+    document.getElementById('lineageLink').href = url;
+  }
+
+  // ══ Script tab ══════════════════════════════════════════════════════════════
+
+  var _scriptLoaded = false;
+  var _cachedScriptData = null;
+
+  var _QLIK_KW = (
+    'LOAD|RESIDENT|INLINE|CROSSTABLE|INTERVALMATCH|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|AS|DISTINCT|TOP|FIRST|'
+    + 'JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|OUTER JOIN|LEFT OUTER JOIN|RIGHT OUTER JOIN|'
+    + 'GROUP BY|ORDER BY|BY|APPLY MAP|MAPPING|'
+    + 'NOCONCATENATE|CONCATENATE|ADD LOAD|ADD FIELDS|'
+    + 'SET|LET|CALL|SUB|END SUB|NEXT|LOOP|DO|WHILE|UNTIL|'
+    + 'IF|THEN|ELSE|ELSEIF|END IF|SWITCH|CASE|DEFAULT|'
+    + 'EXIT|FOR EACH|FOR|TO|STEP|RETURN|'
+    + 'STORE|INTO|DROP TABLE|DROP FIELD|DROP TABLES|'
+    + 'TABLE|FIELD|FIELDS|TAG|UNTAG|'
+    + 'SECTION|ACCESS|APPLICATION|'
+    + 'RENAME TABLE|RENAME FIELD|'
+    + 'SELECT|SQL|CONNECT TO|DISCONNECT|BINARY|'
+    + 'QUALIFY|UNQUALIFY|NULLASVALUE|NULLASNULL|'
+    + 'HIERARCHY|HIERARCHYBELONGSTO|'
+    + 'LIKE|MATCH|WILDMATCH|MIXMATCH|INFO|'
+    + 'AUTOGENERATE|BUNDLE|FORCE BUNDLING'
+  ).split('|').sort(function(a, b) { return b.length - a.length; });
+
+  var _QLIK_FN_RE = /\b(Abs|Fabs|Ceil|Floor|Round|Frac|Sign|Sqrt|Pow|Exp|Log|Log10|Mod|Div|Rand|RangeSum|RangeAvg|RangeMax|RangeMin|RangeCount|RangeOnly|RangeMode|RangeProduct|RangeStdev|RangeStdevp|RangeKurtosis|RangeSkew|RangeTextCount|RangeNullCount|RangeNumericCount|RangeCorr|Date|Time|Timestamp|Num|Text|Dual|IsNum|IsText|IsNull|Null|Chr|Ord|Len|Index|Left|Right|Mid|Upper|Lower|Proper|Trim|LTrim|RTrim|PurgeChar|KeepChar|Replace|Capitalize|Hash128|Hash160|Hash256|MD5|Sha256|If|Alt|IsPartialReload|Now|Today|Year|Month|Day|Week|Hour|Minute|Second|YearToDate|InYearToDate|InYear|InQuarterToDate|InQuarter|InMonthToDate|InMonth|InWeekToDate|InWeek|InDayToDate|InDay|Age|NetWorkDays|AddYears|AddMonths|YearStart|YearEnd|MonthStart|MonthEnd|QuarterStart|QuarterEnd|WeekStart|WeekEnd|DayStart|DayEnd|MakeDate|MakeTime|MakeTimestamp|Interval|Count|Sum|Avg|Max|Min|Mode|Median|Stdev|Stdevp|Kurtosis|Skew|Corr|FirstValue|LastValue|MinString|MaxString|Concat|FirstSortedValue|Top|Bottom|Above|Below|Before|After|Column|Row|RowNo|FieldRowNo|FieldValueCount|FieldValue|GetFieldSelections|GetSelectedCount|GetPossibleCount|GetExcludedCount|GetAlternativeCount|GetNotSelectedCount|GetCurrentSelections|Exists|Lookup|Peek|Previous|FieldName|FieldNumber|NoOfFields|NoOfRows|NoOfTables|TableName|TableNumber|ConnectedTables|LinkedTables|Dimension|Expression|ConcatCount|Attribute|ObjectId|ReloadTime|ComputerName|OSUser|QvVersion|GetSQLType|SubField|TextBetween|Evaluate|Variable|MustExclude|StateName)\s*\(/gi;
+
+  function tokenizeQlik(text) {
+    var tokens = []; var i = 0; var n = text.length;
+    while (i < n) {
+      if (text[i]==='/' && text[i+1]==='/' && text[i+2]==='/' && text.slice(i,i+8).toLowerCase()==='///$tab ') {
+        var end0 = text.indexOf('\n', i); if (end0===-1) end0=n;
+        tokens.push({type:'tab', val: text.slice(i+8,end0).trim()}); i=end0; continue;
+      }
+      if (text[i]==='/' && text[i+1]==='/') {
+        var end1 = text.indexOf('\n', i); if (end1===-1) end1=n;
+        tokens.push({type:'cmt', val: text.slice(i,end1)}); i=end1; continue;
+      }
+      if (text[i]==='/' && text[i+1]==='*') {
+        var end2 = text.indexOf('*/', i+2); if (end2===-1) end2=n-2; else end2+=2;
+        tokens.push({type:'cmt', val: text.slice(i,end2)}); i=end2; continue;
+      }
+      if (text[i]==="'") {
+        var j=i+1; while (j<n && text[j]!=="'") { if (text[j]==='\\') j++; j++; }
+        tokens.push({type:'str', val: text.slice(i,j+1)}); i=j+1; continue;
+      }
+      if (text[i]==='"') {
+        var j2=text.indexOf('"',i+1); if (j2===-1) j2=n-1;
+        tokens.push({type:'fld', val: text.slice(i,j2+1)}); i=j2+1; continue;
+      }
+      if (text[i]==='[') {
+        var j3=text.indexOf(']',i); if (j3===-1) j3=n-1;
+        tokens.push({type:'fld', val: text.slice(i,j3+1)}); i=j3+1; continue;
+      }
+      if (text[i]==='$' && text[i+1]==='(') {
+        var depth=1; var j4=i+2;
+        while (j4<n && depth>0) { if (text[j4]==='(') depth++; else if (text[j4]===')') depth--; j4++; }
+        tokens.push({type:'var', val: text.slice(i,j4)}); i=j4; continue;
+      }
+      var j5=i;
+      while (j5<n && text[j5]!=='/' && text[j5]!=="'" && text[j5]!=='"' && text[j5]!=='[' && text[j5]!=='$') j5++;
+      if (j5===i) j5=i+1;
+      tokens.push({type:'plain', val: text.slice(i,j5)}); i=j5;
+    }
+    return tokens;
+  }
+
+  function applyPlainHighlights(raw) {
+    var s = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    _QLIK_KW.forEach(function(kw) {
+      try {
+        var re = new RegExp('(?<![\\w>])(' + kw.replace(/ /g,'\\s+') + ')(?![\\w<])','gi');
+        s = s.replace(re,'<span class="ql-kw">$1</span>');
+      } catch(e) {
+        s = s.replace(new RegExp('\\b('+kw.replace(/ /g,'\\s+')+')'+'\\b','gi'),'<span class="ql-kw">$1</span>');
+      }
+    });
+    s = s.replace(_QLIK_FN_RE,'<span class="ql-fn">$1</span>(');
+    s = s.replace(/(?<![<"#\-])(\b\d+(?:\.\d+)?\b)/g,'<span class="ql-num">$1</span>');
+    return s;
+  }
+
+  function renderHighlightedScript(text) {
+    var tokens = tokenizeQlik(text);
+    var TAB_PFX = '\x01TAB:';
+    var rawHtml = '';
+    tokens.forEach(function(t) {
+      if (t.type==='tab')      rawHtml += TAB_PFX + escHtml(t.val) + '\x01';
+      else if (t.type==='cmt') rawHtml += '<span class="ql-cmt">' + escHtml(t.val) + '</span>';
+      else if (t.type==='str') rawHtml += '<span class="ql-str">' + escHtml(t.val) + '</span>';
+      else if (t.type==='fld') rawHtml += '<span class="ql-fld">' + escHtml(t.val) + '</span>';
+      else if (t.type==='var') rawHtml += '<span class="ql-var">' + escHtml(t.val) + '</span>';
+      else rawHtml += applyPlainHighlights(t.val);
+    });
+    var lines = rawHtml.split('\n');
+    var out = ''; var lineNum = 1; var inSection = false;
+    for (var i=0; i<lines.length; i++) {
+      var line = lines[i];
+      if (line.indexOf(TAB_PFX) !== -1) {
+        if (inSection) { out += '</div>'; inSection = false; }
+        var label = line.replace(/.*\x01TAB:(.*?)\x01.*/,'$1');
+        var sid = 'sv-s-'+(++_sectionCounter);
+        out += '<div class="sv-tab-section" data-target="'+sid+'">'+(label||'(unnamed)')+'</div>'
+             + '<div class="sv-section-body" id="'+sid+'">';
+        inSection = true; lineNum++;
+      } else {
+        out += '<div class="sv-line"><span class="sv-ln">'+lineNum+'</span><span class="sv-lc">'+(line||' ')+'</span></div>';
+        lineNum++;
+      }
+    }
+    if (inSection) out += '</div>';
+    return out;
+  }
+
+  document.addEventListener('click', function(e) {
+    var hdr = e.target.closest('.sv-tab-section');
+    if (!hdr) return;
+    var sid = hdr.getAttribute('data-target');
+    var body = sid ? document.getElementById(sid) : null;
+    if (body) { body.classList.toggle('sv-collapsed'); hdr.classList.toggle('sv-closed'); }
+  });
+
+  async function loadScript(force) {
+    if (_scriptLoaded && !force) return;
+    var wrap = document.getElementById('scriptWrap');
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x23F3;</div><div>Script wird geladen…</div></div>';
+    try {
+      var data = _cachedScriptData && !force ? _cachedScriptData : null;
+      if (!data) {
+        var resp = await apiFetch('/api/app/' + encodeURIComponent(_hubAppId) + '/script');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        data = await resp.json();
+        _cachedScriptData = data;
+      }
+      if (!data.script) {
+        wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>Kein Script vorhanden. Bitte erst einen Fetch-Job mit Schritt &laquo;scripts&raquo; starten.</div></div>';
+        return;
+      }
+      var lines = data.script.split('\n').length;
+      var meta = (data.fetched_at ? 'Abgezogen: ' + new Date(data.fetched_at).toLocaleString('de-DE') + ' — ' : '')
+               + lines + ' Zeilen';
+      var cardId = 'sc-body-main';
+      var html = '<div class="script-card">'
+        + '<div class="script-card-header open" id="sc-hdr-main">'
+        + '<span class="sc-chevron open">&#x25B6;</span>'
+        + '<span class="sc-name">' + escHtml(_hubAppName) + '</span>'
+        + '<span class="sc-meta">' + escHtml(meta) + '</span>'
+        + '<div class="sc-toolbar"><button class="btn-action" id="btnCopyScript">Kopieren</button></div>'
+        + '</div>'
+        + '<div class="sc-body open" id="' + cardId + '">'
+        + '<pre class="sc-pre" id="scriptPre">' + renderHighlightedScript(data.script) + '</pre>'
+        + '</div></div>';
+      wrap.innerHTML = html;
+      document.getElementById('sc-hdr-main').addEventListener('click', function(e) {
+        if (e.target.closest('button')) return;
+        var body = document.getElementById(cardId);
+        var chev = this.querySelector('.sc-chevron');
+        body.classList.toggle('open');
+        this.classList.toggle('open');
+        if (chev) chev.classList.toggle('open');
+      });
+      document.getElementById('btnCopyScript').addEventListener('click', function(e) {
+        e.stopPropagation();
+        navigator.clipboard.writeText(data.script).then(function() { showToast('Script kopiert'); }).catch(function() { showToast('Kopieren fehlgeschlagen'); });
+      });
+      _scriptLoaded = true;
+      document.getElementById('ovScriptFetched').textContent = data.fetched_at ? new Date(data.fetched_at).toLocaleString('de-DE') : '–';
+      // Apply search filter
+      applyScriptSearch(document.getElementById('scriptSearchInput').value);
+    } catch (e) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x26A0;</div><div>Fehler: ' + escHtml(e.message) + '</div></div>';
+    }
+  }
+
+  function applyScriptSearch(q) {
+    var pre = document.getElementById('scriptPre');
+    if (!pre) return;
+    if (!q) { pre.querySelectorAll('.sc-search-hl').forEach(function(el) { el.outerHTML = el.textContent; }); return; }
+    // Simple scroll to first match in pre — actual highlight is complex, just show toast with line count
+    // (full search-in-highlighted-script is deferred UX enhancement)
+  }
+
+  document.getElementById('scriptSearchInput').addEventListener('input', function() { applyScriptSearch(this.value); });
+
+  document.getElementById('btnExpandAll').addEventListener('click', function() {
+    document.querySelectorAll('#scriptWrap .sv-section-body').forEach(function(b) { b.classList.remove('sv-collapsed'); });
+    document.querySelectorAll('#scriptWrap .sv-tab-section').forEach(function(h) { h.classList.remove('sv-closed'); });
+  });
+  document.getElementById('btnCollapseAll').addEventListener('click', function() {
+    document.querySelectorAll('#scriptWrap .sv-section-body').forEach(function(b) { b.classList.add('sv-collapsed'); });
+    document.querySelectorAll('#scriptWrap .sv-tab-section').forEach(function(h) { h.classList.add('sv-closed'); });
+  });
+  document.getElementById('btnReloadScript').addEventListener('click', function() {
+    _scriptLoaded = false; loadScript(true);
+  });
+
+  // ══ Master Items tab ═══════════════════════════════════════════════════════
+
+  function populateMiTargetSelect() {
+    var opts = _hubApps.filter(function(a) { return a.app_id !== _hubAppId; }).map(function(a) {
+      return '<option value="' + escHtml(a.app_id) + '">' + escHtml(a.name || a.app_id) + '</option>';
+    }).join('');
+    document.getElementById('miTargetApp').innerHTML = '<option value="">Ziel-App wählen…</option>' + opts;
+    document.getElementById('miDiffBtn').disabled = !opts;
+    renderMiExtraTargets();
+  }
+
+  function renderMiExtraTargets() {
+    var targetId = document.getElementById('miTargetApp').value;
+    var el = document.getElementById('miExtraTargets');
+    var available = _hubApps.filter(function(a) { return a.app_id !== _hubAppId && a.app_id !== targetId; });
+    if (!available.length) {
+      el.innerHTML = '<span style="font-size:0.8rem;color:var(--text-dim);">— Keine weiteren Apps verfügbar</span>';
+      updateExtraSelCount(); return;
+    }
+    el.innerHTML = available.map(function(a) {
+      return '<label class="mi-extra-chip"><input type="checkbox" value="' + escHtml(a.app_id) + '" onchange="updateExtraSelCount()"> ' + escHtml(a.name || a.app_id) + '</label>';
+    }).join('');
+    updateExtraSelCount();
+  }
+
+  function updateExtraSelCount() {
+    var n = document.querySelectorAll('#miExtraTargets input[type=checkbox]:checked').length;
+    document.getElementById('miExtraSelCount').textContent = n ? '(' + n + ' ausgewählt)' : '';
+  }
+
+  function miExtraTargetIds() {
+    return Array.from(document.querySelectorAll('#miExtraTargets input[type=checkbox]:checked')).map(function(cb) { return cb.value; });
+  }
+
+  function appNameMap() {
+    var m = {};
+    _hubApps.forEach(function(a) { m[a.app_id] = a.name || a.app_id; });
+    return m;
+  }
+
+  function setMiSectionEnabled(id, enabled) {
+    var el = document.getElementById(id);
+    el.style.opacity = enabled ? '1' : '0.4';
+    el.style.pointerEvents = enabled ? '' : 'none';
+  }
+
+  document.getElementById('miTargetApp').addEventListener('change', function() {
+    document.getElementById('miDiffBtn').disabled = !this.value;
+    renderMiExtraTargets();
+  });
+
+  document.getElementById('miExportBtn').addEventListener('click', async function() {
+    var pid = _hubProjectId;
+    if (!_hubAppId || !pid) { showToast('App-ID oder Projekt-ID fehlt.'); return; }
+    this.disabled = true;
+    this.innerHTML = '<span class="mi-spinner"></span>Exportieren…';
+    document.getElementById('miExportResult').style.display = 'none';
+    setMiSectionEnabled('miDiffSection', false);
+    setMiSectionEnabled('miImportSection', false);
+    try {
+      var resp = await apiFetch('/api/master-items/export', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({project_id: parseInt(pid, 10), app_id: _hubAppId}),
+      });
+      if (!resp.ok) { var err = await resp.json().catch(function(){return{};}); throw new Error(err.detail || 'HTTP '+resp.status); }
+      _miExportData = await resp.json();
+      document.getElementById('miExportDimCount').textContent = (_miExportData.dimensions||[]).length;
+      document.getElementById('miExportMeasCount').textContent = (_miExportData.measures||[]).length;
+      document.getElementById('miExportVizCount').textContent = (_miExportData.visualizations||[]).length;
+      document.getElementById('miExportMeta').textContent = 'Exportiert um ' + new Date(_miExportData.exported_at).toLocaleString('de-DE');
+      document.getElementById('miExportResult').style.display = '';
+      setMiSectionEnabled('miDiffSection', true);
+      showMiDetail();
+      showToast('Export abgeschlossen');
+    } catch (e) {
+      showToast('Export fehlgeschlagen: ' + e.message, 6000);
+    } finally {
+      this.disabled = false;
+      this.textContent = 'Exportieren';
+    }
+  });
+
+  document.getElementById('miDiffBtn').addEventListener('click', async function() {
+    var targetId = document.getElementById('miTargetApp').value;
+    var pid = _hubProjectId;
+    if (!_hubAppId || !targetId || !pid) return;
+    this.disabled = true;
+    this.innerHTML = '<span class="mi-spinner"></span>Vergleichen…';
+    document.getElementById('miDiffResult').style.display = 'none';
+    document.getElementById('miItemSelection').style.display = 'none';
+    setMiSectionEnabled('miImportSection', false);
+    try {
+      var resp = await apiFetch('/api/master-items/diff', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          project_id: parseInt(pid, 10),
+          source_app_id: _hubAppId,
+          target_app_id: targetId,
+          source_export: _miExportData || undefined,
+        }),
+      });
+      if (!resp.ok) { var err = await resp.json().catch(function(){return{};}); throw new Error(err.detail || 'HTTP '+resp.status); }
+      _miDiffData = await resp.json();
+      renderMiDiff(_miDiffData);
+      renderMiSelection(_miDiffData);
+      setMiSectionEnabled('miImportSection', true);
+      document.getElementById('miImportBtn').disabled = false;
+      showToast('Diff abgeschlossen');
+    } catch (e) {
+      showToast('Diff fehlgeschlagen: ' + e.message, 6000);
+    } finally {
+      this.disabled = false;
+      this.textContent = 'Vergleichen';
+    }
+  });
+
+  function renderMiDiff(diff) {
+    var tgtName = document.getElementById('miTargetApp').options[document.getElementById('miTargetApp').selectedIndex].text;
+    document.getElementById('miDiffMeta').textContent = 'Quelle: ' + _hubAppName + ' → Ziel: ' + tgtName;
+    var rows = ['dimensions','measures','visualizations'].map(function(t) {
+      var d = diff[t] || {};
+      return '<tr><td style="font-weight:600">' + escHtml(t.charAt(0).toUpperCase()+t.slice(1)) + '</td>'
+        + '<td><span class="badge badge-new">' + (d.new||0) + '</span></td>'
+        + '<td><span class="badge badge-existing">' + (d.existing||0) + '</span></td>'
+        + '<td><span class="badge badge-conflict">' + (d.conflict||0) + '</span></td></tr>';
+    }).join('');
+    document.getElementById('miDiffBody').innerHTML = rows;
+    document.getElementById('miDiffResult').style.display = '';
+  }
+
+  function renderMiSelection(diff) {
+    var types = [['dimensions','Dimensions'],['measures','Measures'],['visualizations','Visualizations']];
+    var html = '';
+    types.forEach(function(t) {
+      var key = t[0], label = t[1];
+      var d = diff[key] || {};
+      var its = d.items || {};
+      var newItems = its.new || [];
+      var conflictItems = its.conflict || [];
+      var existingItems = its.existing || [];
+      if (!newItems.length && !conflictItems.length && !existingItems.length) return;
+      html += '<div class="mi-sel-group">';
+      html += '<div class="mi-sel-group-hdr" onclick="this.nextElementSibling.classList.toggle(\'open\')">';
+      html += '<span class="msg-title">' + escHtml(label) + '</span>';
+      if (newItems.length) html += '<span class="badge badge-new">' + newItems.length + ' neu</span>';
+      if (conflictItems.length) html += '<span class="badge badge-conflict">' + conflictItems.length + ' Konflikt</span>';
+      if (existingItems.length) html += '<span class="badge badge-existing">' + existingItems.length + ' gleich</span>';
+      html += '<button class="btn-action" style="font-size:0.71rem;padding:0.15rem 0.45rem;" onclick="event.stopPropagation();miSelGroup(\'' + key + '\',true)">Alle</button>';
+      html += '<button class="btn-action" style="font-size:0.71rem;padding:0.15rem 0.45rem;" onclick="event.stopPropagation();miSelGroup(\'' + key + '\',false)">Keine</button>';
+      html += '</div><div class="mi-sel-group-body open">';
+      if (newItems.length) {
+        html += '<div class="mi-sel-status-hdr">Neu (' + newItems.length + ')</div>';
+        newItems.forEach(function(item, idx) {
+          var title = escHtml(item.title || (item.properties&&item.properties.qInfo&&item.properties.qInfo.qId) || '(unbekannt)');
+          html += '<div class="mi-sel-item"><label><input type="checkbox" checked data-mi-type="' + key + '" data-mi-status="new" data-mi-idx="' + idx + '"> ' + title + '</label></div>';
+        });
+      }
+      if (conflictItems.length) {
+        html += '<div class="mi-sel-status-hdr">Konflikt (' + conflictItems.length + ')</div>';
+        conflictItems.forEach(function(conflict, idx) {
+          var src = conflict.source || {};
+          html += '<div class="mi-sel-item"><label><input type="checkbox" checked data-mi-type="' + key + '" data-mi-status="conflict" data-mi-idx="' + idx + '"> ' + escHtml(src.title||'(unbekannt)') + '</label></div>';
+        });
+      }
+      if (existingItems.length) {
+        html += '<div class="mi-sel-status-hdr">Gleich (' + existingItems.length + ') — standardmäßig abgewählt</div>';
+        existingItems.forEach(function(item, idx) {
+          html += '<div class="mi-sel-item"><label><input type="checkbox" data-mi-type="' + key + '" data-mi-status="existing" data-mi-idx="' + idx + '"> ' + escHtml(item.title||'(unbekannt)') + '</label></div>';
+        });
+      }
+      html += '</div></div>';
+    });
+    document.getElementById('miSelectionBody').innerHTML = html || '<div style="font-size:0.82rem;color:var(--text-dim);">Keine Items vorhanden.</div>';
+    document.getElementById('miItemSelection').style.display = '';
+  }
+
+  function miSelGroup(type, checked) {
+    document.querySelectorAll('#miSelectionBody input[data-mi-type="' + type + '"]').forEach(function(cb) { cb.checked = checked; });
+  }
+
+  document.getElementById('miSelAllBtn').addEventListener('click', function() {
+    document.querySelectorAll('#miSelectionBody input[type="checkbox"]').forEach(function(cb) { cb.checked = true; });
+  });
+  document.getElementById('miSelNoneBtn').addEventListener('click', function() {
+    document.querySelectorAll('#miSelectionBody input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
+  });
+
+  function buildFilteredSource() {
+    var filtered = {dimensions:[], measures:[], visualizations:[]};
+    document.querySelectorAll('#miSelectionBody input[type="checkbox"]:checked').forEach(function(cb) {
+      var type = cb.dataset.miType, status = cb.dataset.miStatus, idx = parseInt(cb.dataset.miIdx, 10);
+      if (!_miDiffData || !_miDiffData[type]) return;
+      var its = (_miDiffData[type] && _miDiffData[type].items) || {};
+      var arr = its[status] || [];
+      var entry = arr[idx];
+      if (!entry) return;
+      var item = (status==='conflict') ? (entry.source||entry) : entry;
+      if (item) filtered[type].push(item);
+    });
+    return {
+      app_id: _miExportData ? _miExportData.app_id : _hubAppId,
+      exported_at: _miExportData ? _miExportData.exported_at : new Date().toISOString(),
+      dimensions: filtered.dimensions, measures: filtered.measures, visualizations: filtered.visualizations,
+    };
+  }
+
+  function renderSingleImportTable(r) {
+    var rows = ['dimensions','measures','visualizations'].map(function(t) {
+      return '<tr><td style="font-weight:600">' + escHtml(t.charAt(0).toUpperCase()+t.slice(1)) + '</td>'
+        + '<td style="color:#4ade80">' + ((r.imported||{})[t]||0) + '</td>'
+        + '<td style="color:#a5b4fc">' + ((r.overwritten||{})[t]||0) + '</td>'
+        + '<td style="color:#94a3b8">' + ((r.skipped||{})[t]||0) + '</td></tr>';
+    }).join('');
+    return '<table><thead><tr><th>Typ</th><th>Importiert</th><th>Überschrieben</th><th>Übersprungen</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  document.getElementById('miImportBtn').addEventListener('click', async function() {
+    var targetId = document.getElementById('miTargetApp').value;
+    var pid = _hubProjectId;
+    if (!_hubAppId || !targetId || !pid) return;
+    var types = [];
+    if (document.getElementById('miOptDim').checked) types.push('dimensions');
+    if (document.getElementById('miOptMeas').checked) types.push('measures');
+    if (document.getElementById('miOptViz').checked) types.push('visualizations');
+    if (!types.length) { showToast('Mindestens einen Typ auswählen.'); return; }
+    var onDuplicate = document.querySelector('input[name="miDup"]:checked').value;
+    var dryRun = document.getElementById('miOptDryRun').checked;
+    var sourceExport = _miDiffData ? buildFilteredSource() : (_miExportData || undefined);
+    var extraIds = miExtraTargetIds();
+    var allTargetIds = [targetId].concat(extraIds.filter(function(id) { return id !== targetId; }));
+
+    this.disabled = true;
+    document.getElementById('miImportSpinner').style.display = '';
+    document.getElementById('miImportResult').style.display = 'none';
+    try {
+      var resp = await apiFetch('/api/master-items/import', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          project_id: parseInt(pid, 10),
+          source_app_id: _hubAppId,
+          target_app_id: targetId,
+          target_app_ids: allTargetIds,
+          source_export: sourceExport,
+          options: {types: types, on_duplicate: onDuplicate, dry_run: dryRun},
+        }),
+      });
+      if (!resp.ok) { var err = await resp.json().catch(function(){return{};}); throw new Error(err.detail||'HTTP '+resp.status); }
+      var result = await resp.json();
+      document.getElementById('miImportResultHead').textContent = dryRun ? 'Dry Run — keine Änderungen geschrieben' : 'Import abgeschlossen';
+
+      if (result.multi) {
+        var nm = appNameMap();
+        var bodyHtml = Object.keys(result.results).map(function(appId) {
+          var r = result.results[appId];
+          var appName2 = escHtml(nm[appId]||appId);
+          if (r.error) {
+            return '<div class="mi-multi-app-block"><div class="mi-multi-app-hdr">' + appName2
+              + ' <span style="color:#f87171;font-size:0.78rem;">' + escHtml(r.error) + '</span></div></div>';
+          }
+          var ti = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.imported||{})[t]||0);},0);
+          var to2 = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.overwritten||{})[t]||0);},0);
+          var ts = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.skipped||{})[t]||0);},0);
+          return '<div class="mi-multi-app-block">'
+            + '<div class="mi-multi-app-hdr" onclick="this.nextElementSibling.classList.toggle(\'open\')">'
+            + '<span>' + appName2 + '</span>'
+            + '<span class="mi-multi-badges">'
+            + '<span style="color:#4ade80">' + ti + ' imp</span> '
+            + '<span style="color:#a5b4fc">' + to2 + ' ovr</span> '
+            + '<span style="color:#94a3b8">' + ts + ' skip</span>'
+            + '</span></div>'
+            + '<div class="mi-multi-app-body open">' + renderSingleImportTable(r) + '</div>'
+            + '</div>';
+        }).join('');
+        document.getElementById('miImportBody').innerHTML = bodyHtml;
+        document.getElementById('miImportErrors').innerHTML = '';
+      } else {
+        document.getElementById('miImportBody').innerHTML = renderSingleImportTable(result);
+        var totalImported    = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.imported||{})[t]||0);},0);
+        var totalSkipped     = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.skipped||{})[t]||0);},0);
+        var totalOverwritten = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.overwritten||{})[t]||0);},0);
+        var errHtml = '';
+        if (!dryRun && totalSkipped>0 && totalImported===0 && totalOverwritten===0) {
+          errHtml += '<div style="font-size:0.8rem;color:#fbbf24;margin-top:0.5rem;">&#9432; Alle Items sind bereits in der Ziel-App vorhanden. Wähle <strong>Überschreiben</strong> um sie zu aktualisieren.</div>';
+        }
+        if (result.errors && result.errors.length) {
+          errHtml += '<div style="font-size:0.78rem;color:#f87171;margin-top:0.5rem;">'
+            + result.errors.slice(0,5).map(function(e) { return escHtml('['+e.type+'] '+e.title+': '+e.error); }).join('<br>') + '</div>';
+        }
+        document.getElementById('miImportErrors').innerHTML = errHtml;
+      }
+      document.getElementById('miImportResult').style.display = '';
+      showToast(dryRun ? 'Dry Run abgeschlossen' : 'Import abgeschlossen (' + allTargetIds.length + ' App' + (allTargetIds.length>1?'s':'') + ')');
+    } catch (e) {
+      showToast('Import fehlgeschlagen: ' + e.message, 6000);
+    } finally {
+      this.disabled = false;
+      document.getElementById('miImportSpinner').style.display = 'none';
+    }
+  });
+
+  // Master Items — Properties Detail
+  function showMiDetail() {
+    if (!_miExportData) return;
+    document.getElementById('miDetailSection').style.display = '';
+    document.getElementById('miTabCountDim').textContent = (_miExportData.dimensions||[]).length;
+    document.getElementById('miTabCountMeas').textContent = (_miExportData.measures||[]).length;
+    document.getElementById('miTabCountViz').textContent = (_miExportData.visualizations||[]).length;
+    _miDetailType = 'dimensions';
+    document.querySelectorAll('[data-mi-tab]').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-mi-tab')==='dimensions');
+    });
+    _miDetailOpenSet.clear();
+    renderMiDetail('dimensions', document.getElementById('miDetailSearch').value);
+  }
+
+  function getMiItemTitle(type, item) {
+    if (item.title) return item.title;
+    var p = item.properties || {};
+    if (type==='dimensions'||type==='measures') return (p.qMetaDef&&p.qMetaDef.title)||(p.qInfo&&p.qInfo.qId)||'(unbenannt)';
+    return (p.qMeta&&p.qMeta.title)||(p.qInfo&&p.qInfo.qId)||'(unbenannt)';
+  }
+
+  function renderMiDetailBody(type, item) {
+    var p = item.properties || {};
+    var rows = [];
+    if (type==='dimensions') {
+      var d=p.qDim||{}, dm=p.qMetaDef||{};
+      rows.push(['Titel', item.title||dm.title||'–']);
+      rows.push(['Feld', (d.qFieldDefs||[]).join(', ')||'–']);
+      rows.push(['Label', (d.qFieldLabels&&d.qFieldLabels[0])||d.qAlias||'–']);
+      rows.push(['Beschreibung', dm.description||'–']);
+    } else if (type==='measures') {
+      var ms=p.qMeasure||{}, mm=p.qMetaDef||{};
+      rows.push(['Titel', item.title||mm.title||'–']);
+      rows.push(['Label', ms.qLabel||'–']);
+      rows.push(['Formel', ms.qDef||'–']);
+      rows.push(['Beschreibung', mm.description||'–']);
+    } else {
+      var vi=p.qInfo||{}, vm=p.qMeta||{};
+      rows.push(['Titel', item.title||vm.title||'–']);
+      rows.push(['Typ', vi.qType||'–']);
+      rows.push(['Beschreibung', vm.description||'–']);
+    }
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">';
+    rows.forEach(function(r) {
+      html += '<tr><td style="color:var(--text-muted);width:150px;padding:0.3rem 0.6rem 0.3rem 1rem;vertical-align:top;white-space:nowrap;">' + escHtml(r[0])
+        + '</td><td style="padding:0.3rem 0.6rem;font-family:\'Courier New\',monospace;font-size:0.78rem;word-break:break-all;">' + escHtml(String(r[1])) + '</td></tr>';
+    });
+    html += '</table>';
+    var jid = 'mi-j-' + Math.random().toString(36).slice(2,8);
+    html += '<div style="margin:0.5rem 1rem 0.5rem;">'
+      + '<button class="btn-action mi-json-toggle" data-target="' + jid + '" style="font-size:0.72rem;">Raw JSON</button>'
+      + '<pre id="' + jid + '" style="display:none;margin-top:0.5rem;padding:0.6rem;background:rgba(0,0,0,0.3);border-radius:6px;font-size:0.71rem;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;">'
+      + escHtml(JSON.stringify(item,null,2)) + '</pre></div>';
+    return html;
+  }
+
+  function renderMiDetail(type, filter) {
+    _miDetailType = type;
+    var items = (_miExportData && _miExportData[type]) || [];
+    var lf = (filter||'').toLowerCase();
+    if (lf) items = items.filter(function(it) { return getMiItemTitle(type,it).toLowerCase().indexOf(lf)!==-1; });
+    var body = document.getElementById('miDetailBody');
+    if (!items.length) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>' + (lf?'Keine Treffer.':'Keine Items in dieser Kategorie.') + '</div></div>';
+      return;
+    }
+    var html = '';
+    items.forEach(function(item, idx) {
+      var title = getMiItemTitle(type, item);
+      var key = type + ':' + idx;
+      var isOpen = _miDetailOpenSet.has(key);
+      html += '<div class="script-card">'
+        + '<div class="script-card-header' + (isOpen?' open':'') + '" data-mi-card="' + escHtml(key) + '">'
+        + '<span class="sc-chevron' + (isOpen?' open':'') + '">&#x25B6;</span>'
+        + '<span class="sc-name">' + escHtml(title) + '</span>'
+        + '</div><div class="sc-body' + (isOpen?' open':'') + '">'
+        + (isOpen ? renderMiDetailBody(type,item) : '') + '</div></div>';
+    });
+    body.innerHTML = html;
+    body.querySelectorAll('[data-mi-card]').forEach(function(hdr) {
+      hdr.addEventListener('click', function() {
+        var key2 = this.getAttribute('data-mi-card');
+        var parts = key2.split(':');
+        var t = parts[0], i2 = parseInt(parts[1],10);
+        var wasOpen = _miDetailOpenSet.has(key2);
+        if (wasOpen) _miDetailOpenSet.delete(key2); else _miDetailOpenSet.add(key2);
+        var chev = this.querySelector('.sc-chevron');
+        var bodyEl = this.nextElementSibling;
+        if (wasOpen) {
+          this.classList.remove('open'); if(chev) chev.classList.remove('open');
+          bodyEl.classList.remove('open'); bodyEl.innerHTML='';
+        } else {
+          this.classList.add('open'); if(chev) chev.classList.add('open');
+          bodyEl.classList.add('open');
+          bodyEl.innerHTML = renderMiDetailBody(t, ((_miExportData&&_miExportData[t])||[])[i2]);
+          bodyEl.querySelectorAll('.mi-json-toggle').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var pre = document.getElementById(this.getAttribute('data-target'));
+              if (!pre) return;
+              var hidden = pre.style.display==='none';
+              pre.style.display = hidden?'':'none';
+              this.textContent = hidden?'JSON verbergen':'Raw JSON';
+            });
+          });
+        }
+      });
+    });
+  }
+
+  document.querySelectorAll('[data-mi-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var t = this.getAttribute('data-mi-tab');
+      document.querySelectorAll('[data-mi-tab]').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      _miDetailOpenSet.clear();
+      renderMiDetail(t, document.getElementById('miDetailSearch').value);
+    });
+  });
+
+  var _miDetailSearchTimer = null;
+  document.getElementById('miDetailSearch').addEventListener('input', function() {
+    var val = this.value;
+    clearTimeout(_miDetailSearchTimer);
+    _miDetailSearchTimer = setTimeout(function() { renderMiDetail(_miDetailType, val); }, 250);
+  });
+
+  // ══ Fetch & Schedules tab ══════════════════════════════════════════════════
+
+  async function loadFetchJobs() {
+    var wrap = document.getElementById('fetchJobsWrap');
+    try {
+      var resp = await apiFetch('/api/fetch/jobs');
+      if (!resp.ok) throw new Error('HTTP '+resp.status);
+      var data = await resp.json();
+      renderFetchJobs(data.jobs||[]);
+    } catch (e) {
+      wrap.innerHTML = '<div class="empty-state">Fehler: '+escHtml(e.message)+'</div>';
+    }
+  }
+
+  function renderFetchJobs(jobs) {
+    var wrap = document.getElementById('fetchJobsWrap');
+    if (!jobs.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4CB;</div><div>Keine Jobs vorhanden.</div></div>';
+      return;
+    }
+    var pid = _hubProjectId ? parseInt(_hubProjectId,10) : null;
+    var filtered = pid ? jobs.filter(function(j) { return !j.projectId || j.projectId===pid; }) : jobs;
+    if (!filtered.length) filtered = jobs.slice(0,10);
+    var rows = filtered.slice(0,10).map(function(j) {
+      var statusClass = 'job-status-' + (j.status||'');
+      var steps = (j.completedSteps||[]).length + '/' + (j.plannedSteps||[]).length;
+      var created = j.createdAt ? new Date(j.createdAt).toLocaleString('de-DE') : '–';
+      return '<tr>'
+        + '<td style="font-family:monospace;font-size:0.75rem;color:var(--text-muted);">' + escHtml((j.jobId||'').slice(0,8)) + '</td>'
+        + '<td class="' + statusClass + '">' + escHtml(j.status||'–') + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + escHtml(steps) + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + created + '</td>'
+        + '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table class="sync-table"><thead><tr><th>Job ID</th><th>Status</th><th>Schritte</th><th>Gestartet</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+
+  document.getElementById('btnRefreshJobs').addEventListener('click', loadFetchJobs);
+
+  document.getElementById('btnStartFetch').addEventListener('click', async function() {
+    var pid = _hubProjectId;
+    if (!pid) { showToast('Kein Projekt ausgewählt.'); return; }
+    var steps = Array.from(document.querySelectorAll('.fStepCb:checked')).map(function(cb) { return cb.value; });
+    if (!steps.length) { showToast('Mindestens einen Schritt auswählen.'); return; }
+
+    if (_fetchEvtSrc) { _fetchEvtSrc.close(); _fetchEvtSrc = null; }
+    this.disabled = true;
+    document.getElementById('fetchJobStatus').textContent = 'Starte Job…';
+    document.getElementById('fetchProgressWrap').style.display = '';
+    document.getElementById('fetchProgressBar').style.width = '0%';
+    document.getElementById('fetchProgressLabel').textContent = 'Job gestartet…';
+
+    try {
+      var resp = await apiFetch('/api/fetch/jobs', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({project_id: parseInt(pid,10), steps: steps}),
+      });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function(){return{};});
+        throw new Error(err.detail||'HTTP '+resp.status);
+      }
+      var job = await resp.json();
+      trackFetchJob(job.jobId || job.job_id);
+    } catch (e) {
+      showToast('Fetch fehlgeschlagen: '+e.message, 6000);
+      this.disabled = false;
+      document.getElementById('fetchJobStatus').textContent = '';
+      document.getElementById('fetchProgressWrap').style.display = 'none';
+    }
+  });
+
+  function trackFetchJob(jobId) {
+    if (!jobId) return;
+    var btn = document.getElementById('btnStartFetch');
+    var evtSrc = new EventSource('/api/fetch/jobs/'+encodeURIComponent(jobId)+'/stream');
+    _fetchEvtSrc = evtSrc;
+    evtSrc.onmessage = function(e) {
+      try {
+        var j = JSON.parse(e.data);
+        var planned = (j.plannedSteps||[]).length || 1;
+        var completed = (j.completedSteps||[]).length;
+        var pct = Math.round((completed/planned)*100);
+        document.getElementById('fetchProgressBar').style.width = pct + '%';
+        var step = j.currentStep ? ' (▶ '+j.currentStep+')' : '';
+        document.getElementById('fetchProgressLabel').textContent = completed+'/'+planned+' Schritte'+step;
+        document.getElementById('fetchJobStatus').textContent = j.status||'';
+        if (j.status==='completed'||j.status==='failed') {
+          evtSrc.close(); _fetchEvtSrc=null;
+          btn.disabled = false;
+          document.getElementById('fetchProgressBar').style.width = '100%';
+          document.getElementById('fetchProgressLabel').textContent = j.status==='completed' ? 'Abgeschlossen' : 'Fehlgeschlagen';
+          showToast(j.status==='completed' ? 'Fetch abgeschlossen' : ('Fetch fehlgeschlagen: '+(j.error||'')), j.status==='failed'?6000:3000);
+          loadFetchJobs();
+          if (j.status==='completed') { _scriptLoaded=false; }
+        }
+      } catch (err) { /* ignore parse error */ }
+    };
+    evtSrc.onerror = function() {
+      evtSrc.close(); _fetchEvtSrc=null;
+      btn.disabled=false;
+      document.getElementById('fetchProgressWrap').style.display='none';
+      document.getElementById('fetchJobStatus').textContent='';
+    };
+  }
+
+  // Schedules
+  async function loadSchedules() {
+    var pid = _hubProjectId;
+    if (!pid) return;
+    try {
+      var resp = await apiFetch('/api/fetch/schedules?project_id='+encodeURIComponent(pid));
+      if (!resp.ok) throw new Error('HTTP '+resp.status);
+      var data = await resp.json();
+      renderSchedules(data.schedules||[]);
+    } catch (e) {
+      document.getElementById('schedulesWrap').innerHTML = '<div class="empty-state">Fehler: '+escHtml(e.message)+'</div>';
+    }
+  }
+
+  function renderSchedules(list) {
+    if (!list.length) {
+      document.getElementById('schedulesWrap').innerHTML = '<div class="empty-state"><div class="empty-icon">&#x23F0;</div><div>Noch keine Zeitpläne konfiguriert.</div></div>';
+      return;
+    }
+    var rows = list.map(function(s) {
+      var steps = (s.steps||[]).join(', ');
+      var nextRun = s.next_run_at ? new Date(s.next_run_at).toLocaleString('de-DE') : '&mdash;';
+      var lastRun = s.last_run_at ? new Date(s.last_run_at).toLocaleString('de-DE') : 'Noch nie';
+      var activeBadge = s.is_active ? '<span class="badge badge-in_sync">Aktiv</span>' : '<span class="badge badge-unmapped">Inaktiv</span>';
+      return '<tr>'
+        + '<td>' + escHtml(s.label||'—') + '</td>'
+        + '<td><code style="font-size:0.78rem;color:#a5b4fc;">' + escHtml(s.cron_expr) + '</code></td>'
+        + '<td style="color:var(--text-muted);font-size:0.8rem;">' + escHtml(steps) + '</td>'
+        + '<td>' + activeBadge + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + nextRun + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + lastRun + '</td>'
+        + '<td><div class="actions">'
+        + '<button class="btn-action" onclick="openEditSchedule(' + s.id + ')">Bearbeiten</button>'
+        + '<button class="btn-danger" onclick="deleteSchedule(' + s.id + ')">Löschen</button>'
+        + '</div></td>'
+        + '</tr>';
+    }).join('');
+    document.getElementById('schedulesWrap').innerHTML = '<table class="sync-table"><thead><tr>'
+      + '<th>Bezeichnung</th><th>Cron</th><th>Schritte</th><th>Status</th><th>Nächster Lauf</th><th>Letzter Lauf</th><th>Aktionen</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function openNewSchedule() {
+    _editingScheduleId = null;
+    document.getElementById('scheduleModalTitle').textContent = 'Neuer Zeitplan';
+    document.getElementById('scheduleError').style.display = 'none';
+    document.getElementById('editingScheduleId').value = '';
+    document.getElementById('sCronExpr').value = '';
+    document.getElementById('sLabel').value = '';
+    document.getElementById('sIsActive').checked = true;
+    document.querySelectorAll('.sStepCb').forEach(function(cb) { cb.checked = cb.value==='apps'||cb.value==='scripts'; });
+    document.getElementById('scheduleModal').classList.add('open');
+  }
+
+  async function openEditSchedule(id) {
+    var pid = _hubProjectId;
+    if (!pid) return;
+    try {
+      var resp = await apiFetch('/api/fetch/schedules?project_id='+encodeURIComponent(pid));
+      var data = await resp.json();
+      var s = (data.schedules||[]).find(function(x) { return x.id===id; });
+      if (!s) return;
+      _editingScheduleId = id;
+      document.getElementById('scheduleModalTitle').textContent = 'Zeitplan bearbeiten';
+      document.getElementById('scheduleError').style.display = 'none';
+      document.getElementById('editingScheduleId').value = id;
+      document.getElementById('sCronExpr').value = s.cron_expr;
+      document.getElementById('sLabel').value = s.label||'';
+      document.getElementById('sIsActive').checked = s.is_active;
+      var steps = s.steps||[];
+      document.querySelectorAll('.sStepCb').forEach(function(cb) { cb.checked = steps.indexOf(cb.value)>=0; });
+      document.getElementById('scheduleModal').classList.add('open');
+    } catch (e) { showToast('Fehler: '+e.message); }
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm('Zeitplan wirklich löschen?')) return;
+    try {
+      var resp = await apiFetch('/api/fetch/schedules/'+id, {method:'DELETE'});
+      if (!resp.ok && resp.status!==204) throw new Error('HTTP '+resp.status);
+      showToast('Zeitplan gelöscht');
+      loadSchedules();
+    } catch (e) { showToast('Löschen fehlgeschlagen: '+e.message); }
+  }
+
+  function closeScheduleModal() {
+    document.getElementById('scheduleModal').classList.remove('open');
+    _editingScheduleId = null;
+  }
+
+  document.getElementById('btnNewSchedule').addEventListener('click', openNewSchedule);
+  document.getElementById('scheduleModalClose').addEventListener('click', closeScheduleModal);
+  document.getElementById('scheduleCancel').addEventListener('click', closeScheduleModal);
+  document.getElementById('scheduleModal').addEventListener('click', function(e) { if (e.target===this) closeScheduleModal(); });
+
+  document.getElementById('scheduleForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var pid = _hubProjectId;
+    if (!pid) return;
+    var cron = document.getElementById('sCronExpr').value.trim();
+    var label = document.getElementById('sLabel').value.trim();
+    var isActive = document.getElementById('sIsActive').checked;
+    var steps = [];
+    document.querySelectorAll('.sStepCb:checked').forEach(function(cb) { steps.push(cb.value); });
+    if (!steps.length) {
+      document.getElementById('scheduleError').textContent = 'Mindestens einen Schritt auswählen.';
+      document.getElementById('scheduleError').style.display = '';
+      return;
+    }
+    document.getElementById('scheduleSave').disabled = true;
+    try {
+      var id = document.getElementById('editingScheduleId').value;
+      var method = id ? 'PUT' : 'POST';
+      var url = id ? '/api/fetch/schedules/'+id : '/api/fetch/schedules';
+      var body = {project_id: parseInt(pid,10), steps: steps, cron_expr: cron, label: label||null, is_active: isActive};
+      var resp = await apiFetch(url, {method: method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+      if (!resp.ok) { var err2=await resp.json().catch(function(){return{};}); throw new Error(err2.detail||'HTTP '+resp.status); }
+      closeScheduleModal();
+      showToast(id?'Zeitplan aktualisiert':'Zeitplan erstellt');
+      loadSchedules();
+    } catch (err3) {
+      document.getElementById('scheduleError').textContent = err3.message;
+      document.getElementById('scheduleError').style.display = '';
+    } finally {
+      document.getElementById('scheduleSave').disabled = false;
+    }
+  });
+
+</script>
+</body>
+</html>

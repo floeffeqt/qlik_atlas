@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from shared.qlik_client import QlikApiError, QlikClient, resolve_logger
-from shared.utils import sanitize_name, url_encode_qri, write_json
+from shared.utils import url_encode_qri
 
 
 def _encode_app_qri(app_id: str) -> str:
@@ -22,8 +22,23 @@ def _overview_path(app_id: str) -> str:
 
 
 def _app_edges_path(app_id: str, up_depth: str, collapse: str) -> str:
+    return _app_graph_path(app_id, up_depth, collapse, "resource")
+
+
+LINEAGE_GRAPH_LEVELS = {"field", "table", "resource", "all"}
+
+
+def _normalize_graph_level(level: str | None) -> str:
+    candidate = str(level or "").strip().lower()
+    if candidate in LINEAGE_GRAPH_LEVELS:
+        return candidate
+    return "resource"
+
+
+def _app_graph_path(app_id: str, up_depth: str, collapse: str, graph_level: str) -> str:
     encoded = _encode_app_qri(app_id)
-    return f"/api/v1/lineage-graphs/nodes/{encoded}?level=resource&collapse={collapse}&up={up_depth}"
+    level = _normalize_graph_level(graph_level)
+    return f"/api/v1/lineage-graphs/nodes/{encoded}?level={level}&collapse={collapse}&up={up_depth}"
 
 
 async def _fetch_endpoint(
@@ -75,6 +90,7 @@ async def fetch_and_save_lineage_for_app(
     semaphore: asyncio.Semaphore,
     logger,
     results,
+    collector=None,
 ) -> None:
     app_id = str(app.get("appId", ""))
     app_name = app.get("name") or app_id
@@ -98,9 +114,8 @@ async def fetch_and_save_lineage_for_app(
         },
     }
 
-    file_name = f"{sanitize_name(str(app_name))}__{app_id}__lineage.json"
-    out_path = outdir / file_name
-    write_json(out_path, lineage)
+    if collector is not None:
+        collector.append(lineage)
 
     source_ok = _is_success(source_result)
     overview_ok = _is_success(overview_result)
@@ -109,11 +124,6 @@ async def fetch_and_save_lineage_for_app(
 
     if source_ok and overview_ok:
         results["success"] += 1
-        if success_outdir is not None:
-            success_path = success_outdir / file_name
-            write_json(success_path, lineage)
-            if logger:
-                logger.info("[%s/%s] %s (%s) -> success copy -> %s", idx, total, app_name, app_id, success_path)
     elif source_ok or overview_ok:
         results["partial"] += 1
         results["errors"][app_id] = {
@@ -136,7 +146,7 @@ async def fetch_and_save_lineage_for_app(
             app_id,
             source_result.get("status"),
             overview_result.get("status"),
-            out_path,
+            "memory",
         )
 
 
@@ -146,6 +156,7 @@ async def fetch_lineage_for_apps(
     outdir,
     success_outdir=None,
     concurrency: int = 5,
+    collector=None,
 ) -> Dict[str, Any]:
     semaphore = asyncio.Semaphore(concurrency)
     logger = resolve_logger(getattr(client, "logger", None), "qlik.fetch.lineage")
@@ -155,13 +166,15 @@ async def fetch_lineage_for_apps(
     total = len(apps)
     for idx, app in enumerate(apps, start=1):
         task = fetch_and_save_lineage_for_app(
-            idx, total, app, client, outdir, success_outdir, semaphore, logger, results
+            idx, total, app, client, outdir, success_outdir, semaphore, logger, results, collector
         )
         tasks.append(task)
 
-    await asyncio.gather(*tasks)
-    await client.close()
-    return results
+    try:
+        await asyncio.gather(*tasks)
+        return results
+    finally:
+        await client.close()
 
 
 def _extract_app_edges(data: Any) -> List[Dict[str, str]]:
@@ -198,9 +211,12 @@ async def fetch_app_edges_for_apps(
     concurrency: int = 5,
     up_depth: str = "-1",
     collapse: str = "true",
+    graph_level: str = "resource",
+    collector=None,
 ) -> Dict[str, Any]:
     semaphore = asyncio.Semaphore(concurrency)
     logger = resolve_logger(getattr(client, "logger", None), "qlik.fetch.lineage")
+    normalized_level = _normalize_graph_level(graph_level)
     results: Dict[str, Any] = {"success": 0, "failed": 0, "errors": {}, "edges": []}
 
     async def _fetch_edges_for_app(idx: int, total: int, app: Dict[str, Any]) -> None:
@@ -209,7 +225,7 @@ async def fetch_app_edges_for_apps(
         if logger:
             logger.info("[%s/%s] %s (%s) -> start app_edges", idx, total, app_name, app_id)
 
-        path = _app_edges_path(app_id, up_depth, collapse)
+        path = _app_graph_path(app_id, up_depth, collapse, normalized_level)
         result = await _fetch_endpoint("app_edges", path, client, semaphore, logger)
 
         edges = _extract_app_edges(result.get("data") if isinstance(result, dict) else None)
@@ -224,35 +240,31 @@ async def fetch_app_edges_for_apps(
             },
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "status": result.get("status"),
+            "level": normalized_level,
             "edges": edges,
             "raw": result.get("data") if isinstance(result, dict) and "data" in result else result,
         }
 
-        file_name = f"{sanitize_name(str(app_name))}__{app_id}__app_edges.json"
-        out_path = outdir / file_name
-        write_json(out_path, payload)
+        if collector is not None:
+            collector.append(payload)
 
         if isinstance(result, dict) and 200 <= int(result.get("status") or 0) < 300:
             results["success"] += 1
-            if success_outdir is not None:
-                success_path = success_outdir / file_name
-                write_json(success_path, payload)
-                if logger:
-                    logger.info("[%s/%s] %s (%s) -> success copy -> %s", idx, total, app_name, app_id, success_path)
         else:
             results["failed"] += 1
             results["errors"][app_id] = result
 
         if logger:
             logger.info(
-                "[%s/%s] %s (%s) -> status=%s edges=%s -> %s",
+                "[%s/%s] %s (%s) -> level=%s status=%s edges=%s -> %s",
                 idx,
                 total,
                 app_name,
                 app_id,
+                normalized_level,
                 result.get("status"),
                 len(edges),
-                out_path,
+                "memory",
             )
 
     tasks = []
@@ -260,6 +272,8 @@ async def fetch_app_edges_for_apps(
     for idx, app in enumerate(apps, start=1):
         tasks.append(_fetch_edges_for_app(idx, total, app))
 
-    await asyncio.gather(*tasks)
-    await client.close()
-    return results
+    try:
+        await asyncio.gather(*tasks)
+        return results
+    finally:
+        await client.close()

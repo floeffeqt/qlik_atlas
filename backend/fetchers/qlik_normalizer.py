@@ -94,8 +94,7 @@ def build_edge(
     }
 
 
-def normalize_file(path: Path) -> Tuple[Dict, List[Dict], List[Dict]]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+def normalize_payload(data: Any, file_name: str = "") -> Tuple[Dict, List[Dict], List[Dict]]:
     if not isinstance(data, dict):
         raise ValueError("lineage artifact must be a JSON object")
 
@@ -105,7 +104,7 @@ def normalize_file(path: Path) -> Tuple[Dict, List[Dict], List[Dict]]:
     space_id = app.get("spaceId")
     fetched_at = data.get("fetched_at")
     status = data.get("status")
-    file_name = path.name
+    file_name = file_name or ""
 
     graph: Dict[str, Any] = {}
     raw_payload = data.get("raw")
@@ -142,3 +141,8 @@ def normalize_file(path: Path) -> Tuple[Dict, List[Dict], List[Dict]]:
         "edgesCount": len(canonical_edges),
     }
     return app_info, canonical_nodes, canonical_edges
+
+
+def normalize_file(path: Path) -> Tuple[Dict, List[Dict], List[Dict]]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return normalize_payload(data, file_name=path.name)

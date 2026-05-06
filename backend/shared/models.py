@@ -93,6 +93,15 @@ class InventoryResponse(BaseModel):
     totals: Dict[str, int]
 
 
+class PaginatedGraphResponse(BaseModel):
+    nodes: List[Node]
+    edges: List[Edge]
+    next_cursor: Optional[str] = None
+    total_nodes: int
+    total_edges: int
+    page_size: int
+
+
 class HealthResponse(BaseModel):
     status: str
     filesLoaded: int

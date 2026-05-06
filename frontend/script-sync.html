@@ -1,0 +1,2001 @@
+<!doctype html>
+<html lang="en" style="background:#1a1a2e;">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Script Sync – Lineage Explorer</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      --surface: rgba(255,255,255,0.05);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.1);
+      --accent: #667eea;
+      --accent2: #764ba2;
+      --text: #fff;
+      --text-muted: rgba(255,255,255,0.5);
+      --text-dim: rgba(255,255,255,0.3);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); }
+
+    nav { position: sticky; top: 0; z-index: 100; background: rgba(15,20,40,0.7); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 60px; display: flex; align-items: center; gap: 1rem; }
+    .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--text); }
+    .brand-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; overflow: hidden; }
+    .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .nav-project-badge { margin-left: 0.5rem; padding: 0.25rem 0.55rem; border: 1px solid rgba(148,163,184,0.35); border-radius: 999px; background: rgba(30,41,59,0.45); display: inline-flex; align-items: center; gap: 0.42rem; min-width: 0; }
+    .nav-project-badge .k { color: rgba(219,234,254,0.74); text-transform: uppercase; font-size: 0.67rem; letter-spacing: 0.02em; }
+    .nav-project-select { height: 28px; min-width: 220px; max-width: 280px; background: rgba(15,23,42,0.82); border: 1px solid rgba(148,163,184,0.35); color: #fff; border-radius: 999px; padding: 0 0.6rem; font-size: 0.76rem; outline: none; }
+    .nav-project-select:disabled { opacity: 0.65; cursor: not-allowed; }
+    .nav-project-select:focus { border-color: rgba(102,126,234,0.72); box-shadow: 0 0 0 1px rgba(102,126,234,0.28) inset; }
+    .nav-project-select option { background: #1a1a2e; color: #fff; }
+    .nav-spacer { flex: 1; }
+    .nav-user { display: flex; align-items: center; gap: 0.75rem; }
+    .nav-user-email { color: var(--text-muted); font-size: 0.8rem; }
+    .btn-sm { padding: 0.4rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
+    .btn-sm:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+    .page-title { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .page-subtitle { color: var(--text-muted); font-size: 0.9rem; }
+
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-action { background: rgba(102,126,234,0.15); border: 1px solid rgba(102,126,234,0.3); color: #a5b4fc; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-action:hover { background: rgba(102,126,234,0.3); }
+    .btn-danger { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-danger:hover { background: rgba(239,68,68,0.3); }
+    .btn-refresh { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; border-radius: var(--radius-sm); font-size: 0.78rem; padding: 0.3rem 0.65rem; cursor: pointer; transition: all 0.15s; }
+    .btn-refresh:hover { background: rgba(34,197,94,0.3); }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem; border-radius: 100px; font-size: 0.72rem; font-weight: 600; }
+    .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .badge-in_sync  { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-git_ahead { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .badge-qlik_ahead { background: rgba(249,115,22,0.15); color: #fb923c; }
+    .badge-diverged  { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-error     { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-unmapped  { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+
+    /* Section */
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
+    .section-title { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+
+    /* Table */
+    .sync-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .sync-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    .sync-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+    .sync-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .sync-table .app-name { font-weight: 600; }
+    .sync-table .mono { font-family: 'Courier New', monospace; font-size: 0.75rem; color: var(--text-muted); }
+    .sync-table .actions { display: flex; gap: 0.3rem; }
+
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-dim); }
+    .empty-icon { font-size: 2rem; opacity: 0.3; margin-bottom: 0.75rem; }
+
+    /* Modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: rgba(15,20,50,0.97); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 520px; position: relative; box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.5rem; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+    .modal-close:hover { color: var(--text); }
+    .form-group { margin-bottom: 1.1rem; }
+    label { display: block; color: rgba(255,255,255,0.7); font-size: 0.82rem; font-weight: 500; margin-bottom: 0.45rem; }
+    input[type="text"], select { width: 100%; padding: 0.7rem 0.9rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; font-size: 0.9rem; outline: none; transition: border-color 0.2s; font-family: inherit; }
+    input::placeholder { color: rgba(255,255,255,0.3); }
+    input:focus, select:focus { border-color: var(--accent); }
+    select option { background: #1a1a2e; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+    .btn-modal-cancel { padding: 0.6rem 1.1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.875rem; cursor: pointer; }
+    .btn-modal-cancel:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-modal-save { padding: 0.6rem 1.3rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-modal-save:hover { opacity: 0.9; }
+    .btn-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .alert { border-radius: var(--radius-sm); padding: 0.65rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
+    .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
+
+    /* History table */
+    .history-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .history-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .history-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.78rem; }
+    .history-table .mono { font-family: 'Courier New', monospace; font-size: 0.72rem; color: var(--text-muted); }
+
+    /* Stats row */
+    .stats-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem 1.25rem; flex: 1; min-width: 120px; text-align: center; }
+    .stat-value { font-size: 1.6rem; font-weight: 700; }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+    .stat-value.green { color: #4ade80; }
+    .stat-value.yellow { color: #fbbf24; }
+    .stat-value.orange { color: #fb923c; }
+    .stat-value.red { color: #f87171; }
+
+    #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(10px); background: rgba(30,40,70,0.95); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-size: 0.875rem; color: var(--text); backdrop-filter: blur(10px); opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; max-width: 320px; z-index: 500; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .admin-fab {
+      position: fixed; bottom: 1.5rem; left: 1.5rem; padding: 0.6rem 1.2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff;
+      text-decoration: none; font-size: 0.85rem; font-weight: 600; border-radius: var(--radius-sm);
+      z-index: 90; box-shadow: 0 4px 16px rgba(102,126,234,0.3); transition: opacity 0.2s; display: none;
+    }
+    .admin-fab:hover { opacity: 0.9; }
+
+    /* ── Script accordion ── */
+    .script-card { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.5rem; overflow: hidden; background: rgba(255,255,255,0.02); }
+    .script-card-header { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; cursor: pointer; user-select: none; transition: background 0.15s; }
+    .script-card-header:hover { background: rgba(255,255,255,0.04); }
+    .script-card-header.open { background: rgba(102,126,234,0.08); border-bottom: 1px solid var(--border); }
+    .sc-chevron { font-size: 0.65rem; color: var(--text-muted); transition: transform 0.2s; flex-shrink: 0; }
+    .sc-chevron.open { transform: rotate(90deg); }
+    .sc-name { font-weight: 600; font-size: 0.87rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sc-meta { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; padding-right: 0.5rem; }
+    .sc-toolbar { display: flex; gap: 0.4rem; flex-shrink: 0; }
+    .sc-body { display: none; }
+    .sc-body.open { display: block; }
+    .sc-pre {
+      margin: 0; padding: 0.75rem 0; overflow-x: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+      font-size: 0.78rem; line-height: 1.6; max-height: 520px; overflow-y: auto;
+      counter-reset: line; background: rgba(10,13,30,0.5);
+    }
+    .sv-line { display: flex; }
+    .sv-line:hover { background: rgba(255,255,255,0.03); }
+    .sv-ln { display: inline-block; min-width: 3rem; padding: 0 0.75rem; text-align: right;
+      color: rgba(255,255,255,0.2); user-select: none; border-right: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+    .sv-lc { display: inline-block; padding: 0 1rem; white-space: pre; }
+
+    /* ── Qlik syntax highlighting ── */
+    .ql-kw  { color: #7c9fef; font-weight: 600; }   /* keywords  – blue    */
+    .ql-str { color: #98c379; }                       /* strings   – green   */
+    .ql-cmt { color: #5c6785; font-style: italic; }  /* comments  – gray    */
+    .ql-var { color: #e5c07b; }                       /* variables – yellow  */
+    .ql-fn  { color: #c678dd; }                       /* functions – purple  */
+    .ql-fld { color: #56b6c2; }                       /* [fields]  – teal    */
+    .ql-num { color: #d19a66; }                       /* numbers   – orange  */
+    /* ── Tab section header ── */
+    .sv-tab-section {
+      display: flex; align-items: center; gap: 0.5rem;
+      margin: 0.6rem 0 0;
+      padding: 0.25rem 0.75rem;
+      background: rgba(124,159,239,0.10);
+      border-left: 3px solid #7c9fef;
+      color: #7c9fef; font-weight: 600; font-style: normal;
+      font-size: 0.82rem; letter-spacing: 0.04em; text-transform: uppercase;
+      cursor: pointer; user-select: none;
+    }
+    .sv-tab-section::before {
+      content: '▾';
+      display: inline-block;
+      margin-right: 0.35rem;
+      transition: transform 0.15s ease;
+    }
+    .sv-tab-section.sv-closed::before { transform: rotate(-90deg); }
+    .sv-section-body.sv-collapsed { display: none; }
+
+    /* ── Master Items specific ── */
+    .mi-step { counter-increment: mi-step; }
+    .mi-step-label { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.6rem; }
+    .mi-app-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .mi-app-row select { flex: 1; min-width: 200px; max-width: 380px; padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; font-size: 0.875rem; outline: none; }
+    .mi-app-row select:focus { border-color: var(--accent); }
+    .mi-app-row select option { background: #1a1a2e; }
+    .mi-result-box { margin-top: 1rem; padding: 0.9rem 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--radius-sm); }
+    .mi-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.75rem; }
+    .mi-type-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 0.6rem; text-align: center; }
+    .mi-type-card .val { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+    .mi-type-card .lbl { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .mi-diff-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.75rem; }
+    .mi-diff-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+    .mi-diff-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .mi-diff-table tr:last-child td { border-bottom: none; }
+    .badge-new { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-existing { background: rgba(148,163,184,0.12); color: #94a3b8; }
+    .badge-conflict { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .mi-opts { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: 0.75rem; align-items: flex-start; }
+    .mi-sel-group { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.4rem; overflow: hidden; }
+    .mi-sel-group-hdr { display: flex; align-items: center; gap: 0.45rem; padding: 0.55rem 0.75rem; cursor: pointer; background: rgba(255,255,255,0.02); user-select: none; flex-wrap: wrap; }
+    .mi-sel-group-hdr:hover { background: rgba(255,255,255,0.04); }
+    .mi-sel-group-hdr .msg-title { font-weight: 600; font-size: 0.83rem; flex: 1; min-width: 80px; }
+    .mi-sel-group-body { display: none; padding: 0.55rem 0.85rem; border-top: 1px solid var(--border); max-height: 260px; overflow-y: auto; }
+    .mi-sel-group-body.open { display: block; }
+    .mi-sel-status-hdr { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; margin: 0.5rem 0 0.3rem; }
+    .mi-sel-status-hdr:first-child { margin-top: 0; }
+    .mi-sel-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.18rem 0; font-size: 0.81rem; }
+    .mi-sel-item label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+    .mi-sel-conflict-sub { font-size: 0.71rem; color: var(--text-dim); margin-left: 1.35rem; margin-top: -0.1rem; }
+    .mi-opts label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: rgba(255,255,255,0.75); cursor: pointer; font-weight: normal; }
+    .mi-opts input[type=checkbox], .mi-opts input[type=radio] { width: auto; padding: 0; cursor: pointer; accent-color: var(--accent); }
+    .mi-import-result { margin-top: 1rem; }
+    .mi-import-result table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .mi-import-result th { text-align: left; color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+    .mi-import-result td { padding: 0.4rem 0.5rem; }
+    .mi-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(102,126,234,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
+    .mi-extra-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 0.2rem 0.65rem; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .mi-extra-chip:hover { border-color: var(--accent); background: rgba(102,126,234,0.1); }
+    .mi-extra-chip input { cursor: pointer; accent-color: var(--accent); width: auto; padding: 0; }
+    .mi-multi-app-block { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 0.4rem; overflow: hidden; }
+    .mi-multi-app-hdr { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.7rem; background: rgba(255,255,255,0.04); cursor: pointer; font-size: 0.82rem; font-weight: 600; gap: 0.75rem; }
+    .mi-multi-app-hdr:hover { background: rgba(255,255,255,0.07); }
+    .mi-multi-badges { display: flex; gap: 0.5rem; font-size: 0.75rem; font-weight: 400; }
+    .mi-multi-app-body { display: none; padding: 0.5rem 0.5rem 0.3rem; }
+    .mi-multi-app-body.open { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+  <link rel="stylesheet" href="/assets/tabs.css" />
+  <link rel="stylesheet" href="/assets/responsive-retrofit.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/"><div class="brand-icon"><img src="/assets/logo.png" alt="Atlas Logo" /></div>Atlas</a>
+  <div class="nav-links">
+    <a class="nav-link" href="/projects.html">Projekte</a>
+    <a class="nav-link" href="/">Dashboard</a>
+    <a class="nav-link" href="/analytics.html">Analytics</a>
+    <a class="nav-link" href="/lineage.html">Lineage</a>
+    <a class="nav-link active" href="/script-sync.html">Script Sync</a>
+    <a class="nav-link" href="/app-hub.html">App Hub</a>
+    <a class="nav-link" href="/theme-builder.html">Theme</a>
+  </div>
+  <div class="nav-project-badge" id="navCustomerBadge">
+    <span class="k">Kunde</span>
+    <select id="navCustomerSelect" class="nav-project-select"><option value="">Kunde wird geladen ...</option></select>
+  </div>
+  <div class="nav-project-badge" id="navProjectBadge">
+    <span class="k">Projekt</span>
+    <select id="navProjectSelect" class="nav-project-select"><option value="">Projekt wird geladen ...</option></select>
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="nav-user">
+    <span class="nav-user-email" id="userEmail"></span>
+    <button class="btn-sm" id="logoutBtn">Sign out</button>
+  </div>
+</nav>
+
+<main>
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="scriptsync">Script Sync</button>
+    <button class="tab-btn" data-tab="masteritems">Master Items</button>
+  </div>
+
+  <!-- ════════════════════════════════ TAB: Script Sync ════════════════════════════════ -->
+  <div class="tab-content active" id="tab-scriptsync">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Script Sync</h1>
+      <p class="page-subtitle">Git-Repository Mappings und Drift-Status fuer Qlik App Load-Scripts</p>
+    </div>
+    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+      <button class="btn-refresh" id="btnFetchScripts" disabled style="display:none;">&#x2193; Scripts abziehen</button>
+      <button class="btn-refresh" id="refreshBtn" disabled>Drift pruefen</button>
+      <button class="btn-primary" id="newMappingBtn" disabled>+ Neues Mapping</button>
+    </div>
+  </div>
+
+  <!-- Fetch progress -->
+  <div id="fetchProgressSection" style="display:none;margin-bottom:1rem;">
+    <div style="background:rgba(102,126,234,0.08);border:1px solid rgba(102,126,234,0.25);border-radius:10px;padding:0.85rem 1.1rem;display:flex;align-items:center;gap:0.85rem;">
+      <div style="flex:1;">
+        <div style="font-size:0.8rem;font-weight:600;color:#a5b4fc;margin-bottom:0.35rem;" id="fetchProgressLabel">Fetch-Job läuft…</div>
+        <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden;">
+          <div id="fetchProgressBar" style="height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:3px;width:0%;transition:width 0.4s ease;"></div>
+        </div>
+      </div>
+      <span id="fetchProgressStatus" style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;"></span>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="statsRow" style="display:none;">
+    <div class="stat-card"><div class="stat-value green" id="statSync">0</div><div class="stat-label">In Sync</div></div>
+    <div class="stat-card"><div class="stat-value yellow" id="statGitAhead">0</div><div class="stat-label">Git Ahead</div></div>
+    <div class="stat-card"><div class="stat-value orange" id="statQlikAhead">0</div><div class="stat-label">Qlik Ahead</div></div>
+    <div class="stat-card"><div class="stat-value red" id="statDiverged">0</div><div class="stat-label">Diverged / Error</div></div>
+  </div>
+
+  <!-- Overview table -->
+  <div class="section">
+    <div class="section-title">Mappings &amp; Sync-Status</div>
+    <div id="overviewWrap">
+      <div class="empty-state"><div class="empty-icon">&#x1F517;</div><div>Kein Projekt ausgewaehlt oder keine Mappings vorhanden.</div></div>
+    </div>
+  </div>
+
+  <!-- History (shown after clicking on an app) -->
+  <div class="section" id="historySection" style="display:none;">
+    <div class="section-title">Deployment-History: <span id="historyAppName" style="color:var(--accent)"></span></div>
+    <div id="historyWrap"></div>
+  </div>
+
+  <!-- Scripts section -->
+  <div class="section" id="scriptsSection" style="display:none;">
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+      <span>&#x1F4C4; Qlik Load Scripts</span>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <input id="scriptSearchInput" type="text" placeholder="App filtern&hellip;"
+          style="width:200px;padding:0.35rem 0.7rem;background:rgba(255,255,255,0.07);border:1px solid var(--border);border-radius:var(--radius-sm);color:#fff;font-size:0.82rem;outline:none;" />
+        <button class="btn-action" id="expandAllBtn">Alle &ouml;ffnen</button>
+        <button class="btn-action" id="collapseAllBtn">Alle schlie&szlig;en</button>
+      </div>
+    </div>
+    <div id="scriptsListWrap">
+      <div class="empty-state"><div class="empty-icon">&#x1F4C4;</div><div>Kein Projekt ausgew&auml;hlt oder noch keine Scripts abgezogen.</div></div>
+    </div>
+  </div>
+
+  <!-- Scheduled Fetch-Jobs -->
+  <div class="section" id="schedulesSection" style="display:none;">
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+      <span>&#x23F0; Geplante Fetch-Jobs</span>
+      <button class="btn-primary" id="newScheduleBtn">+ Neuer Zeitplan</button>
+    </div>
+    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">Automatische Fetch-Jobs nach Cron-Zeitplan (UTC). Beispiele: <code style="font-size:0.78rem;color:#a5b4fc;">0 3 * * *</code> = täglich 03:00 Uhr &nbsp;|&nbsp; <code style="font-size:0.78rem;color:#a5b4fc;">0 */6 * * *</code> = alle 6 Stunden</p>
+    <div id="schedulesWrap">
+      <div class="empty-state"><div class="empty-icon">&#x23F0;</div><div>Kein Projekt ausgewählt oder noch keine Zeitpläne konfiguriert.</div></div>
+    </div>
+  </div>
+
+  </div><!-- end tab-scriptsync -->
+
+  <!-- ════════════════════════════════ TAB: Master Items ════════════════════════════════ -->
+  <div class="tab-content" id="tab-masteritems">
+
+    <!-- Schritt 1: Quell-App exportieren -->
+    <div class="section mi-step">
+      <div class="section-title">1 &mdash; Quell-App exportieren</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">W&auml;hle die App, aus der Master Dimensions, Measures und Visualizations ausgelesen werden sollen.</p>
+      <div class="mi-app-row">
+        <select id="miSourceApp"><option value="">App w&auml;hlen&hellip;</option></select>
+        <button class="btn-primary" id="miExportBtn" disabled>Exportieren</button>
+      </div>
+      <div id="miExportResult" style="display:none;" class="mi-result-box">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;" id="miExportMeta"></div>
+        <div class="mi-type-grid">
+          <div class="mi-type-card"><div class="val" id="miExportDimCount">–</div><div class="lbl">Dimensions</div></div>
+          <div class="mi-type-card"><div class="val" id="miExportMeasCount">–</div><div class="lbl">Measures</div></div>
+          <div class="mi-type-card"><div class="val" id="miExportVizCount">–</div><div class="lbl">Visualizations</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail-Fenster: Properties der exportierten Master Items -->
+    <div class="section" id="miDetailSection" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">
+        <div class="section-title" style="margin:0;">Master Item Properties</div>
+        <input id="miDetailSearch" type="text" placeholder="Filtern&hellip;"
+          style="width:200px;padding:0.35rem 0.7rem;background:rgba(255,255,255,0.07);border:1px solid var(--border);border-radius:var(--radius-sm);color:#fff;font-size:0.82rem;outline:none;" />
+      </div>
+      <!-- Mini-Tab-Bar (gleicher Pattern wie app-detail.html) -->
+      <div class="tab-bar" style="margin-bottom:1rem;">
+        <button class="tab-btn active" data-mi-tab="dimensions">Dimensionen <span class="badge badge-existing" id="miTabCountDim" style="margin-left:0.3rem">0</span></button>
+        <button class="tab-btn" data-mi-tab="measures">Kennzahlen <span class="badge badge-existing" id="miTabCountMeas" style="margin-left:0.3rem">0</span></button>
+        <button class="tab-btn" data-mi-tab="visualizations">Visualisierungen <span class="badge badge-existing" id="miTabCountViz" style="margin-left:0.3rem">0</span></button>
+      </div>
+      <div id="miDetailBody"></div>
+    </div>
+
+    <!-- Schritt 2: Ziel-App vergleichen -->
+    <div class="section mi-step" id="miDiffSection" style="opacity:0.4;pointer-events:none;">
+      <div class="section-title">2 &mdash; Ziel-App vergleichen</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">W&auml;hle die App, in die sp&auml;ter importiert werden soll. Der Diff zeigt, was neu, gleich oder abweichend ist.</p>
+      <div class="mi-app-row">
+        <select id="miTargetApp"><option value="">App w&auml;hlen&hellip;</option></select>
+        <button class="btn-refresh" id="miDiffBtn" disabled>Vergleichen</button>
+      </div>
+      <div id="miDiffResult" style="display:none;" class="mi-result-box">
+        <table class="mi-diff-table" id="miDiffTable">
+          <thead><tr><th>Typ</th><th><span class="badge badge-new">Neu</span></th><th><span class="badge badge-existing">Gleich</span></th><th><span class="badge badge-conflict">Konflikt</span></th></tr></thead>
+          <tbody id="miDiffBody"></tbody>
+        </table>
+        <div id="miItemSelection" style="display:none;margin-top:1rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.55rem;flex-wrap:wrap;gap:0.4rem;">
+            <span style="font-size:0.78rem;color:var(--text-muted);">Item-Auswahl f&uuml;r Import (Neu &amp; Konflikte standardm&auml;&szlig;ig gew&auml;hlt)</span>
+            <div style="display:flex;gap:0.4rem;">
+              <button class="btn-action" id="miSelAllBtn">Alle w&auml;hlen</button>
+              <button class="btn-action" id="miSelNoneBtn">Alle abw&auml;hlen</button>
+            </div>
+          </div>
+          <div id="miSelectionBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schritt 3: Import -->
+    <div class="section mi-step" id="miImportSection" style="opacity:0.4;pointer-events:none;">
+      <div class="section-title">3 &mdash; Importieren</div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;">Konfiguriere den Import und starte ihn. Bestehende Items werden niemals gel&ouml;scht.</p>
+      <div class="mi-opts">
+        <div>
+          <div style="font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;font-weight:700;letter-spacing:0.05em;margin-bottom:0.4rem;">Typen</div>
+          <label><input type="checkbox" id="miOptDim" checked /> Dimensions</label>
+          <label style="margin-left:0.9rem"><input type="checkbox" id="miOptMeas" checked /> Measures</label>
+          <label style="margin-left:0.9rem"><input type="checkbox" id="miOptViz" checked /> Visualizations</label>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;font-weight:700;letter-spacing:0.05em;margin-bottom:0.4rem;">Duplikate</div>
+          <label><input type="radio" name="miDup" id="miDupSkip" value="skip" checked /> &Uuml;berspringen</label>
+          <label style="margin-left:0.9rem"><input type="radio" name="miDup" id="miDupOverwrite" value="overwrite" /> &Uuml;berschreiben</label>
+        </div>
+        <div style="margin-top:0.1rem;">
+          <label><input type="checkbox" id="miOptDryRun" /> <strong>Dry Run</strong> (simulieren, nichts schreiben)</label>
+        </div>
+      </div>
+      <!-- Weitere Ziel-Apps -->
+      <div style="margin-top:1rem;">
+        <div style="font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;font-weight:700;letter-spacing:0.05em;margin-bottom:0.5rem;">Weitere Ziel-Apps <span id="miExtraSelCount" style="font-weight:400;color:var(--accent);"></span></div>
+        <div id="miExtraTargets" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.6rem;">
+          <span style="font-size:0.8rem;color:var(--text-dim);">&#8212; Projekt ausw&auml;hlen</span>
+        </div>
+      </div>
+      <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+        <button class="btn-primary" id="miImportBtn">Importieren</button>
+        <span id="miImportSpinner" style="display:none;font-size:0.8rem;color:var(--text-muted);"><span class="mi-spinner"></span>L&auml;uft&hellip;</span>
+      </div>
+      <div id="miImportResult" style="display:none;" class="mi-result-box mi-import-result">
+        <div id="miImportResultHead" style="font-size:0.82rem;font-weight:600;margin-bottom:0.6rem;"></div>
+        <div id="miImportBody"></div>
+        <div id="miImportErrors" style="margin-top:0.6rem;"></div>
+      </div>
+    </div>
+
+  </div><!-- end tab-masteritems -->
+
+</main>
+
+<!-- Create/Edit Mapping Modal -->
+<div class="modal-backdrop" id="mappingModal">
+  <div class="modal">
+    <button class="modal-close" id="mappingModalClose">&times;</button>
+    <div class="modal-title" id="mappingModalTitle">Neues Mapping</div>
+    <div class="alert alert-error" id="mappingError"></div>
+    <form id="mappingForm">
+      <input type="hidden" id="editingAppId" value="" />
+      <div class="form-group">
+        <label for="mAppId">Qlik App ID *</label>
+        <input id="mAppId" type="text" placeholder="z.B. abc12345-def6-7890-abcd-ef1234567890" required />
+      </div>
+      <div class="form-group">
+        <label for="mRepo">Repository *</label>
+        <input id="mRepo" type="text" placeholder="z.B. owner/repo-name oder GitLab Project-ID" required />
+      </div>
+      <div class="form-group">
+        <label for="mBranch">Branch</label>
+        <input id="mBranch" type="text" placeholder="main" value="main" />
+      </div>
+      <div class="form-group">
+        <label for="mFilePath">Dateipfad im Repo *</label>
+        <input id="mFilePath" type="text" placeholder="z.B. apps/sales-dashboard/script.qvs" required />
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="mappingCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="mappingSave">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal-backdrop" id="scheduleModal">
+  <div class="modal">
+    <button class="modal-close" id="scheduleModalClose">&times;</button>
+    <div class="modal-title" id="scheduleModalTitle">Neuer Zeitplan</div>
+    <div class="alert alert-error" id="scheduleError"></div>
+    <form id="scheduleForm">
+      <input type="hidden" id="editingScheduleId" value="" />
+      <div class="form-group">
+        <label for="sCronExpr">Cron-Ausdruck (UTC) *</label>
+        <input id="sCronExpr" type="text" placeholder="z.B.  0 3 * * *  (täglich 03:00 Uhr)" required />
+        <div style="font-size:0.73rem;color:var(--text-dim);margin-top:0.3rem;">Format: Minute Stunde Tag Monat Wochentag &nbsp;|&nbsp; <a href="https://crontab.guru" target="_blank" style="color:var(--accent);">crontab.guru</a></div>
+      </div>
+      <div class="form-group">
+        <label>Schritte *</label>
+        <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.3rem;">
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="apps" checked> Apps</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="spaces"> Spaces</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="scripts"> Scripts</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="data-connections"> Datenverbindungen</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="lineage"> Lineage</label>
+          <label style="display:flex;gap:0.3rem;align-items:center;font-size:0.82rem;"><input type="checkbox" class="sStepCb" value="usage"> Usage</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="sLabel">Bezeichnung (optional)</label>
+        <input id="sLabel" type="text" placeholder="z.B. Nächtlicher Sync" />
+      </div>
+      <div class="form-group">
+        <label style="display:flex;gap:0.5rem;align-items:center;cursor:pointer;">
+          <input type="checkbox" id="sIsActive" checked> Aktiv
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" id="scheduleCancel">Abbrechen</button>
+        <button type="submit" class="btn-modal-save" id="scheduleSave">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<a href="/admin.html" class="admin-fab" id="adminFab">Admin</a>
+<div id="toast"></div>
+
+<script src="/assets/atlas-shared.js"></script>
+<script>
+  window.AtlasShared.requireAuth({ emailElementId: 'userEmail', adminFabId: 'adminFab' });
+  window.AtlasShared.bindLogout('logoutBtn');
+
+  // Show "Scripts abziehen" only for admins
+  var _currentUser = window.AtlasShared.getCachedUser ? window.AtlasShared.getCachedUser() : null;
+  if (_currentUser && _currentUser.role === 'admin') {
+    var _fetchBtn = document.getElementById('btnFetchScripts');
+    if (_fetchBtn) _fetchBtn.style.display = '';
+  }
+
+  function showToast(msg, dur) { window.AtlasShared.showToast(msg, dur, 'toast'); }
+  async function apiFetch(path, opts) { return window.AtlasShared.apiFetch(path, opts); }
+
+  var initialFocusState = window.AtlasShared.readFocusState(window.location.search);
+  var focusState = { project: initialFocusState.project, customer: initialFocusState.customer };
+  function projectCustomerId(project) { return window.AtlasShared.projectCustomerId(project); }
+  function applyFocusPersistence() { window.AtlasShared.persistFocusState(focusState); }
+
+  var projects = [];
+  var customers = [];
+  var mappings = [];
+  var overviewData = [];
+
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function fmtDate(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+  function shortSha(sha) { return sha ? sha.substring(0, 7) : ''; }
+
+  var STATUS_LABELS = {
+    in_sync:    { text: 'In Sync',    cls: 'badge-in_sync' },
+    git_ahead:  { text: 'Git Ahead',  cls: 'badge-git_ahead' },
+    qlik_ahead: { text: 'Qlik Ahead', cls: 'badge-qlik_ahead' },
+    diverged:   { text: 'Diverged',   cls: 'badge-diverged' },
+    error:      { text: 'Fehler',     cls: 'badge-error' },
+    unmapped:   { text: 'Unmapped',   cls: 'badge-unmapped' },
+  };
+
+  function statusBadge(status) {
+    var info = STATUS_LABELS[status] || STATUS_LABELS.unmapped;
+    return '<span class="badge ' + info.cls + '"><span class="dot"></span>' + escHtml(info.text) + '</span>';
+  }
+
+  // ── Focus selectors ──
+  function syncCustomerFromProject() {
+    var projectMap = {};
+    (Array.isArray(projects) ? projects : []).forEach(function(p) {
+      if (p && p.id !== undefined) projectMap[String(p.id)] = p;
+    });
+    window.AtlasShared.syncCustomerFromProject(focusState, projectMap);
+  }
+  function updateFocusNavLinks(pid, cid) {
+    window.AtlasShared.updateNavProjectContext(pid, cid, 'a.nav-link');
+  }
+  function syncFocusInUrl(pid, cid) {
+    var q = new URLSearchParams(window.location.search);
+    if (pid) q.set('project', String(pid)); else q.delete('project');
+    if (cid) q.set('customer', String(cid)); else q.delete('customer');
+    history.replaceState(null, '', '/script-sync.html' + (q.toString() ? ('?' + q.toString()) : ''));
+  }
+  function renderFocusCustomerSelect() {
+    var sel = document.getElementById('navCustomerSelect');
+    var list = Array.isArray(customers) ? customers : [];
+    if (!list.length) { sel.innerHTML = '<option value="">Keine Kunden</option>'; sel.disabled = true; return; }
+    sel.disabled = false;
+    if (!focusState.customer || !list.find(function(c) { return String(c.id) === String(focusState.customer); })) {
+      focusState.customer = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(c) {
+      return '<option value="' + escHtml(String(c.id)) + '"' + (String(c.id) === String(focusState.customer) ? ' selected' : '') + '>' + escHtml(c.name || ('Kunde ' + c.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.customer);
+  }
+  function renderFocusProjectSelect() {
+    var sel = document.getElementById('navProjectSelect');
+    var list = (Array.isArray(projects) ? projects : []).filter(function(p) {
+      return String(projectCustomerId(p)) === String(focusState.customer || '');
+    });
+    if (!list.length) {
+      focusState.project = '';
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Keine Projekte</option>';
+      applyFocusPersistence();
+      updateFocusNavLinks('', focusState.customer);
+      syncFocusInUrl('', focusState.customer);
+      onProjectChanged();
+      return;
+    }
+    sel.disabled = false;
+    if (!focusState.project || !list.find(function(p) { return String(p.id) === String(focusState.project); })) {
+      focusState.project = String(list[0].id);
+    }
+    sel.innerHTML = list.map(function(p) {
+      return '<option value="' + escHtml(String(p.id)) + '"' + (String(p.id) === String(focusState.project) ? ' selected' : '') + '>' + escHtml(p.name || ('Projekt ' + p.id)) + '</option>';
+    }).join('');
+    sel.value = String(focusState.project);
+    applyFocusPersistence();
+    updateFocusNavLinks(focusState.project, focusState.customer);
+    syncFocusInUrl(focusState.project, focusState.customer);
+    onProjectChanged();
+  }
+
+  document.getElementById('navCustomerSelect').addEventListener('change', function() {
+    focusState.customer = this.value;
+    focusState.project = '';
+    renderFocusProjectSelect();
+  });
+  document.getElementById('navProjectSelect').addEventListener('change', function() {
+    focusState.project = this.value;
+    applyFocusPersistence();
+    updateFocusNavLinks(focusState.project, focusState.customer);
+    syncFocusInUrl(focusState.project, focusState.customer);
+    onProjectChanged();
+  });
+
+  // ── Data loading ──
+  async function loadData() {
+    var results = await Promise.all([
+      apiFetch('/api/projects'),
+      apiFetch('/api/customers/names'),
+    ]);
+    projects = await results[0].json();
+    customers = await results[1].json();
+    syncCustomerFromProject();
+    renderFocusCustomerSelect();
+    renderFocusProjectSelect();
+  }
+
+  function onProjectChanged() {
+    var pid = focusState.project;
+    var hasProject = pid && pid !== '';
+    document.getElementById('newMappingBtn').disabled = !hasProject;
+    document.getElementById('refreshBtn').disabled = !hasProject;
+    var fetchBtn = document.getElementById('btnFetchScripts');
+    if (fetchBtn) fetchBtn.disabled = !hasProject;
+    if (hasProject) {
+      loadMappings();
+      loadScriptsList();
+      loadSchedules();
+    } else {
+      mappings = [];
+      overviewData = [];
+      renderOverview();
+      _allScriptApps = [];
+      _openScriptAppId = null;
+      document.getElementById('scriptsSection').style.display = 'none';
+      document.getElementById('schedulesSection').style.display = 'none';
+      var vp = document.getElementById('scriptViewerPanel');
+      if (vp) vp.style.display = 'none';
+    }
+  }
+
+  async function loadMappings() {
+    var pid = focusState.project;
+    if (!pid) return;
+    try {
+      var resp = await apiFetch('/api/script-sync/mappings?project_id=' + pid);
+      mappings = await resp.json();
+    } catch (e) {
+      mappings = [];
+    }
+    renderOverview();
+  }
+
+  async function loadDriftStatus() {
+    var pid = focusState.project;
+    if (!pid) return;
+    document.getElementById('refreshBtn').disabled = true;
+    document.getElementById('refreshBtn').textContent = 'Pruefen...';
+    try {
+      var resp = await apiFetch('/api/script-sync/overview?project_id=' + pid);
+      overviewData = await resp.json();
+      renderOverview();
+      showToast('Drift-Status aktualisiert');
+    } catch (e) {
+      showToast('Fehler: ' + (e.message || e));
+    } finally {
+      document.getElementById('refreshBtn').disabled = false;
+      document.getElementById('refreshBtn').textContent = 'Drift pruefen';
+    }
+  }
+
+  // ── Fetch Scripts Job ──
+  var _fetchPollTimer = null;
+
+  async function startFetchScripts() {
+    var pid = focusState.project;
+    if (!pid) return;
+    var btn = document.getElementById('btnFetchScripts');
+    btn.disabled = true;
+    btn.textContent = 'Läuft…';
+    try {
+      var resp = await apiFetch('/api/fetch/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: parseInt(pid, 10), steps: ['apps', 'scripts'] }),
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var job = await resp.json();
+      pollFetchJob(job.jobId || job.job_id);
+    } catch (e) {
+      showToast('Fehler: ' + (e.message || e));
+      btn.disabled = false;
+      btn.textContent = '↓ Scripts abziehen';
+    }
+  }
+
+  function _onFetchJobUpdate(job, stepOrder) {
+    var progressSection = document.getElementById('fetchProgressSection');
+    var label = document.getElementById('fetchProgressLabel');
+    var bar = document.getElementById('fetchProgressBar');
+    var statusEl = document.getElementById('fetchProgressStatus');
+    var status = job.status;
+    var step = job.currentStep || '';
+    var completed = job.completedSteps || [];
+
+    var pct = 5;
+    if (stepOrder.length > 0) {
+      var doneCount = completed.length;
+      var totalCount = stepOrder.length;
+      if (step) {
+        var curIdx = stepOrder.indexOf(step);
+        if (curIdx >= 0) pct = Math.round(((doneCount + 0.5) / totalCount) * 100);
+        else pct = Math.round((doneCount / totalCount) * 100);
+      } else {
+        pct = Math.round((doneCount / totalCount) * 100);
+      }
+    }
+    if (status === 'completed') pct = 100;
+
+    bar.style.width = pct + '%';
+    label.textContent = step ? ('Schritt: ' + step) : 'Fetch-Job l\u00e4uft\u2026';
+    statusEl.textContent = status;
+
+    if (status === 'completed' || status === 'failed') {
+      var btn = document.getElementById('btnFetchScripts');
+      btn.disabled = false;
+      btn.textContent = '\u2193 Scripts abziehen';
+      if (status === 'completed') {
+        label.textContent = 'Scripts erfolgreich abgezogen';
+        statusEl.textContent = 'Fertig';
+        setTimeout(function() { progressSection.style.display = 'none'; }, 3000);
+        loadScriptsList();
+        showToast('Scripts abgezogen');
+      } else {
+        label.textContent = 'Fetch-Job fehlgeschlagen: ' + (job.error || status);
+        bar.style.background = '#f87171';
+      }
+    }
+  }
+
+  function pollFetchJob(jobId, stepOrder) {
+    stepOrder = stepOrder || ['apps', 'scripts'];
+    var progressSection = document.getElementById('fetchProgressSection');
+    progressSection.style.display = '';
+
+    if (typeof EventSource !== 'undefined') {
+      var es = new EventSource('/api/fetch/jobs/' + encodeURIComponent(jobId) + '/stream');
+      es.onmessage = function(e) {
+        try {
+          var job = JSON.parse(e.data);
+          if (job.error) { es.close(); return; }
+          _onFetchJobUpdate(job, stepOrder);
+          if (job.status === 'completed' || job.status === 'failed') es.close();
+        } catch (ex) {}
+      };
+      es.onerror = function() {
+        es.close();
+        _pollFetchFallback(jobId, stepOrder);
+      };
+    } else {
+      _pollFetchFallback(jobId, stepOrder);
+    }
+  }
+
+  function _pollFetchFallback(jobId, stepOrder) {
+    function tick() {
+      apiFetch('/api/fetch/jobs/' + encodeURIComponent(jobId)).then(function(r) {
+        return r.json();
+      }).then(function(job) {
+        _onFetchJobUpdate(job, stepOrder);
+        if (job.status === 'running' || job.status === 'queued') {
+          _fetchPollTimer = setTimeout(tick, 1500);
+        }
+      }).catch(function() {
+        var btn = document.getElementById('btnFetchScripts');
+        btn.disabled = false;
+        btn.textContent = '\u2193 Scripts abziehen';
+      });
+    }
+    tick();
+  }
+
+  document.getElementById('btnFetchScripts').addEventListener('click', startFetchScripts);
+
+  // ── Rendering ──
+  function renderOverview() {
+    var wrap = document.getElementById('overviewWrap');
+    var statsRow = document.getElementById('statsRow');
+
+    if (!mappings.length && !overviewData.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F517;</div><div>Keine Mappings vorhanden. Erstelle ein Mapping um eine Qlik App mit einem Git-Repository zu verbinden.</div></div>';
+      statsRow.style.display = 'none';
+      return;
+    }
+
+    // Build unified list: mappings + drift info
+    var items = [];
+    var statusMap = {};
+    overviewData.forEach(function(d) { statusMap[d.app_id] = d; });
+
+    mappings.forEach(function(m) {
+      var drift = statusMap[m.app_id] || null;
+      items.push({
+        app_id: m.app_id,
+        app_name: drift ? drift.app_name : null,
+        repo_identifier: m.repo_identifier,
+        branch: m.branch,
+        file_path: m.file_path,
+        status: drift ? drift.status : 'unmapped',
+        git_commit_sha: drift ? drift.git_commit_sha : m.last_git_commit_sha,
+        last_checked_at: drift ? drift.last_checked_at : (m.last_checked_at || null),
+      });
+    });
+
+    // Stats
+    var counts = { in_sync: 0, git_ahead: 0, qlik_ahead: 0, diverged: 0, error: 0 };
+    items.forEach(function(i) {
+      if (counts[i.status] !== undefined) counts[i.status]++;
+      if (i.status === 'error') counts.diverged++;
+    });
+    document.getElementById('statSync').textContent = counts.in_sync;
+    document.getElementById('statGitAhead').textContent = counts.git_ahead;
+    document.getElementById('statQlikAhead').textContent = counts.qlik_ahead;
+    document.getElementById('statDiverged').textContent = counts.diverged;
+    statsRow.style.display = items.some(function(i) { return i.status !== 'unmapped'; }) ? 'flex' : 'none';
+
+    // Table
+    var html = '<table class="sync-table"><thead><tr>'
+      + '<th>Status</th><th>App</th><th>Repository</th><th>Branch / Pfad</th><th>Commit</th><th>Geprueft</th><th>Aktionen</th>'
+      + '</tr></thead><tbody>';
+
+    items.forEach(function(item) {
+      var displayName = item.app_name ? escHtml(item.app_name) : '<span class="mono">' + escHtml(item.app_id) + '</span>';
+      html += '<tr>'
+        + '<td>' + statusBadge(item.status) + '</td>'
+        + '<td class="app-name">' + displayName + '</td>'
+        + '<td class="mono">' + escHtml(item.repo_identifier) + '</td>'
+        + '<td class="mono">' + escHtml(item.branch) + ' / ' + escHtml(item.file_path) + '</td>'
+        + '<td class="mono">' + escHtml(shortSha(item.git_commit_sha)) + '</td>'
+        + '<td>' + fmtDate(item.last_checked_at) + '</td>'
+        + '<td class="actions">'
+        + '<a class="btn-action" href="/app-hub.html?app_id=' + encodeURIComponent(item.app_id) + (focusState.project ? '&project_id=' + encodeURIComponent(focusState.project) : '') + '" title="App Hub">Hub</a>'
+        + '<button class="btn-action" data-history="' + escHtml(item.app_id) + '">History</button>'
+        + '<button class="btn-action" data-edit="' + escHtml(item.app_id) + '">Edit</button>'
+        + '<button class="btn-danger" data-delete="' + escHtml(item.app_id) + '">Del</button>'
+        + '</td></tr>';
+    });
+
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+
+    // Bind action buttons
+    wrap.querySelectorAll('[data-history]').forEach(function(btn) {
+      btn.addEventListener('click', function() { loadHistory(this.dataset.history); });
+    });
+    wrap.querySelectorAll('[data-edit]').forEach(function(btn) {
+      btn.addEventListener('click', function() { openEditMapping(this.dataset.edit); });
+    });
+    wrap.querySelectorAll('[data-delete]').forEach(function(btn) {
+      btn.addEventListener('click', function() { deleteMapping(this.dataset.delete); });
+    });
+  }
+
+  // ── History ──
+  async function loadHistory(appId) {
+    var pid = focusState.project;
+    if (!pid) return;
+    var section = document.getElementById('historySection');
+    var wrap = document.getElementById('historyWrap');
+    var nameEl = document.getElementById('historyAppName');
+    nameEl.textContent = appId;
+    section.style.display = 'block';
+    wrap.innerHTML = '<div style="color:var(--text-muted);padding:1rem;">Laden...</div>';
+
+    try {
+      var resp = await apiFetch('/api/script-sync/history/' + encodeURIComponent(appId) + '?project_id=' + pid);
+      var entries = await resp.json();
+      if (!entries.length) {
+        wrap.innerHTML = '<div class="empty-state">Keine Deployments fuer diese App.</div>';
+        return;
+      }
+      var html = '<table class="history-table"><thead><tr>'
+        + '<th>Datum</th><th>Richtung</th><th>Status</th><th>Commit</th><th>Message</th><th>Fehler</th>'
+        + '</tr></thead><tbody>';
+      entries.forEach(function(d) {
+        var dir = d.direction === 'git_to_qlik' ? 'Git &rarr; Qlik' : 'Qlik &rarr; Git';
+        html += '<tr>'
+          + '<td>' + fmtDate(d.created_at) + '</td>'
+          + '<td>' + dir + '</td>'
+          + '<td>' + statusBadge(d.status === 'success' ? 'in_sync' : d.status === 'conflict' ? 'diverged' : 'error') + '</td>'
+          + '<td class="mono">' + escHtml(shortSha(d.git_commit_sha)) + '</td>'
+          + '<td>' + escHtml(d.version_message || '') + '</td>'
+          + '<td style="color:#f87171;">' + escHtml(d.error_detail || '') + '</td>'
+          + '</tr>';
+      });
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    } catch (e) {
+      wrap.innerHTML = '<div style="color:#f87171;padding:1rem;">Fehler: ' + escHtml(e.message || String(e)) + '</div>';
+    }
+  }
+
+  // ── Mapping CRUD ──
+  function openNewMapping() {
+    document.getElementById('mappingModalTitle').textContent = 'Neues Mapping';
+    document.getElementById('editingAppId').value = '';
+    document.getElementById('mAppId').value = '';
+    document.getElementById('mAppId').disabled = false;
+    document.getElementById('mRepo').value = '';
+    document.getElementById('mBranch').value = 'main';
+    document.getElementById('mFilePath').value = '';
+    document.getElementById('mappingError').style.display = 'none';
+    document.getElementById('mappingModal').classList.add('open');
+  }
+
+  function openEditMapping(appId) {
+    var m = mappings.find(function(x) { return x.app_id === appId; });
+    if (!m) return;
+    document.getElementById('mappingModalTitle').textContent = 'Mapping bearbeiten';
+    document.getElementById('editingAppId').value = m.app_id;
+    document.getElementById('mAppId').value = m.app_id;
+    document.getElementById('mAppId').disabled = true;
+    document.getElementById('mRepo').value = m.repo_identifier;
+    document.getElementById('mBranch').value = m.branch;
+    document.getElementById('mFilePath').value = m.file_path;
+    document.getElementById('mappingError').style.display = 'none';
+    document.getElementById('mappingModal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('mappingModal').classList.remove('open');
+  }
+
+  document.getElementById('mappingModalClose').addEventListener('click', closeModal);
+  document.getElementById('mappingCancel').addEventListener('click', closeModal);
+  document.getElementById('newMappingBtn').addEventListener('click', openNewMapping);
+  document.getElementById('refreshBtn').addEventListener('click', loadDriftStatus);
+
+  document.getElementById('mappingForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var editingId = document.getElementById('editingAppId').value;
+    var isEdit = editingId !== '';
+    var pid = parseInt(focusState.project, 10);
+    var body = {
+      project_id: pid,
+      app_id: document.getElementById('mAppId').value.trim(),
+      repo_identifier: document.getElementById('mRepo').value.trim(),
+      branch: document.getElementById('mBranch').value.trim() || 'main',
+      file_path: document.getElementById('mFilePath').value.trim(),
+    };
+
+    var errEl = document.getElementById('mappingError');
+    errEl.style.display = 'none';
+
+    try {
+      if (isEdit) {
+        await apiFetch('/api/script-sync/mappings/' + encodeURIComponent(editingId) + '?project_id=' + pid, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        showToast('Mapping aktualisiert');
+      } else {
+        await apiFetch('/api/script-sync/mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        showToast('Mapping erstellt');
+      }
+      closeModal();
+      await loadMappings();
+    } catch (err) {
+      errEl.textContent = err.message || String(err);
+      errEl.style.display = 'block';
+    }
+  });
+
+  async function deleteMapping(appId) {
+    if (!confirm('Mapping fuer App "' + appId + '" wirklich loeschen?')) return;
+    var pid = focusState.project;
+    try {
+      await apiFetch('/api/script-sync/mappings/' + encodeURIComponent(appId) + '?project_id=' + pid, { method: 'DELETE' });
+      showToast('Mapping geloescht');
+      await loadMappings();
+    } catch (e) {
+      showToast('Fehler: ' + (e.message || e));
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Scripts Accordion
+  // ══════════════════════════════════════════════════════════════
+
+  var _allScriptApps = [];
+  var _scriptCache = {};
+  var _openCards = new Set();
+
+  async function loadScriptsList() {
+    var pid = focusState.project;
+    if (!pid) return;
+    document.getElementById('scriptsSection').style.display = '';
+
+    try {
+      var resp = await apiFetch('/api/qlik-apps?project_id=' + pid);
+      _allScriptApps = resp.ok ? await resp.json() : [];
+    } catch (e) {
+      _allScriptApps = [];
+    }
+    renderScriptAccordion('');
+  }
+
+  function renderScriptAccordion(filter) {
+    var wrap = document.getElementById('scriptsListWrap');
+    var list = _allScriptApps.filter(function(a) {
+      if (!filter) return true;
+      return (a.name || a.app_id || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1;
+    });
+
+    if (!list.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4C4;</div>'
+        + '<div>' + (filter ? 'Keine passende App gefunden.' : 'Noch keine Apps in der Datenbank. Scripts abziehen.') + '</div></div>';
+      return;
+    }
+
+    var html = '';
+    list.forEach(function(a) {
+      var appId = a.app_id;
+      var appName = a.name || appId;
+      var isOpen = _openCards.has(appId);
+      var cached = _scriptCache[appId];
+      var metaText = cached ? (cached.lines + ' Zeilen') : '';
+      var bodyContent = isOpen
+        ? (cached ? cached.html : '<div style="color:var(--text-muted);padding:1rem 1.5rem;">Lade Script&hellip;</div>')
+        : '';
+
+      html += '<div class="script-card">'
+        + '<div class="script-card-header' + (isOpen ? ' open' : '') + '" data-appid="' + escHtml(appId) + '" data-appname="' + escHtml(appName) + '">'
+        + '<span class="sc-chevron' + (isOpen ? ' open' : '') + '">&#x25B6;</span>'
+        + '<span class="sc-name">' + escHtml(appName) + '</span>'
+        + '<span class="sc-meta" id="sc-meta-' + escHtml(appId) + '">' + escHtml(metaText) + '</span>'
+        + '<div class="sc-toolbar">'
+        + '<a class="btn-action" href="/app-hub.html?app_id=' + encodeURIComponent(appId) + (focusState.project ? '&project_id='+encodeURIComponent(focusState.project) : '') + '" onclick="event.stopPropagation()">Hub</a>'
+        + '<button class="btn-action sc-copy-btn" data-appid="' + escHtml(appId) + '">Kopieren</button>'
+        + '</div>'
+        + '</div>'
+        + '<div class="sc-body' + (isOpen ? ' open' : '') + '" id="sc-body-' + escHtml(appId) + '">'
+        + bodyContent
+        + '</div>'
+        + '</div>';
+    });
+    wrap.innerHTML = html;
+
+    wrap.querySelectorAll('.script-card-header').forEach(function(hdr) {
+      hdr.addEventListener('click', function(e) {
+        if (e.target.closest && e.target.closest('.sc-toolbar')) return;
+        toggleCard(this.dataset.appid, this.dataset.appname);
+      });
+    });
+
+    wrap.querySelectorAll('.sc-copy-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        copyScript(this.dataset.appid);
+      });
+    });
+  }
+
+  async function _loadCardScript(appId) {
+    var body = document.getElementById('sc-body-' + appId);
+    var meta = document.getElementById('sc-meta-' + appId);
+
+    if (_scriptCache[appId]) {
+      if (body && _openCards.has(appId)) body.innerHTML = _scriptCache[appId].html;
+      if (meta) meta.textContent = _scriptCache[appId].lines + ' Zeilen';
+      return;
+    }
+
+    try {
+      var resp = await apiFetch('/api/app/' + encodeURIComponent(appId) + '/script');
+      if (resp.status === 404) {
+        if (body) body.innerHTML = '<div style="color:var(--text-muted);padding:1rem 1.5rem;">Kein Script in der Datenbank. Bitte zuerst &quot;Scripts abziehen&quot;.</div>';
+        return;
+      }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      var scriptText = data.script || '';
+      var lines = scriptText.split('\n').length;
+      var fetchedAt = data.fetched_at ? fmtDate(data.fetched_at) : '';
+      var preHtml = '<pre class="sc-pre">' + renderHighlightedScript(scriptText) + '</pre>';
+      if (fetchedAt) {
+        preHtml = '<div style="font-size:0.75rem;color:var(--text-muted);padding:0.5rem 1rem 0;">Abgezogen: ' + escHtml(fetchedAt) + '</div>' + preHtml;
+      }
+      _scriptCache[appId] = { html: preHtml, lines: lines, text: scriptText };
+      if (_openCards.has(appId)) {
+        if (body) body.innerHTML = preHtml;
+        if (meta) meta.textContent = lines + ' Zeilen';
+      }
+    } catch (e) {
+      if (body) body.innerHTML = '<div style="color:#f87171;padding:1rem 1.5rem;">Fehler: ' + escHtml(e.message || String(e)) + '</div>';
+    }
+  }
+
+  function toggleCard(appId) {
+    if (_openCards.has(appId)) {
+      _openCards.delete(appId);
+    } else {
+      _openCards.add(appId);
+    }
+    renderScriptAccordion(document.getElementById('scriptSearchInput').value);
+    if (_openCards.has(appId)) {
+      _loadCardScript(appId);
+    }
+  }
+
+  function copyScript(appId) {
+    var cached = _scriptCache[appId];
+    if (!cached) { showToast('Script noch nicht geladen'); return; }
+    navigator.clipboard.writeText(cached.text).then(function() {
+      showToast('Script kopiert \u2713');
+    }).catch(function() {
+      showToast('Kopieren fehlgeschlagen');
+    });
+  }
+
+  document.getElementById('scriptSearchInput').addEventListener('input', function() {
+    renderScriptAccordion(this.value);
+  });
+
+  document.getElementById('expandAllBtn').addEventListener('click', function() {
+    var filter = document.getElementById('scriptSearchInput').value;
+    var visible = _allScriptApps.filter(function(a) {
+      if (!filter) return true;
+      return (a.name || a.app_id || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1;
+    });
+    visible.forEach(function(a) { _openCards.add(a.app_id); });
+    renderScriptAccordion(filter);
+    visible.forEach(function(a) { _loadCardScript(a.app_id); });
+  });
+
+  document.getElementById('collapseAllBtn').addEventListener('click', function() {
+    _openCards.clear();
+    renderScriptAccordion(document.getElementById('scriptSearchInput').value);
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // Qlik Load Script — Syntax Highlighter
+  // ══════════════════════════════════════════════════════════════
+
+  var _QLIK_KW = (
+    'LOAD|RESIDENT|INLINE|CROSSTABLE|INTERVALMATCH|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|AS|DISTINCT|TOP|FIRST|'
+    + 'JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|OUTER JOIN|LEFT OUTER JOIN|RIGHT OUTER JOIN|'
+    + 'GROUP BY|ORDER BY|BY|APPLY MAP|MAPPING|'
+    + 'NOCONCATENATE|CONCATENATE|ADD LOAD|ADD FIELDS|'
+    + 'SET|LET|CALL|SUB|END SUB|NEXT|LOOP|DO|WHILE|UNTIL|'
+    + 'IF|THEN|ELSE|ELSEIF|END IF|SWITCH|CASE|DEFAULT|'
+    + 'EXIT|FOR EACH|FOR|TO|STEP|RETURN|'
+    + 'STORE|INTO|DROP TABLE|DROP FIELD|DROP TABLES|'
+    + 'TABLE|FIELD|FIELDS|TAG|UNTAG|'
+    + 'SECTION|ACCESS|APPLICATION|'
+    + 'RENAME TABLE|RENAME FIELD|'
+    + 'SELECT|SQL|CONNECT TO|DISCONNECT|BINARY|'
+    + 'QUALIFY|UNQUALIFY|NULLASVALUE|NULLASNULL|'
+    + 'HIERARCHY|HIERARCHYBELONGSTO|'
+    + 'LIKE|MATCH|WILDMATCH|MIXMATCH|INFO|'
+    + 'AUTOGENERATE|BUNDLE|FORCE BUNDLING'
+  ).split('|').sort(function(a, b) { return b.length - a.length; }); // longest first
+
+  var _QLIK_FN_RE = /\b(Abs|Fabs|Ceil|Floor|Round|Frac|Sign|Sqrt|Pow|Exp|Log|Log10|Mod|Div|Rand|RangeSum|RangeAvg|RangeMax|RangeMin|RangeCount|RangeOnly|RangeMode|RangeProduct|RangeStdev|RangeStdevp|RangeKurtosis|RangeSkew|RangeTextCount|RangeNullCount|RangeNumericCount|RangeCorr|Date|Time|Timestamp|Num|Text|Dual|IsNum|IsText|IsNull|Null|Chr|Ord|Len|Index|Left|Right|Mid|Upper|Lower|Proper|Trim|LTrim|RTrim|PurgeChar|KeepChar|Replace|Capitalize|Hash128|Hash160|Hash256|MD5|Sha256|If|Alt|IsPartialReload|Now|Today|Year|Month|Day|Week|Hour|Minute|Second|YearToDate|InYearToDate|InYear|InQuarterToDate|InQuarter|InMonthToDate|InMonth|InWeekToDate|InWeek|InDayToDate|InDay|Age|NetWorkDays|AddYears|AddMonths|YearStart|YearEnd|MonthStart|MonthEnd|QuarterStart|QuarterEnd|WeekStart|WeekEnd|DayStart|DayEnd|MakeDate|MakeTime|MakeTimestamp|Interval|Count|Sum|Avg|Max|Min|Mode|Median|Stdev|Stdevp|Kurtosis|Skew|Corr|FirstValue|LastValue|MinString|MaxString|Concat|FirstSortedValue|Top|Bottom|Above|Below|Before|After|Column|Row|RowNo|FieldRowNo|FieldValueCount|FieldValue|GetFieldSelections|GetSelectedCount|GetPossibleCount|GetExcludedCount|GetAlternativeCount|GetNotSelectedCount|GetCurrentSelections|Exists|Lookup|Peek|Previous|FieldName|FieldNumber|NoOfFields|NoOfRows|NoOfTables|TableName|TableNumber|ConnectedTables|LinkedTables|Dimension|Expression|ConcatCount|Attribute|ObjectId|ReloadTime|ComputerName|OSUser|QvVersion|GetSQLType|SubField|TextBetween|Evaluate|Variable|MustExclude|StateName)\s*\(/gi;
+
+  function tokenizeQlik(text) {
+    var tokens = [];
+    var i = 0;
+    var n = text.length;
+
+    while (i < n) {
+      // Tab section marker: ///$tab <name>
+      if (text[i] === '/' && text[i+1] === '/' && text[i+2] === '/'
+          && text.slice(i, i + 8).toLowerCase() === '///$tab ') {
+        var end0 = text.indexOf('\n', i);
+        if (end0 === -1) end0 = n;
+        tokens.push({ type: 'tab', val: text.slice(i + 8, end0).trim() });
+        i = end0;
+        continue;
+      }
+      // Line comment: // ...
+      if (text[i] === '/' && text[i + 1] === '/') {
+        var end = text.indexOf('\n', i);
+        if (end === -1) end = n;
+        tokens.push({ type: 'cmt', val: text.slice(i, end) });
+        i = end;
+        continue;
+      }
+      // Block comment: /* ... */
+      if (text[i] === '/' && text[i + 1] === '*') {
+        var end2 = text.indexOf('*/', i + 2);
+        if (end2 === -1) end2 = n - 2; else end2 += 2;
+        tokens.push({ type: 'cmt', val: text.slice(i, end2) });
+        i = end2;
+        continue;
+      }
+      // Single-quoted string
+      if (text[i] === "'") {
+        var j = i + 1;
+        while (j < n && text[j] !== "'") { if (text[j] === '\\') j++; j++; }
+        tokens.push({ type: 'str', val: text.slice(i, j + 1) });
+        i = j + 1;
+        continue;
+      }
+      // Double-quoted identifier
+      if (text[i] === '"') {
+        var j2 = text.indexOf('"', i + 1);
+        if (j2 === -1) j2 = n - 1;
+        tokens.push({ type: 'fld', val: text.slice(i, j2 + 1) });
+        i = j2 + 1;
+        continue;
+      }
+      // Bracket field name [...]
+      if (text[i] === '[') {
+        var j3 = text.indexOf(']', i);
+        if (j3 === -1) j3 = n - 1;
+        tokens.push({ type: 'fld', val: text.slice(i, j3 + 1) });
+        i = j3 + 1;
+        continue;
+      }
+      // Variable $( ... )
+      if (text[i] === '$' && text[i + 1] === '(') {
+        var depth = 1;
+        var j4 = i + 2;
+        while (j4 < n && depth > 0) {
+          if (text[j4] === '(') depth++;
+          else if (text[j4] === ')') depth--;
+          j4++;
+        }
+        tokens.push({ type: 'var', val: text.slice(i, j4) });
+        i = j4;
+        continue;
+      }
+      // Plain text run (up to next special char)
+      var j5 = i;
+      while (j5 < n && text[j5] !== '/' && text[j5] !== "'" && text[j5] !== '"'
+             && text[j5] !== '[' && text[j5] !== '$') { j5++; }
+      if (j5 === i) j5 = i + 1;
+      tokens.push({ type: 'plain', val: text.slice(i, j5) });
+      i = j5;
+    }
+    return tokens;
+  }
+
+  function applyPlainHighlights(raw) {
+    // Escape HTML first
+    var s = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Keywords (longest match first, word boundaries)
+    _QLIK_KW.forEach(function(kw) {
+      try {
+        var re = new RegExp('(?<![\\w>])(' + kw.replace(/ /g, '\\s+') + ')(?![\\w<])', 'gi');
+        s = s.replace(re, '<span class="ql-kw">$1</span>');
+      } catch(e) {
+        // Fallback for browsers without lookbehind support
+        s = s.replace(new RegExp('\\b(' + kw.replace(/ /g,'\\s+') + ')\\b', 'gi'), '<span class="ql-kw">$1</span>');
+      }
+    });
+    // Functions (name followed by open paren)
+    s = s.replace(_QLIK_FN_RE, '<span class="ql-fn">$1</span>(');
+    // Numbers
+    s = s.replace(/(?<![<"#\-])(\b\d+(?:\.\d+)?\b)/g, '<span class="ql-num">$1</span>');
+    return s;
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  var _sectionCounter = 0; // globally unique IDs across all rendered scripts
+
+  function renderHighlightedScript(text) {
+    var tokens = tokenizeQlik(text);
+    var TAB_PFX = '\x01TAB:';
+    var rawHtml = '';
+    tokens.forEach(function(t) {
+      if (t.type === 'tab')       rawHtml += TAB_PFX + esc(t.val) + '\x01';
+      else if (t.type === 'cmt')  rawHtml += '<span class="ql-cmt">'  + esc(t.val) + '</span>';
+      else if (t.type === 'str')  rawHtml += '<span class="ql-str">'  + esc(t.val) + '</span>';
+      else if (t.type === 'fld')  rawHtml += '<span class="ql-fld">'  + esc(t.val) + '</span>';
+      else if (t.type === 'var')  rawHtml += '<span class="ql-var">'  + esc(t.val) + '</span>';
+      else rawHtml += applyPlainHighlights(t.val);
+    });
+
+    var lines = rawHtml.split('\n');
+    var out = '';
+    var lineNum = 1;
+    var inSection = false;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line.indexOf(TAB_PFX) !== -1) {
+        if (inSection) { out += '</div>'; inSection = false; }
+        var label = line.replace(/.*\x01TAB:(.*?)\x01.*/, '$1');
+        var sid = 'sv-s-' + (++_sectionCounter);
+        out += '<div class="sv-tab-section" data-target="' + sid + '">' + (label || '(unnamed)') + '</div>'
+             + '<div class="sv-section-body" id="' + sid + '">';
+        inSection = true;
+        lineNum++;
+      } else {
+        out += '<div class="sv-line">'
+          + '<span class="sv-ln">' + lineNum + '</span>'
+          + '<span class="sv-lc">' + (line || ' ') + '</span>'
+          + '</div>';
+        lineNum++;
+      }
+    }
+    if (inSection) out += '</div>';
+    return out;
+  }
+
+  // Delegated click handler for collapsible section headers
+  document.addEventListener('click', function(e) {
+    var hdr = e.target.closest('.sv-tab-section');
+    if (!hdr) return;
+    var sid = hdr.getAttribute('data-target');
+    var body = sid ? document.getElementById(sid) : null;
+    if (!body) return;
+    body.classList.toggle('sv-collapsed');
+    hdr.classList.toggle('sv-closed');
+  });
+
+  // ── Tab switching (page-level only; mini-tabs use data-mi-tab) ──
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab-btn[data-tab]').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+      this.classList.add('active');
+      document.getElementById('tab-' + this.getAttribute('data-tab')).classList.add('active');
+      if (this.getAttribute('data-tab') === 'masteritems') populateMiAppSelects();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // Master Items
+  // ══════════════════════════════════════════════════════════════
+
+  var _miExportData = null;
+  var _miDiffData = null;
+  var _miApps = [];        // [{app_id, name}] for current project — used for extra-targets list
+
+  function renderMiSelection(diff) {
+    var types = [['dimensions','Dimensions'],['measures','Measures'],['visualizations','Visualizations']];
+    var html = '';
+    types.forEach(function(t) {
+      var key = t[0], label = t[1];
+      var d = diff[key] || {};
+      var its = d.items || {};
+      var newItems = its.new || [];
+      var conflictItems = its.conflict || [];
+      var existingItems = its.existing || [];
+      if (!newItems.length && !conflictItems.length && !existingItems.length) return;
+      html += '<div class="mi-sel-group">';
+      html += '<div class="mi-sel-group-hdr" onclick="this.nextElementSibling.classList.toggle(\'open\')">';
+      html += '<span class="msg-title">' + escHtml(label) + '</span>';
+      if (newItems.length) html += '<span class="badge badge-new">' + newItems.length + ' neu</span>';
+      if (conflictItems.length) html += '<span class="badge badge-conflict">' + conflictItems.length + ' Konflikt</span>';
+      if (existingItems.length) html += '<span class="badge badge-existing">' + existingItems.length + ' gleich</span>';
+      html += '<button class="btn-action" style="font-size:0.71rem;padding:0.15rem 0.45rem;" onclick="event.stopPropagation();_miSelGroup(\'' + key + '\',true)">Alle</button>';
+      html += '<button class="btn-action" style="font-size:0.71rem;padding:0.15rem 0.45rem;" onclick="event.stopPropagation();_miSelGroup(\'' + key + '\',false)">Keine</button>';
+      html += '</div><div class="mi-sel-group-body open">';
+      if (newItems.length) {
+        html += '<div class="mi-sel-status-hdr">Neu (' + newItems.length + ')</div>';
+        newItems.forEach(function(item, idx) {
+          var title = escHtml(item.title || (item.properties && item.properties.qInfo && item.properties.qInfo.qId) || '(unbekannt)');
+          html += '<div class="mi-sel-item"><label><input type="checkbox" checked data-mi-type="' + key + '" data-mi-status="new" data-mi-idx="' + idx + '"> ' + title + '</label></div>';
+        });
+      }
+      if (conflictItems.length) {
+        html += '<div class="mi-sel-status-hdr">Konflikt (' + conflictItems.length + ')</div>';
+        conflictItems.forEach(function(conflict, idx) {
+          var src = conflict.source || {};
+          var tgt = conflict.target || {};
+          var srcTitle = escHtml(src.title || '(unbekannt)');
+          var tgtTitle = escHtml(tgt.title || '');
+          html += '<div class="mi-sel-item"><label><input type="checkbox" checked data-mi-type="' + key + '" data-mi-status="conflict" data-mi-idx="' + idx + '"> ' + srcTitle + '</label></div>';
+          if (tgtTitle && tgtTitle !== srcTitle) html += '<div class="mi-sel-conflict-sub">Ziel: ' + tgtTitle + '</div>';
+        });
+      }
+      if (existingItems.length) {
+        html += '<div class="mi-sel-status-hdr">Gleich (' + existingItems.length + ') &mdash; standardm&auml;&szlig;ig abgew&auml;hlt</div>';
+        existingItems.forEach(function(item, idx) {
+          var title = escHtml(item.title || '(unbekannt)');
+          html += '<div class="mi-sel-item"><label><input type="checkbox" data-mi-type="' + key + '" data-mi-status="existing" data-mi-idx="' + idx + '"> ' + title + '</label></div>';
+        });
+      }
+      html += '</div></div>';
+    });
+    document.getElementById('miSelectionBody').innerHTML = html || '<div style="font-size:0.82rem;color:var(--text-dim);">Keine Items vorhanden.</div>';
+    document.getElementById('miItemSelection').style.display = '';
+  }
+
+  function _miSelGroup(type, checked) {
+    document.querySelectorAll('#miSelectionBody input[data-mi-type="' + type + '"]').forEach(function(cb) { cb.checked = checked; });
+  }
+  function _miSelAll(checked) {
+    document.querySelectorAll('#miSelectionBody input[type="checkbox"]').forEach(function(cb) { cb.checked = checked; });
+  }
+
+  function _buildFilteredSource() {
+    var filtered = { dimensions: [], measures: [], visualizations: [] };
+    document.querySelectorAll('#miSelectionBody input[type="checkbox"]:checked').forEach(function(cb) {
+      var type = cb.dataset.miType;
+      var status = cb.dataset.miStatus;
+      var idx = parseInt(cb.dataset.miIdx, 10);
+      if (!_miDiffData || !_miDiffData[type]) return;
+      var its = (_miDiffData[type] && _miDiffData[type].items) || {};
+      var arr = its[status] || [];
+      var entry = arr[idx];
+      if (!entry) return;
+      var item = (status === 'conflict') ? (entry.source || entry) : entry;
+      if (item) filtered[type].push(item);
+    });
+    return {
+      app_id: _miExportData ? _miExportData.app_id : '',
+      exported_at: _miExportData ? _miExportData.exported_at : new Date().toISOString(),
+      dimensions: filtered.dimensions,
+      measures: filtered.measures,
+      visualizations: filtered.visualizations,
+    };
+  }
+
+  document.getElementById('miSelAllBtn').addEventListener('click', function() { _miSelAll(true); });
+  document.getElementById('miSelNoneBtn').addEventListener('click', function() { _miSelAll(false); });
+
+  function populateMiAppSelects() {
+    var pid = focusState.project;
+    if (!pid) return;
+    apiFetch('/api/qlik-apps?project_id=' + pid).then(function(r) {
+      return r.ok ? r.json() : [];
+    }).then(function(apps) {
+      apps = Array.isArray(apps) ? apps : [];
+      var opts = apps.map(function(a) {
+        return '<option value="' + escHtml(a.app_id) + '">' + escHtml(a.name || a.app_id) + '</option>';
+      }).join('');
+      var placeholder = '<option value="">App w\u00e4hlen\u2026</option>';
+      document.getElementById('miSourceApp').innerHTML = placeholder + opts;
+      document.getElementById('miTargetApp').innerHTML = placeholder + opts;
+      document.getElementById('miExportBtn').disabled = !apps.length;
+      document.getElementById('miDiffBtn').disabled = !apps.length;
+      _renderMiExtraTargets();
+    }).catch(function() {});
+  }
+
+  function _renderMiExtraTargets() {
+    var sourceId = document.getElementById('miSourceApp').value;
+    var el = document.getElementById('miExtraTargets');
+    var available = _miApps.filter(function(a) { return a.app_id !== sourceId; });
+    if (!available.length) {
+      el.innerHTML = '<span style="font-size:0.8rem;color:var(--text-dim);">— Keine weiteren Apps verf\u00fcgbar</span>';
+      _updateExtraSelCount();
+      return;
+    }
+    el.innerHTML = available.map(function(a) {
+      return '<label class="mi-extra-chip"><input type="checkbox" value="' + escHtml(a.app_id) + '" onchange="_updateExtraSelCount()"> ' + escHtml(a.name || a.app_id) + '</label>';
+    }).join('');
+    _updateExtraSelCount();
+  }
+
+  function _updateExtraSelCount() {
+    var n = document.querySelectorAll('#miExtraTargets input[type=checkbox]:checked').length;
+    document.getElementById('miExtraSelCount').textContent = n ? '(' + n + ' ausgew\u00e4hlt)' : '';
+  }
+
+  function _miExtraTargetIds() {
+    return Array.from(document.querySelectorAll('#miExtraTargets input[type=checkbox]:checked')).map(function(cb) { return cb.value; });
+  }
+
+  function _appNameMap() {
+    var m = {};
+    _miApps.forEach(function(a) { m[a.app_id] = a.name || a.app_id; });
+    return m;
+  }
+
+  function _renderSingleImportTable(r) {
+    var rows = ['dimensions','measures','visualizations'].map(function(t) {
+      return '<tr><td style="font-weight:600">' + escHtml(t.charAt(0).toUpperCase() + t.slice(1)) + '</td>'
+        + '<td style="color:#4ade80">' + ((r.imported||{})[t]||0) + '</td>'
+        + '<td style="color:#a5b4fc">' + ((r.overwritten||{})[t]||0) + '</td>'
+        + '<td style="color:#94a3b8">' + ((r.skipped||{})[t]||0) + '</td></tr>';
+    }).join('');
+    return '<table><thead><tr><th>Typ</th><th>Importiert</th><th>\u00dcberschrieben</th><th>\u00dcbersprungen</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  document.getElementById('miSourceApp').addEventListener('change', function() {
+    document.getElementById('miExportBtn').disabled = !this.value;
+    // Reset downstream steps
+    _miExportData = null;
+    _miDiffData = null;
+    document.getElementById('miExportResult').style.display = 'none';
+    document.getElementById('miDetailSection').style.display = 'none';
+    _miDetailOpenSet.clear();
+    setMiSectionEnabled('miDiffSection', false);
+    setMiSectionEnabled('miImportSection', false);
+    document.getElementById('miDiffResult').style.display = 'none';
+    document.getElementById('miItemSelection').style.display = 'none';
+    document.getElementById('miImportResult').style.display = 'none';
+    _renderMiExtraTargets();
+  });
+
+  document.getElementById('miTargetApp').addEventListener('change', function() {
+    document.getElementById('miDiffBtn').disabled = !this.value;
+  });
+
+  function setMiSectionEnabled(id, enabled) {
+    var el = document.getElementById(id);
+    el.style.opacity = enabled ? '1' : '0.4';
+    el.style.pointerEvents = enabled ? '' : 'none';
+  }
+
+  document.getElementById('miExportBtn').addEventListener('click', async function() {
+    var appId = document.getElementById('miSourceApp').value;
+    var pid = focusState.project;
+    if (!appId || !pid) return;
+    this.disabled = true;
+    this.innerHTML = '<span class="mi-spinner"></span>Exportieren\u2026';
+    document.getElementById('miExportResult').style.display = 'none';
+    setMiSectionEnabled('miDiffSection', false);
+    setMiSectionEnabled('miImportSection', false);
+
+    // Fire app-list refresh in parallel so newly created apps appear in target dropdown
+    apiFetch('/api/fetch/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: parseInt(pid, 10), steps: ['apps'] }),
+    }).then(function(r) {
+      return r.ok ? r.json() : null;
+    }).then(function(job) {
+      if (!job) return;
+      var jobId = job.jobId || job.job_id;
+      function pollApps() {
+        apiFetch('/api/fetch/jobs/' + encodeURIComponent(jobId)).then(function(r) { return r.json(); }).then(function(j) {
+          if (j.status === 'running' || j.status === 'queued') { setTimeout(pollApps, 1500); return; }
+          if (j.status === 'completed') { populateMiAppSelects(); return; }
+          console.warn('App-Listen-Refresh fehlgeschlagen:', j.status, j);
+        }).catch(function() {});
+      }
+      pollApps();
+    }).catch(function() {});
+
+    try {
+      var resp = await apiFetch('/api/master-items/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: parseInt(pid, 10), app_id: appId }),
+      });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'HTTP ' + resp.status);
+      }
+      _miExportData = await resp.json();
+      document.getElementById('miExportDimCount').textContent = (_miExportData.dimensions || []).length;
+      document.getElementById('miExportMeasCount').textContent = (_miExportData.measures || []).length;
+      document.getElementById('miExportVizCount').textContent = (_miExportData.visualizations || []).length;
+      document.getElementById('miExportMeta').textContent = 'Exportiert um ' + new Date(_miExportData.exported_at).toLocaleString('de-DE');
+      document.getElementById('miExportResult').style.display = '';
+      setMiSectionEnabled('miDiffSection', true);
+      showMiDetail();
+      showToast('Export abgeschlossen');
+    } catch (e) {
+      showToast('Export fehlgeschlagen: ' + e.message, 6000);
+    } finally {
+      this.disabled = false;
+      this.textContent = 'Exportieren';
+    }
+  });
+
+  document.getElementById('miDiffBtn').addEventListener('click', async function() {
+    var sourceId = document.getElementById('miSourceApp').value;
+    var targetId = document.getElementById('miTargetApp').value;
+    var pid = focusState.project;
+    if (!sourceId || !targetId || !pid) return;
+    var types = [];
+    if (document.getElementById('miOptDim').checked)  types.push('dimensions');
+    if (document.getElementById('miOptMeas').checked) types.push('measures');
+    if (document.getElementById('miOptViz').checked)  types.push('visualizations');
+    if (!types.length) { showToast('Mindestens einen Typ ausw\u00e4hlen.'); return; }
+    var onDuplicate = document.querySelector('input[name="miDup"]:checked').value;
+    var dryRun = document.getElementById('miOptDryRun').checked;
+    var sourceExport = _miDiffData ? _buildFilteredSource() : (_miExportData || undefined);
+
+    var extraIds = _miExtraTargetIds();
+    var allTargetIds = [targetId].concat(extraIds.filter(function(id) { return id !== targetId; }));
+
+    document.getElementById('miImportBtn').disabled = true;
+    document.getElementById('miImportSpinner').style.display = '';
+    document.getElementById('miImportResult').style.display = 'none';
+    try {
+      var resp = await apiFetch('/api/master-items/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: parseInt(pid, 10),
+          source_app_id: sourceId,
+          target_app_id: targetId,
+          target_app_ids: allTargetIds,
+          source_export: sourceExport,
+          options: { types: types, on_duplicate: onDuplicate, dry_run: dryRun },
+        }),
+      });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'HTTP ' + resp.status);
+      }
+      var result = await resp.json();
+      document.getElementById('miImportResultHead').textContent = dryRun ? 'Dry Run \u2014 keine \u00c4nderungen geschrieben' : 'Import abgeschlossen';
+
+      if (result.multi) {
+        var nameMap = _appNameMap();
+        var bodyHtml = Object.keys(result.results).map(function(appId) {
+          var r = result.results[appId];
+          var appName = escHtml(nameMap[appId] || appId);
+          if (r.error) {
+            return '<div class="mi-multi-app-block"><div class="mi-multi-app-hdr">' + appName
+              + ' <span style="color:#f87171;font-size:0.78rem;">' + escHtml(r.error) + '</span></div></div>';
+          }
+          var ti = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.imported||{})[t]||0);},0);
+          var to2 = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.overwritten||{})[t]||0);},0);
+          var ts = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((r.skipped||{})[t]||0);},0);
+          return '<div class="mi-multi-app-block">'
+            + '<div class="mi-multi-app-hdr" onclick="this.nextElementSibling.classList.toggle(\'open\')">'
+            + '<span>' + appName + '</span>'
+            + '<span class="mi-multi-badges">'
+            + '<span style="color:#4ade80">' + ti + ' imp</span> '
+            + '<span style="color:#a5b4fc">' + to2 + ' ovr</span> '
+            + '<span style="color:#94a3b8">' + ts + ' skip</span>'
+            + '</span></div>'
+            + '<div class="mi-multi-app-body open">' + _renderSingleImportTable(r) + '</div>'
+            + '</div>';
+        }).join('');
+        document.getElementById('miImportBody').innerHTML = bodyHtml;
+        document.getElementById('miImportErrors').innerHTML = '';
+      } else {
+        document.getElementById('miImportBody').innerHTML = _renderSingleImportTable(result);
+        var totalImported    = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.imported||{})[t]||0);},0);
+        var totalSkipped     = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.skipped||{})[t]||0);},0);
+        var totalOverwritten = ['dimensions','measures','visualizations'].reduce(function(s,t){return s+((result.overwritten||{})[t]||0);},0);
+        var hintHtml = '';
+        if (!dryRun && totalSkipped > 0 && totalImported === 0 && totalOverwritten === 0) {
+          hintHtml = '<div style="font-size:0.8rem;color:#fbbf24;margin-top:0.5rem;">&#9432; Alle Items sind bereits in der Ziel-App vorhanden. W\u00e4hle <strong>\u00dcberschreiben</strong> um sie zu aktualisieren.</div>';
+        }
+        var errHtml = hintHtml;
+        if (result.errors && result.errors.length) {
+          errHtml += '<div style="font-size:0.78rem;color:#f87171;margin-top:0.5rem;">'
+            + result.errors.slice(0, 5).map(function(e) {
+                return escHtml('[' + e.type + '] ' + e.title + ': ' + e.error);
+              }).join('<br>') + '</div>';
+        }
+        document.getElementById('miImportErrors').innerHTML = errHtml;
+      }
+
+      document.getElementById('miImportResult').style.display = '';
+      showToast(dryRun ? 'Dry Run abgeschlossen' : 'Import abgeschlossen (' + allTargetIds.length + ' App' + (allTargetIds.length > 1 ? 's' : '') + ')');
+    } catch (e) {
+      showToast('Import fehlgeschlagen: ' + e.message, 6000);
+    } finally {
+      document.getElementById('miImportBtn').disabled = false;
+      document.getElementById('miImportSpinner').style.display = 'none';
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // Master Items — Properties Detail Window
+  // ══════════════════════════════════════════════════════════════
+
+  var _miDetailType = 'dimensions';
+  var _miDetailOpenSet = new Set();
+
+  function showMiDetail() {
+    if (!_miExportData) return;
+    document.getElementById('miDetailSection').style.display = '';
+    document.getElementById('miTabCountDim').textContent = (_miExportData.dimensions || []).length;
+    document.getElementById('miTabCountMeas').textContent = (_miExportData.measures || []).length;
+    document.getElementById('miTabCountViz').textContent = (_miExportData.visualizations || []).length;
+    _miDetailType = 'dimensions';
+    document.querySelectorAll('[data-mi-tab]').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-mi-tab') === 'dimensions');
+    });
+    _miDetailOpenSet.clear();
+    renderMiDetail('dimensions', document.getElementById('miDetailSearch').value);
+  }
+
+  function getMiItemTitle(type, item) {
+    if (item.title) return item.title;
+    var p = item.properties || {};
+    if (type === 'dimensions' || type === 'measures')
+      return (p.qMetaDef && p.qMetaDef.title) || (p.qInfo && p.qInfo.qId) || '(unbenannt)';
+    return (p.qMeta && p.qMeta.title) || (p.qInfo && p.qInfo.qId) || '(unbenannt)';
+  }
+
+  function renderMiDetailBody(type, item) {
+    var p = item.properties || {};
+    var rows = [];
+    if (type === 'dimensions') {
+      var d = p.qDim || {}, dm = p.qMetaDef || {};
+      rows.push(['Titel', item.title || dm.title || '\u2013']);
+      rows.push(['Feld', (d.qFieldDefs || []).join(', ') || '\u2013']);
+      var lbl = (d.qFieldLabels && d.qFieldLabels[0]) || d.qAlias || '';
+      rows.push(['Label', lbl || '\u2013']);
+      rows.push(['Beschreibung', dm.description || '\u2013']);
+    } else if (type === 'measures') {
+      var ms = p.qMeasure || {}, mm = p.qMetaDef || {};
+      rows.push(['Titel', item.title || mm.title || '\u2013']);
+      rows.push(['Label', ms.qLabel || '\u2013']);
+      rows.push(['Formel', ms.qDef || '\u2013']);
+      rows.push(['Beschreibung', mm.description || '\u2013']);
+    } else {
+      var vi = p.qInfo || {}, vm = p.qMeta || {};
+      rows.push(['Titel', item.title || vm.title || '\u2013']);
+      rows.push(['Typ', vi.qType || '\u2013']);
+      rows.push(['Beschreibung', vm.description || '\u2013']);
+    }
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">';
+    rows.forEach(function(r) {
+      if (r[1] === undefined || r[1] === null) return;
+      html += '<tr>'
+        + '<td style="color:var(--text-muted);width:150px;padding:0.3rem 0.6rem 0.3rem 1rem;vertical-align:top;white-space:nowrap;">' + escHtml(r[0]) + '</td>'
+        + '<td style="padding:0.3rem 0.6rem;font-family:\'Courier New\',monospace;font-size:0.78rem;word-break:break-all;">' + escHtml(String(r[1])) + '</td>'
+        + '</tr>';
+    });
+    html += '</table>';
+    var jid = 'mi-j-' + Math.random().toString(36).slice(2, 8);
+    html += '<div style="margin:0.5rem 1rem 0.5rem;">'
+      + '<button class="btn-action mi-json-toggle" data-target="' + jid + '" style="font-size:0.72rem;">Raw JSON</button>'
+      + '<pre id="' + jid + '" style="display:none;margin-top:0.5rem;padding:0.6rem;background:rgba(0,0,0,0.3);border-radius:6px;font-size:0.71rem;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;">'
+      + escHtml(JSON.stringify(item, null, 2)) + '</pre></div>';
+    return html;
+  }
+
+  function renderMiDetail(type, filter) {
+    _miDetailType = type;
+    var items = (_miExportData && _miExportData[type]) || [];
+    var lf = (filter || '').toLowerCase();
+    if (lf) items = items.filter(function(it) { return getMiItemTitle(type, it).toLowerCase().indexOf(lf) !== -1; });
+    var body = document.getElementById('miDetailBody');
+    if (!items.length) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>'
+        + (lf ? 'Keine Treffer.' : 'Keine Items in dieser Kategorie.') + '</div></div>';
+      return;
+    }
+    var html = '';
+    items.forEach(function(item, idx) {
+      var title = getMiItemTitle(type, item);
+      var key = type + ':' + idx;
+      var isOpen = _miDetailOpenSet.has(key);
+      html += '<div class="script-card">'
+        + '<div class="script-card-header' + (isOpen ? ' open' : '') + '" data-mi-card="' + escHtml(key) + '">'
+        + '<span class="sc-chevron' + (isOpen ? ' open' : '') + '">&#x25B6;</span>'
+        + '<span class="sc-name">' + escHtml(title) + '</span>'
+        + '</div>'
+        + '<div class="sc-body' + (isOpen ? ' open' : '') + '">'
+        + (isOpen ? renderMiDetailBody(type, item) : '')
+        + '</div></div>';
+    });
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-mi-card]').forEach(function(hdr) {
+      hdr.addEventListener('click', function() {
+        var key2 = this.getAttribute('data-mi-card');
+        var parts = key2.split(':');
+        var t = parts[0], i = parseInt(parts[1], 10);
+        var wasOpen = _miDetailOpenSet.has(key2);
+        if (wasOpen) _miDetailOpenSet.delete(key2); else _miDetailOpenSet.add(key2);
+        var chevron = this.querySelector('.sc-chevron');
+        var bodyEl = this.nextElementSibling;
+        if (wasOpen) {
+          this.classList.remove('open');
+          if (chevron) chevron.classList.remove('open');
+          bodyEl.classList.remove('open');
+          bodyEl.innerHTML = '';
+        } else {
+          this.classList.add('open');
+          if (chevron) chevron.classList.add('open');
+          bodyEl.classList.add('open');
+          var allItems = (_miExportData && _miExportData[t]) || [];
+          bodyEl.innerHTML = renderMiDetailBody(t, allItems[i]);
+          bodyEl.querySelectorAll('.mi-json-toggle').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var pre = document.getElementById(this.getAttribute('data-target'));
+              if (!pre) return;
+              var hidden = pre.style.display === 'none';
+              pre.style.display = hidden ? '' : 'none';
+              this.textContent = hidden ? 'JSON verbergen' : 'Raw JSON';
+            });
+          });
+        }
+      });
+    });
+  }
+
+  // Mini-tab switching inside detail section
+  document.querySelectorAll('[data-mi-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var t = this.getAttribute('data-mi-tab');
+      document.querySelectorAll('[data-mi-tab]').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      _miDetailOpenSet.clear();
+      renderMiDetail(t, document.getElementById('miDetailSearch').value);
+    });
+  });
+
+  document.getElementById('miDetailSearch').addEventListener('input', function() {
+    renderMiDetail(_miDetailType, this.value);
+  });
+
+  // ── Init ──
+  loadData();
+
+  // ══════════════════════════════════════════════════════════════
+  // Scheduled Fetch-Jobs
+  // ══════════════════════════════════════════════════════════════
+
+  var _editingScheduleId = null;
+
+  async function loadSchedules() {
+    var pid = focusState.project;
+    var section = document.getElementById('schedulesSection');
+    if (!pid) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    try {
+      var resp = await apiFetch('/api/fetch/schedules?project_id=' + encodeURIComponent(pid));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      renderSchedules(data.schedules || []);
+    } catch (e) {
+      document.getElementById('schedulesWrap').innerHTML = '<div class="empty-state">Fehler beim Laden der Zeitpläne: ' + escHtml(e.message) + '</div>';
+    }
+  }
+
+  function renderSchedules(list) {
+    if (!list.length) {
+      document.getElementById('schedulesWrap').innerHTML = '<div class="empty-state"><div class="empty-icon">&#x23F0;</div><div>Noch keine Zeitpläne konfiguriert.</div></div>';
+      return;
+    }
+    var rows = list.map(function(s) {
+      var steps = (s.steps || []).join(', ');
+      var nextRun = s.next_run_at ? new Date(s.next_run_at).toLocaleString('de-DE') : '&mdash;';
+      var lastRun = s.last_run_at ? new Date(s.last_run_at).toLocaleString('de-DE') : 'Noch nie';
+      var activeBadge = s.is_active
+        ? '<span class="badge badge-in_sync">Aktiv</span>'
+        : '<span class="badge badge-unmapped">Inaktiv</span>';
+      return '<tr>'
+        + '<td>' + escHtml(s.label || '—') + '</td>'
+        + '<td><code style="font-size:0.78rem;color:#a5b4fc;">' + escHtml(s.cron_expr) + '</code></td>'
+        + '<td style="color:var(--text-muted);font-size:0.8rem;">' + escHtml(steps) + '</td>'
+        + '<td>' + activeBadge + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + nextRun + '</td>'
+        + '<td style="font-size:0.78rem;color:var(--text-muted);">' + lastRun + '</td>'
+        + '<td><div class="actions">'
+        + '<button class="btn-action" onclick="openEditSchedule(' + s.id + ')">Bearbeiten</button>'
+        + '<button class="btn-action" style="color:#f87171;" onclick="deleteSchedule(' + s.id + ')">Löschen</button>'
+        + '</div></td>'
+        + '</tr>';
+    }).join('');
+    document.getElementById('schedulesWrap').innerHTML = '<table class="sync-table"><thead><tr>'
+      + '<th>Bezeichnung</th><th>Cron</th><th>Schritte</th><th>Status</th><th>Nächster Lauf</th><th>Letzter Lauf</th><th>Aktionen</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function openNewSchedule() {
+    _editingScheduleId = null;
+    document.getElementById('scheduleModalTitle').textContent = 'Neuer Zeitplan';
+    document.getElementById('scheduleError').style.display = 'none';
+    document.getElementById('editingScheduleId').value = '';
+    document.getElementById('sCronExpr').value = '';
+    document.getElementById('sLabel').value = '';
+    document.getElementById('sIsActive').checked = true;
+    document.querySelectorAll('.sStepCb').forEach(function(cb) { cb.checked = cb.value === 'apps'; });
+    document.getElementById('scheduleModal').classList.add('open');
+  }
+
+  async function openEditSchedule(id) {
+    var pid = focusState.project;
+    if (!pid) return;
+    try {
+      var resp = await apiFetch('/api/fetch/schedules?project_id=' + encodeURIComponent(pid));
+      var data = await resp.json();
+      var s = (data.schedules || []).find(function(x) { return x.id === id; });
+      if (!s) return;
+      _editingScheduleId = id;
+      document.getElementById('scheduleModalTitle').textContent = 'Zeitplan bearbeiten';
+      document.getElementById('scheduleError').style.display = 'none';
+      document.getElementById('editingScheduleId').value = id;
+      document.getElementById('sCronExpr').value = s.cron_expr;
+      document.getElementById('sLabel').value = s.label || '';
+      document.getElementById('sIsActive').checked = s.is_active;
+      var steps = s.steps || [];
+      document.querySelectorAll('.sStepCb').forEach(function(cb) { cb.checked = steps.indexOf(cb.value) >= 0; });
+      document.getElementById('scheduleModal').classList.add('open');
+    } catch (e) {
+      showToast('Fehler: ' + e.message);
+    }
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm('Zeitplan wirklich löschen?')) return;
+    try {
+      var resp = await apiFetch('/api/fetch/schedules/' + id, { method: 'DELETE' });
+      if (!resp.ok && resp.status !== 204) throw new Error('HTTP ' + resp.status);
+      showToast('Zeitplan gelöscht');
+      loadSchedules();
+    } catch (e) {
+      showToast('Löschen fehlgeschlagen: ' + e.message);
+    }
+  }
+
+  function closeScheduleModal() {
+    document.getElementById('scheduleModal').classList.remove('open');
+    _editingScheduleId = null;
+  }
+
+  document.getElementById('newScheduleBtn').addEventListener('click', openNewSchedule);
+  document.getElementById('scheduleModalClose').addEventListener('click', closeScheduleModal);
+  document.getElementById('scheduleCancel').addEventListener('click', closeScheduleModal);
+  document.getElementById('scheduleModal').addEventListener('click', function(e) {
+    if (e.target === this) closeScheduleModal();
+  });
+
+  document.getElementById('scheduleForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var pid = focusState.project;
+    if (!pid) return;
+    var cron = document.getElementById('sCronExpr').value.trim();
+    var label = document.getElementById('sLabel').value.trim();
+    var isActive = document.getElementById('sIsActive').checked;
+    var steps = [];
+    document.querySelectorAll('.sStepCb:checked').forEach(function(cb) { steps.push(cb.value); });
+    if (!steps.length) {
+      document.getElementById('scheduleError').textContent = 'Mindestens einen Schritt auswählen.';
+      document.getElementById('scheduleError').style.display = '';
+      return;
+    }
+    document.getElementById('scheduleSave').disabled = true;
+    try {
+      var id = document.getElementById('editingScheduleId').value;
+      var method = id ? 'PUT' : 'POST';
+      var url = id ? '/api/fetch/schedules/' + id : '/api/fetch/schedules';
+      var body = { project_id: parseInt(pid, 10), steps: steps, cron_expr: cron, label: label || null, is_active: isActive };
+      var resp = await apiFetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        throw new Error(err.detail || 'HTTP ' + resp.status);
+      }
+      closeScheduleModal();
+      showToast(id ? 'Zeitplan aktualisiert' : 'Zeitplan erstellt');
+      loadSchedules();
+    } catch (err) {
+      document.getElementById('scheduleError').textContent = err.message;
+      document.getElementById('scheduleError').style.display = '';
+    } finally {
+      document.getElementById('scheduleSave').disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

@@ -11,23 +11,19 @@
 
 Environment variables:
 - `APP_ENV`: `dev` or `prod`.
-- `LINEAGE_DATA_DIR`: override data directory (default is `../output/lineage_success/` if it exists, else `data/lineage/`).
 - `FRONTEND_DIST`: override frontend dist directory.
-- `SPACES_FILE`: optional JSON file with space names (see format below).
-
-Spaces file format (optional):
-- Dict mapping: `{ "spaceId": "Space Name" }`
-- Or list: `[{"spaceId":"...","spaceName":"..."}, {"id":"...","name":"..."}]`
 
 ## Fetch Pipeline (CLI)
 
-From `backend/`:
+Fuer den Runtime-Fetch nutze die Fetch Trigger API (oder den Frontend-Admin-Flow).
 
-1. `python fetch_spaces.py`
-2. `python fetch_apps.py`
-3. `python fetch_data_connections.py`
-4. `python fetch_lineage.py`
-5. `python fetch_usage.py`
+From `backend/` (example via API):
+
+1. `uvicorn main:app --reload --host 127.0.0.1 --port 8000`
+2. Trigger fetch job:
+   - `curl -X POST "http://127.0.0.1:8000/api/fetch/jobs" -H "Authorization: Bearer <ADMIN_TOKEN>" -H "Content-Type: application/json" -d "{\"project_id\":1,\"steps\":[\"spaces\",\"apps\",\"data-connections\",\"lineage\",\"app-edges\",\"usage\"]}"`
+3. Check status:
+   - `curl -H "Authorization: Bearer <ADMIN_TOKEN>" "http://127.0.0.1:8000/api/fetch/jobs"`
 
 Required environment variables for fetching:
 - `QLIK_TENANT_URL`
@@ -43,7 +39,6 @@ Common optional variables:
 - `QLIK_USAGE_CONCURRENCY`
 - `QLIK_USAGE_WINDOW_DAYS`
 - `QLIK_APP_EDGES_UP_DEPTH` (default `-1` for full upstream lineage)
-- `APP_EDGES_OUTDIR` (optional CLI override, default `../output/lineage_success`)
 - `FETCH_TRIGGER_TOKEN` (optional: if set, `POST /api/fetch/jobs` requires `X-Fetch-Token`)
 
 ## Fetch Trigger API (for frontend)
@@ -61,8 +56,7 @@ Fetch steps can be selected from:
 - `app-edges`
 - `usage`
 
-`POST /api/fetch/jobs` always clears artifacts of the selected steps before starting, so only fresh run data is processed.
+`POST /api/fetch/jobs` runs DB-first only: payloads are processed in-memory and persisted directly to PostgreSQL.
 
 Notes:
-- The main graph artifacts are `*__app_edges.json` in `output/lineage_success/`.
 - `app-edges` are generated only for apps where the lineage extraction was successful for both `source` and `overview`.

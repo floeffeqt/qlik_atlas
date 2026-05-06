@@ -16,30 +16,30 @@
 ## 2. Authentication System ✅ (DONE)
 
 - [x] User model in PostgreSQL (id, email, password_hash, is_active, created_at)
-- [x] Password hashing with bcrypt
+- [x] Password hashing with Argon2id
 - [x] JWT token generation (HS256)
 - [x] `/auth/register` endpoint with duplicate email check
 - [x] `/auth/login` endpoint with credential validation
 - [x] Frontend login page (form + submission)
 - [x] Frontend register page (form + submission)
-- [x] Token storage in localStorage (`auth_access_token`)
-- [x] API fetch wrapper including Authorization header
+- [x] Access-token transport via `HttpOnly` auth cookie
+- [x] API fetch wrapper using cookie-based authenticated requests
 - [x] Automatic redirect to login on 401 response
 - [x] Test user seeding: `admin@admin.de` / `admin123`
 - [x] Alembic migration for users table
 
-## 3. Qlik Credentials Management (TO DO)
+## 3. Qlik Credentials Management (PARTIAL)
 
-- [ ] Create `QlikCredentials` table in PostgreSQL
-  - Fields: id, user_id (FK), tenant_url, api_key_encrypted, created_at, updated_at
-- [ ] Encryption at rest: use db-specific encryption (pgcrypto or similar) or application-level (cryptography library)
+- [x] Store Qlik credentials in `customers` table (customer-scoped)
+  - Fields used: `customers.tenant_url`, `customers.api_key` (encrypted at rest in application layer)
+- [x] Encryption at rest implemented at application level (AES-256-GCM)
 - [ ] Admin UI page (`/admin/qlik-settings`) to input/update Qlik credentials
   - Form with Tenant URL and API Key fields
   - "Test connection" button to verify credentials before saving
   - Visual feedback (success/error)
 - [ ] Backend endpoint `POST /admin/qlik/settings` to securely store credentials
 - [ ] Backend endpoint `GET /admin/qlik/settings` to retrieve (without exposing key)
-- [ ] Middleware to decrypt credentials when needed for fetcher operations
+- [x] Fetch/job runtime loads and decrypts credentials from the project's customer when needed
 
 ## 4. Database Schema for Lineage Data (TO DO)
 
@@ -83,32 +83,41 @@ Design tables to replace JSON file storage:
   - Idempotent (safe to run multiple times)
   - Verify data integrity post-migration
 
-## 6. Token Management (TO DO)
+## 6. Token Management (PARTIAL)
 
-- [ ] Refresh token support
-  - Modify `/auth/login` and `/auth/register` to return both `access_token` and `refresh_token`
-  - New `/auth/refresh` endpoint to exchange refresh token for new access token
-  - Store refresh tokens in DB (linked to user)
-  - Set appropriate expiration times (access: 15 min, refresh: 7 days)
+- [x] Refresh token support
+  - `/auth/login` now issues access + refresh session cookies
+  - New `/auth/refresh` endpoint exchanges refresh cookie for a new access token and rotated refresh token
+  - Refresh tokens are stored in DB (`refresh_tokens`) and linked to users
+  - Expiration times are separated (access: 15 min default, refresh: 7 days default)
 
-- [ ] Token revocation / logout
-  - `POST /auth/logout` endpoint to invalidate refresh token
-  - Optional: implement token blacklist table in DB
+- [x] Token revocation / logout
+  - `POST /auth/logout` invalidates the current refresh token
+  - No access-token blacklist table yet; access JWTs remain stateless until expiry
 
-- [ ] Frontend token refresh logic
+- [x] Frontend token refresh logic
   - Detect 401 on API call
-  - Attempt refresh using stored refresh_token
+  - Attempt refresh using the refresh cookie
   - Retry original request if refresh succeeds
   - Redirect to login if refresh fails
 
-## 7. Rate Limiting (TO DO)
+## 6b. Password Hashing Upgrade (PARTIAL)
 
-- [ ] Add `slowapi` or similar rate limiting library to requirements.txt
-- [ ] Apply rate limiter to auth endpoints:
-  - `/auth/register` — max 5 attempts per IP per hour
-  - `/auth/login` — max 10 attempts per IP per hour
-- [ ] Return 429 (Too Many Requests) with retry-after header
-- [ ] Optional: Redis backend for distributed rate limiting (if scaling needed)
+- [x] New password hashes default to `Argon2id`
+- [x] Existing `PBKDF2-SHA256` password hashes remain verifiable
+- [x] Successful login upgrades legacy password hashes to `Argon2id`
+- [ ] Legacy hashes are only migrated when the affected user logs in successfully
+
+## 7. Rate Limiting (PARTIAL)
+
+- [x] Protect `/auth/login` against brute-force retries
+  - IP-based limit: 10 failed attempts per hour by default
+  - Email-based limit: 5 failed attempts per hour by default
+  - Lockout duration: 15 minutes by default
+- [x] Return `429 Too Many Requests` with `Retry-After` header on login lockout
+- [x] Emit auth audit logs for login success, failure, and rate-limited attempts
+- [ ] Apply rate limiter to `/auth/register` if public self-service registration remains enabled
+- [ ] Optional: move limiter state to Redis or similar if multiple backend instances are introduced
 
 ## 8. Protected API Endpoints (TO DO)
 
@@ -278,3 +287,13 @@ Design tables to replace JSON file storage:
    - Locally (current Docker Compose)?
    - Kubernetes cluster?
    - Cloud (AWS/GCP/Azure)?
+
+---
+
+## Progress Update (2026-02-25)
+
+- Runtime reads for dashboard/graph/inventory-adjacent data were moved to PostgreSQL (RLS-scoped) as source of truth.
+- Legacy `GraphStore` (file-backed runtime read path) was removed.
+- Fetch jobs now use a DB-first in-memory pipeline by default (no local fetch JSON artifacts in the standard path).
+- Optional debug/compat mode for local fetch artifacts can be enabled via `FETCH_WRITE_LOCAL_ARTIFACTS=true`.
+- Additional DB tables were introduced for runtime-read completeness (`qlik_spaces`, `qlik_data_connections`, `qlik_app_usage`, `qlik_app_scripts`) plus `lineage_edges.app_id` for app-linking.
