@@ -717,22 +717,6 @@ def _resolve_window_days(value: Optional[int]) -> int:
     return DEFAULT_WINDOW_DAYS
 
 
-def _build_default_client(logger: Optional[logging.Logger]) -> QlikClient:
-    tenant_url = os.getenv("QLIK_TENANT_URL", "").strip()
-    api_key = os.getenv("QLIK_API_KEY", "").strip()
-    if not tenant_url or not api_key:
-        raise RuntimeError("Missing env vars QLIK_TENANT_URL or QLIK_API_KEY")
-    max_retries = int(os.getenv("QLIK_MAX_RETRIES", "5"))
-    timeout = float(os.getenv("QLIK_TIMEOUT", "30"))
-    return QlikClient(
-        base_url=tenant_url,
-        api_key=api_key,
-        timeout=timeout,
-        max_retries=max_retries,
-        logger=logger,
-    )
-
-
 async def fetch_usage_async(
     apps: List[Dict[str, Any]],
     client: QlikClient,
@@ -789,32 +773,3 @@ async def fetch_usage_async(
         await client.close()
 
 
-def fetch_usage(
-    apps: List[Dict[str, Any]],
-    *,
-    client: Optional[QlikClient] = None,
-    window_days: Optional[int] = None,
-    outdir: Path | str | None = DEFAULT_OUTDIR,
-    concurrency: Optional[int] = None,
-    logger: Optional[logging.Logger] = None,
-) -> None:
-    close_client = False
-    if client is None:
-        client = _build_default_client(logger)
-        close_client = True
-    try:
-        asyncio.run(
-            fetch_usage_async(
-                apps=apps,
-                client=client,
-                window_days=window_days,
-                outdir=outdir,
-                concurrency=concurrency,
-                close_client=close_client,
-                logger=logger,
-            )
-        )
-    except RuntimeError as exc:
-        if "asyncio.run() cannot be called" in str(exc):
-            raise RuntimeError("fetch_usage() cannot be called from a running event loop; use fetch_usage_async") from exc
-        raise

@@ -25,9 +25,8 @@ From `backend/` (example via API):
 3. Check status:
    - `curl -H "Authorization: Bearer <ADMIN_TOKEN>" "http://127.0.0.1:8000/api/fetch/jobs"`
 
-Required environment variables for fetching:
-- `QLIK_TENANT_URL`
-- `QLIK_API_KEY`
+Fetch-Credentials (tenant_url, api_key) werden pro Kunde verschlüsselt in der DB gespeichert
+und über `resolve_project_creds()` (qlik_deps.py) aufgelöst — keine Env-Vars erforderlich.
 
 Common optional variables:
 - `FETCH_LIMIT_APPS` (empty = all apps)

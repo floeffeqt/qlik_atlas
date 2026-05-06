@@ -86,4 +86,3 @@ Ohne diesen Schritt ist eine Rotation nicht möglich.
 | `JWT_SECRET` | Signiert Login-Tokens | Ja (loggt alle User aus) |
 | `CREDENTIALS_AES256_GCM_KEY_B64` | Verschlüsselt Kunden-Credentials | Nur mit Re-Encryption |
 | `CREDENTIALS_AES256_GCM_KEY_ID` | Key-Versions-Label | Mit Key-Rotation |
-| `QLIK_API_KEY` | Qlik-Tenant-Zugang | Ja |

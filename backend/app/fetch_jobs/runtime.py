@@ -343,19 +343,22 @@ async def _run_usage_step(
     client = _build_qlik_client(creds)
     usage_window_days = request.usageWindowDays or int(os.getenv("QLIK_USAGE_WINDOW_DAYS", "28"))
     usage_concurrency = request.usageConcurrency or int(os.getenv("QLIK_USAGE_CONCURRENCY", "5"))
+    collector: list[dict[str, Any]] = []
     try:
-        usage_payloads = await fetch_usage_async(
+        await fetch_usage_async(
             client=client,
             apps=apps,
             outdir=None,
-            days=usage_window_days,
+            window_days=usage_window_days,
             concurrency=usage_concurrency,
+            close_client=False,
+            collector=collector,
         )
     finally:
         await client.close()
-    return usage_payloads, {
+    return collector, {
         "apps": len(apps),
-        "usageRecords": len(usage_payloads),
+        "usageRecords": len(collector),
         "windowDays": usage_window_days,
         "storage": "db-first-memory",
         "localArtifactWritten": False,

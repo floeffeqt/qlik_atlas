@@ -29,11 +29,6 @@ Edit `.env` and set at least:
 - `CREDENTIALS_AES256_GCM_KEY_B64`
 - `CREDENTIALS_AES256_GCM_KEY_ID`
 
-Optional (for real fetch jobs):
-
-- `QLIK_TENANT_URL`
-- `QLIK_API_KEY`
-
 Generate a local AES-256-GCM key (PowerShell, correct format):
 
 ```powershell
