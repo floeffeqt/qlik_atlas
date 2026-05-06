@@ -17,7 +17,7 @@ def load_settings() -> Settings:
     base = Path(__file__).resolve().parents[1]
     frontend_dist = Path(os.getenv("FRONTEND_DIST", str(base / "frontend" / "dist")))
     dev_cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-    connect_src = "http://127.0.0.1:8000"
+    connect_src = os.getenv("PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
     fetch_trigger_token = os.getenv("FETCH_TRIGGER_TOKEN", "").strip() or None
     return Settings(
         env=env,
