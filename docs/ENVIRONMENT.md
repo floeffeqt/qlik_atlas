@@ -21,7 +21,7 @@ wird beim Start über die Shell-Variable `ENV_FILE` gesteuert.
 docker compose up -d
 
 # Produktion
-ENV_FILE=.env.prod docker compose up -d
+docker compose -f docker-compose.prod.yml up -d
 
 # Mit pgAdmin (nur Dev)
 docker compose --profile dev up -d
